@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Algorithmic — Institute Operations</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -98,14 +98,54 @@
   .hint{font-size:11px;color:var(--text-faint);margin-top:8px;}
   .field-note{font-size:11px;color:var(--text-faint);margin-top:4px;}
   .del{color:var(--danger);cursor:pointer;font-size:11px;}
+  #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+  .auth-card{width:360px;border:1px solid var(--border);background:var(--surface);padding:36px 32px;}
+  .auth-brand{font-family:'Archivo',sans-serif;font-weight:900;font-size:24px;text-align:center;margin-bottom:4px;}
+  .auth-brand span{color:var(--accent);}
+  .auth-sub{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:var(--text-faint);text-transform:uppercase;margin-bottom:28px;}
+  .auth-tabs{display:flex;margin-bottom:20px;border-bottom:1px solid var(--border);}
+  .auth-tab{flex:1;text-align:center;padding:8px;font-size:12px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .auth-tab.active{color:var(--accent);border-bottom:2px solid var(--accent);}
+  .auth-error{font-size:12px;color:var(--danger);margin-top:10px;display:none;}
+  .app{display:none;}
+  .app.ready{display:flex;}
 </style>
 </head>
 <body>
-<div class="app">
+
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-brand">ALGORITHM<span>.</span>IC</div>
+    <div class="auth-sub">Institute operations</div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-mode="login">Log in</div>
+      <div class="auth-tab" data-mode="signup">Create account</div>
+    </div>
+    <div id="loginForm">
+      <label>Email</label>
+      <input type="text" id="loginEmail" placeholder="you@institute.edu" />
+      <label>Password</label>
+      <input type="text" id="loginPassword" placeholder="Your password" />
+      <div class="btn-row"><button class="primary" id="loginBtn" style="width:100%;">Log in</button></div>
+    </div>
+    <div id="signupForm" style="display:none;">
+      <label>Institute name</label>
+      <input type="text" id="signupInstitute" placeholder="e.g. Horizon Academy" />
+      <label>Email</label>
+      <input type="text" id="signupEmail" placeholder="you@institute.edu" />
+      <label>Password</label>
+      <input type="text" id="signupPassword" placeholder="At least 6 characters" />
+      <div class="btn-row"><button class="primary" id="signupBtn" style="width:100%;">Create account</button></div>
+    </div>
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div class="app" id="app">
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">ALGORITHM<span>.</span>IC</div>
-      <div class="brand-sub">Institute operations</div>
+      <div class="brand-sub" id="instituteLabel">Institute operations</div>
     </div>
     <nav>
       <div class="nav-item active" data-view="seating"><span class="num">01</span>&nbsp;&nbsp;Seating</div>
@@ -117,7 +157,9 @@
       NO TWO SAME-BATCH<br>
       ADJACENT / NO CLASH<br>
       TEACHER-SLOT<br><br>
-      Created by <strong style="color:var(--text);">Samarth Dave</strong>
+      <span style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Created by</span>
+      <span style="display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;font-size:19px;letter-spacing:0.01em;color:var(--accent);text-transform:none;">Samarth Dave</span>
+      <div class="btn-row"><button class="ghost" id="logoutBtn" style="padding:4px 0;">Log out</button></div>
     </div>
   </aside>
 
@@ -241,6 +283,88 @@
 
 <script>
 const BATCH_COLORS = ['c1','c2','c3','c4','c5','c6'];
+
+let authToken = localStorage.getItem('algorithmic_token');
+let instituteName = localStorage.getItem('algorithmic_institute');
+
+function showApp(){
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').classList.add('ready');
+  document.getElementById('instituteLabel').textContent = instituteName || 'Institute operations';
+}
+function showAuth(){
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('app').classList.remove('ready');
+}
+
+async function checkSession(){
+  if(!authToken){ showAuth(); return; }
+  try{
+    const res = await fetch('/api/me', {headers:{'Authorization':'Bearer '+authToken}});
+    if(!res.ok){ localStorage.removeItem('algorithmic_token'); localStorage.removeItem('algorithmic_institute'); showAuth(); return; }
+    const data = await res.json();
+    instituteName = data.institute_name;
+    localStorage.setItem('algorithmic_institute', instituteName);
+    showApp();
+  } catch(e){ showAuth(); }
+}
+checkSession();
+
+document.querySelectorAll('.auth-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.auth-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('loginForm').style.display = tab.dataset.mode==='login' ? 'block' : 'none';
+    document.getElementById('signupForm').style.display = tab.dataset.mode==='signup' ? 'block' : 'none';
+    document.getElementById('authError').style.display = 'none';
+  });
+});
+
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if(!email || !password){ showAuthError('Enter your email and password.'); return; }
+  try{
+    const res = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password})});
+    const data = await res.json();
+    if(!res.ok){ showAuthError(data.detail || 'Could not log in.'); return; }
+    authToken = data.token; instituteName = data.institute_name;
+    localStorage.setItem('algorithmic_token', authToken);
+    localStorage.setItem('algorithmic_institute', instituteName);
+    showApp();
+  } catch(e){ showAuthError('Could not reach the server.'); }
+});
+
+document.getElementById('signupBtn').addEventListener('click', async ()=>{
+  const institute_name = document.getElementById('signupInstitute').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  if(!institute_name || !email || password.length<6){ showAuthError('Fill in every field — password needs at least 6 characters.'); return; }
+  try{
+    const res = await fetch('/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({institute_name, email, password})});
+    const data = await res.json();
+    if(!res.ok){ showAuthError(data.detail || 'Could not create account.'); return; }
+    authToken = data.token; instituteName = data.institute_name;
+    localStorage.setItem('algorithmic_token', authToken);
+    localStorage.setItem('algorithmic_institute', instituteName);
+    showApp();
+  } catch(e){ showAuthError('Could not reach the server.'); }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  try{ await fetch('/api/logout', {method:'POST', headers:{'Authorization':'Bearer '+authToken}}); } catch(e){}
+  localStorage.removeItem('algorithmic_token');
+  localStorage.removeItem('algorithmic_institute');
+  authToken = null; instituteName = null;
+  showAuth();
+});
+
 const colorVar = c => getComputedStyle(document.documentElement).getPropertyValue('--'+c).trim();
 
 let state = {
@@ -562,7 +686,7 @@ async function sendChat(){
   try{
     const res = await fetch('/api/assistant', {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+authToken},
       body: JSON.stringify({
         message: text,
         seatGrid: state.seatGrid,
@@ -570,14 +694,14 @@ async function sendChat(){
       })
     });
     chatLog.removeChild(chatLog.lastChild);
-    if(!res.ok){ pushMsg('ai', 'Backend assistant endpoint is not reachable yet — see the setup note below.'); return; }
     const data = await res.json();
+    if(!res.ok){ pushMsg('ai', data.detail || 'The assistant hit an error it did not explain.'); return; }
     pushMsg('ai', data.reply || 'Done.');
     if(data.seatGrid){ state.seatGrid = data.seatGrid; renderSeatGrid(); }
     if(data.schedule){ state.schedule = data.schedule; renderTimetable(); }
   } catch(err){
     chatLog.removeChild(chatLog.lastChild);
-    pushMsg('ai', 'Could not reach the assistant backend. Make sure /api/assistant is deployed and ANTHROPIC_API_KEY is set.');
+    pushMsg('ai', 'Could not reach the backend at all — check that your service is deployed and running.');
   }
 }
 </script>
