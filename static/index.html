@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cohort OS — Institute Operations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --surface:#141412;
+    --surface-2:#1d1c19;
+    --border:#2c2a24;
+    --border-strong:#413d33;
+    --text:#f2f0ea;
+    --text-dim:#8b877c;
+    --text-faint:#5c584e;
+    --accent:#c9a227;
+    --accent-dim:#8a6e1d;
+    --accent-text:#0a0a0a;
+    --danger:#c1543a;
+    --c1:#1d9e75; --c2:#d85a30; --c3:#378add; --c4:#7f77dd; --c5:#d4537e; --c6:#ba7517;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;}
+  ::selection{background:var(--accent);color:var(--accent-text);}
+  h1,h2,h3{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-0.01em;margin:0;text-transform:uppercase;}
+  .app{display:flex;min-height:100vh;}
+  .sidebar{width:220px;flex-shrink:0;border-right:1px solid var(--border);padding:28px 20px;display:flex;flex-direction:column;gap:32px;position:sticky;top:0;height:100vh;}
+  .brand{display:flex;flex-direction:column;gap:2px;}
+  .brand-mark{font-family:'Archivo',sans-serif;font-weight:900;font-size:22px;letter-spacing:-0.02em;}
+  .brand-mark span{color:var(--accent);}
+  .brand-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:var(--text-faint);text-transform:uppercase;}
+  nav{display:flex;flex-direction:column;gap:4px;}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:2px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-dim);border-left:2px solid transparent;transition:all .15s;}
+  .nav-item .num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-faint);}
+  .nav-item:hover{color:var(--text);background:var(--surface);}
+  .nav-item.active{color:var(--text);border-left:2px solid var(--accent);background:var(--surface);}
+  .nav-item.active .num{color:var(--accent);}
+  .sidebar-foot{margin-top:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);line-height:1.6;}
+  main{flex:1;padding:40px 48px;max-width:1100px;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .view-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:16px;}
+  .view-head h1{font-size:26px;}
+  .view-head p{color:var(--text-dim);font-size:13px;margin-top:6px;max-width:520px;}
+  .tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:var(--text-faint);border:1px solid var(--border);padding:4px 8px;text-transform:uppercase;}
+  .grid2{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:20px;}
+  .card + .card{margin-top:16px;}
+  label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:6px;margin-top:14px;}
+  label:first-child{margin-top:0;}
+  input[type=text],input[type=number],textarea,select{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);padding:9px 10px;font-family:'Inter',sans-serif;font-size:13px;border-radius:2px;}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  button{cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;border-radius:2px;border:1px solid var(--border-strong);background:transparent;color:var(--text);padding:10px 16px;transition:all .15s;}
+  button:hover{border-color:var(--accent);color:var(--accent);}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);}
+  button.primary:hover{background:#e0b52e;color:var(--accent-text);}
+  button.ghost{border-color:transparent;color:var(--text-dim);padding:6px 8px;}
+  button.ghost:hover{color:var(--text);}
+  .btn-row{display:flex;gap:8px;margin-top:16px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-faint);padding:6px 8px;border-bottom:1px solid var(--border-strong);}
+  td{padding:6px 8px;border-bottom:1px solid var(--border);}
+  .empty{color:var(--text-faint);font-size:12px;padding:24px 0;text-align:center;border:1px dashed var(--border-strong);}
+  .blueprint{position:relative;background:var(--surface);border:1px solid var(--border);padding:32px;min-height:420px;}
+  .blueprint-label{position:absolute;top:14px;right:18px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);text-align:right;letter-spacing:0.06em;line-height:1.6;}
+  .seat-grid{display:grid;gap:6px;justify-content:center;}
+  .seat{position:relative;width:52px;height:52px;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;text-align:center;padding:2px;line-height:1.15;background:var(--surface-2);cursor:default;}
+  .seat .dot{position:absolute;top:3px;left:3px;width:6px;height:6px;border-radius:50%;}
+  .seat span{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;max-width:46px;}
+  .front-label{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:0.2em;margin-bottom:14px;text-transform:uppercase;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;font-size:11px;color:var(--text-dim);}
+  .legend .li{display:flex;align-items:center;gap:6px;}
+  .legend .dot{width:8px;height:8px;border-radius:50%;}
+  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border);}
+  .tab{padding:8px 14px;font-size:12px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .tab.active{color:var(--accent);border-bottom:2px solid var(--accent);}
+  .tt-grid{display:grid;font-size:11px;border:1px solid var(--border);}
+  .tt-cell{border:1px solid var(--border);padding:8px 6px;min-height:52px;}
+  .tt-cell.head{background:var(--surface-2);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:10px;color:var(--text-faint);text-align:center;display:flex;align-items:center;justify-content:center;}
+  .tt-cell .subj{font-weight:600;color:var(--text);}
+  .tt-cell .tch{color:var(--text-dim);font-size:10px;margin-top:2px;}
+  .tt-cell.free{color:var(--text-faint);font-style:italic;display:flex;align-items:center;justify-content:center;}
+  .chat-wrap{display:flex;flex-direction:column;height:560px;border:1px solid var(--border);background:var(--surface);}
+  .chat-log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+  .msg{max-width:78%;font-size:13px;line-height:1.55;padding:10px 13px;border-radius:2px;}
+  .msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-text);}
+  .msg.ai{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);}
+  .msg.sys{align-self:center;color:var(--text-faint);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;}
+  .chat-input{display:flex;border-top:1px solid var(--border);}
+  .chat-input input{flex:1;border:none;border-radius:0;background:var(--surface);padding:16px;font-size:13px;}
+  .chat-input input:focus{outline:none;}
+  .chat-input button{border:none;border-radius:0;border-left:1px solid var(--border);}
+  .hint{font-size:11px;color:var(--text-faint);margin-top:8px;}
+  .field-note{font-size:11px;color:var(--text-faint);margin-top:4px;}
+  .del{color:var(--danger);cursor:pointer;font-size:11px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">COHORT<span>.</span>OS</div>
+      <div class="brand-sub">Institute operations</div>
+    </div>
+    <nav>
+      <div class="nav-item active" data-view="seating"><span class="num">01</span>&nbsp;&nbsp;Seating</div>
+      <div class="nav-item" data-view="timetable"><span class="num">02</span>&nbsp;&nbsp;Timetable</div>
+      <div class="nav-item" data-view="assistant"><span class="num">03</span>&nbsp;&nbsp;Assistant</div>
+    </nav>
+    <div class="sidebar-foot">
+      BUILD MVP-01<br>
+      NO TWO SAME-BATCH<br>
+      ADJACENT / NO CLASH<br>
+      TEACHER-SLOT
+    </div>
+  </aside>
+
+  <main>
+    <!-- SEATING -->
+    <section class="view active" id="view-seating">
+      <div class="view-head">
+        <div>
+          <h1>Seating arrangement</h1>
+          <p>Upload the student list and set the room dimensions. Cohort OS shuffles seats so no two students from the same batch sit front-to-back or side-by-side.</p>
+        </div>
+        <div class="tag">Module 01</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <label>Student list (.xlsx or .csv — columns: name, batch)</label>
+            <input type="file" id="seatFile" accept=".xlsx,.xls,.csv" />
+            <div class="field-note" id="seatFileStatus">No file uploaded yet.</div>
+            <label>Or add manually</label>
+            <div class="row2">
+              <input type="text" id="manName" placeholder="Student name" />
+              <input type="text" id="manBatch" placeholder="Batch, e.g. B1" />
+            </div>
+            <div class="btn-row"><button id="manAdd">Add student</button></div>
+          </div>
+          <div class="card">
+            <label>Room dimensions</label>
+            <div class="row2">
+              <div><input type="number" id="roomRows" placeholder="Rows" min="1" value="6" /><div class="field-note">Rows (front to back)</div></div>
+              <div><input type="number" id="roomCols" placeholder="Columns" min="1" value="6" /><div class="field-note">Columns (left to right)</div></div>
+            </div>
+            <div class="btn-row"><button class="primary" id="genSeating">Generate seating plan</button></div>
+            <div class="hint" id="seatCountHint"></div>
+          </div>
+          <div class="card">
+            <label>Roster (<span id="rosterCount">0</span> students)</label>
+            <table id="rosterTable"><thead><tr><th>Name</th><th>Batch</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+        <div>
+          <div class="blueprint">
+            <div class="blueprint-label" id="bpLabel">— × — · SEATING PLAN · REV 01</div>
+            <div class="front-label">↑ Front of room ↑</div>
+            <div id="seatGridWrap"><div class="empty">Generate a plan to see the seating chart.</div></div>
+            <div class="legend" id="seatLegend"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMETABLE -->
+    <section class="view" id="view-timetable">
+      <div class="view-head">
+        <div>
+          <h1>Weekly timetable</h1>
+          <p>List every teacher, their subject, batch, and lectures per week. Cohort OS schedules the week so no teacher is double-booked and no batch has two classes at once.</p>
+        </div>
+        <div class="tag">Module 02</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <label>Week structure</label>
+            <div class="row2">
+              <div><input type="number" id="ttDays" min="1" max="6" value="5" /><div class="field-note">Days per week</div></div>
+              <div><input type="number" id="ttPeriods" min="1" max="10" value="6" /><div class="field-note">Periods per day</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <label>Add a teacher</label>
+            <input type="text" id="tName" placeholder="Teacher name" />
+            <div class="row2">
+              <input type="text" id="tSubject" placeholder="Subject" />
+              <input type="text" id="tBatch" placeholder="Batch, e.g. B1" />
+            </div>
+            <div class="row2">
+              <input type="number" id="tLectures" placeholder="Lectures / week" min="1" value="4" />
+              <input type="text" id="tUnavail" placeholder="Unavailable e.g. Mon-1,Wed-3" />
+            </div>
+            <div class="field-note">Unavailable slots are optional — format Day-Period, comma separated.</div>
+            <div class="btn-row"><button id="addTeacher">Add teacher</button></div>
+          </div>
+          <div class="card">
+            <label>Faculty list (<span id="teacherCount">0</span>)</label>
+            <table id="teacherTable"><thead><tr><th>Teacher</th><th>Subject</th><th>Batch</th><th>/wk</th><th></th></tr></thead><tbody></tbody></table>
+            <div class="btn-row"><button class="primary" id="genTimetable">Generate timetable</button></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="tabs" id="batchTabs"></div>
+            <div id="ttWrap"><div class="empty">Add teachers and generate a timetable to see the weekly grid.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ASSISTANT -->
+    <section class="view" id="view-assistant">
+      <div class="view-head">
+        <div>
+          <h1>Assistant</h1>
+          <p>Handles out-of-script changes to seating or the timetable — "Mr. Sharma is sick, move Wednesday period 3" or "swap seat R2C4 and R5C1." It only touches these two jobs.</p>
+        </div>
+        <div class="tag">Module 03</div>
+      </div>
+      <div class="chat-wrap">
+        <div class="chat-log" id="chatLog">
+          <div class="msg sys">Assistant connected · scope: seating + timetable only</div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="chatInput" placeholder="Describe the change you need..." />
+          <button id="chatSend">Send</button>
+        </div>
+      </div>
+      <div class="hint">Runs through your backend's <code>/api/assistant</code> endpoint, which holds the Anthropic API key server-side. It will not answer anything outside seating and timetabling.</div>
+    </section>
+  </main>
+</div>
+
+<script>
+const BATCH_COLORS = ['c1','c2','c3','c4','c5','c6'];
+const colorVar = c => getComputedStyle(document.documentElement).getPropertyValue('--'+c).trim();
+
+let state = {
+  roster: [],
+  seatGrid: null,
+  rows: 6, cols: 6,
+  teachers: [],
+  ttDays: 5, ttPeriods: 6,
+  schedule: null,
+  batches: []
+};
+
+document.querySelectorAll('.nav-item').forEach(item=>{
+  item.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    item.classList.add('active');
+    document.getElementById('view-'+item.dataset.view).classList.add('active');
+  });
+});
+
+// ---------- SEATING ----------
+function renderRoster(){
+  const tbody = document.querySelector('#rosterTable tbody');
+  tbody.innerHTML = '';
+  state.roster.forEach((s,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.name}</td><td>${s.batch}</td><td><span class="del" data-i="${i}">remove</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('rosterCount').textContent = state.roster.length;
+  tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
+    state.roster.splice(+e.target.dataset.i,1); renderRoster();
+  }));
+}
+
+document.getElementById('seatFile').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const wb = XLSX.read(evt.target.result, {type:'binary'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+    let added = 0;
+    rows.forEach(r=>{
+      const name = r.name || r.Name || r.NAME;
+      const batch = r.batch || r.Batch || r.BATCH;
+      if(name && batch){ state.roster.push({name:String(name), batch:String(batch)}); added++; }
+    });
+    document.getElementById('seatFileStatus').textContent = `Loaded ${added} students from ${file.name}.`;
+    renderRoster();
+  };
+  reader.readAsBinaryString(file);
+});
+
+document.getElementById('manAdd').addEventListener('click', ()=>{
+  const name = document.getElementById('manName').value.trim();
+  const batch = document.getElementById('manBatch').value.trim();
+  if(!name || !batch) return;
+  state.roster.push({name, batch});
+  document.getElementById('manName').value=''; document.getElementById('manBatch').value='';
+  renderRoster();
+});
+
+function interleaveByBatch(roster){
+  const groups = {};
+  roster.forEach(s=>{ (groups[s.batch] = groups[s.batch]||[]).push(s); });
+  const keys = Object.keys(groups);
+  const seq = [];
+  let remaining = true;
+  while(remaining){
+    remaining = false;
+    for(const k of keys){
+      if(groups[k].length){ seq.push(groups[k].shift()); remaining = true; }
+    }
+  }
+  return seq;
+}
+
+function buildSeatGrid(roster, rows, cols){
+  const seq = interleaveByBatch(roster);
+  const grid = Array.from({length:rows}, ()=>Array(cols).fill(null));
+  let idx = 0;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      grid[r][c] = idx < seq.length ? seq[idx++] : null;
+    }
+  }
+  // conflict-fix pass: swap with later cells to avoid same-batch neighbors (up/left)
+  for(let pass=0; pass<3; pass++){
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const cur = grid[r][c];
+        if(!cur) continue;
+        const up = r>0 ? grid[r-1][c] : null;
+        const left = c>0 ? grid[r][c-1] : null;
+        if((up && up.batch===cur.batch) || (left && left.batch===cur.batch)){
+          // find a swap candidate later in the grid
+          outer:
+          for(let r2=r;r2<rows;r2++){
+            for(let c2=(r2===r?c+1:0); c2<cols; c2++){
+              const cand = grid[r2][c2];
+              if(!cand) continue;
+              const candUp = r2>0 ? grid[r2-1][c2] : null;
+              const candLeft = c2>0 ? grid[r2][c2-1] : null;
+              const okHere = !((candUp && candUp.batch===cur.batch) || (candLeft && candLeft.batch===cur.batch));
+              const okThere = !((up && up.batch===cand.batch) || (left && left.batch===cand.batch));
+              if(okHere && okThere){
+                grid[r][c] = cand; grid[r2][c2] = cur;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return grid;
+}
+
+function batchColorMap(roster){
+  const batches = [...new Set(roster.map(s=>s.batch))];
+  const map = {};
+  batches.forEach((b,i)=>{ map[b] = BATCH_COLORS[i % BATCH_COLORS.length]; });
+  return map;
+}
+
+function renderSeatGrid(){
+  const grid = state.seatGrid;
+  const wrap = document.getElementById('seatGridWrap');
+  if(!grid){ wrap.innerHTML = '<div class="empty">Generate a plan to see the seating chart.</div>'; return; }
+  const cmap = batchColorMap(state.roster);
+  wrap.innerHTML = '';
+  const gridEl = document.createElement('div');
+  gridEl.className = 'seat-grid';
+  gridEl.style.gridTemplateColumns = `repeat(${state.cols}, 52px)`;
+  grid.forEach(row=>{
+    row.forEach(seat=>{
+      const el = document.createElement('div');
+      el.className = 'seat';
+      if(seat){
+        const color = cmap[seat.batch];
+        el.innerHTML = `<div class="dot" style="background:var(--${color})"></div><span>${seat.name}</span>`;
+        el.title = `${seat.name} — ${seat.batch}`;
+      } else {
+        el.style.opacity = '0.3';
+      }
+      gridEl.appendChild(el);
+    });
+  });
+  wrap.appendChild(gridEl);
+  document.getElementById('bpLabel').textContent = `${state.rows} × ${state.cols} · SEATING PLAN · REV 01`;
+  const legend = document.getElementById('seatLegend');
+  legend.innerHTML = '';
+  Object.entries(cmap).forEach(([batch,color])=>{
+    const li = document.createElement('div'); li.className='li';
+    li.innerHTML = `<div class="dot" style="background:var(--${color})"></div>${batch}`;
+    legend.appendChild(li);
+  });
+}
+
+document.getElementById('genSeating').addEventListener('click', ()=>{
+  const rows = parseInt(document.getElementById('roomRows').value)||6;
+  const cols = parseInt(document.getElementById('roomCols').value)||6;
+  state.rows = rows; state.cols = cols;
+  if(state.roster.length === 0){
+    document.getElementById('seatCountHint').textContent = 'Add students first.';
+    return;
+  }
+  if(state.roster.length > rows*cols){
+    document.getElementById('seatCountHint').textContent = `${state.roster.length} students won't fit in a ${rows}×${cols} room (capacity ${rows*cols}).`;
+  } else {
+    document.getElementById('seatCountHint').textContent = `Capacity ${rows*cols} · seated ${state.roster.length}.`;
+  }
+  state.seatGrid = buildSeatGrid(state.roster, rows, cols);
+  renderSeatGrid();
+});
+
+// ---------- TIMETABLE ----------
+function renderTeachers(){
+  const tbody = document.querySelector('#teacherTable tbody');
+  tbody.innerHTML = '';
+  state.teachers.forEach((t,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${t.name}</td><td>${t.subject}</td><td>${t.batch}</td><td>${t.lectures}</td><td><span class="del" data-i="${i}">remove</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('teacherCount').textContent = state.teachers.length;
+  tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
+    state.teachers.splice(+e.target.dataset.i,1); renderTeachers();
+  }));
+}
+
+document.getElementById('addTeacher').addEventListener('click', ()=>{
+  const name = document.getElementById('tName').value.trim();
+  const subject = document.getElementById('tSubject').value.trim();
+  const batch = document.getElementById('tBatch').value.trim();
+  const lectures = parseInt(document.getElementById('tLectures').value)||1;
+  const unavail = document.getElementById('tUnavail').value.trim();
+  if(!name||!subject||!batch) return;
+  const unavailSlots = unavail ? unavail.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  state.teachers.push({name, subject, batch, lectures, unavailSlots});
+  ['tName','tSubject','tBatch','tUnavail'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('tLectures').value = 4;
+  renderTeachers();
+});
+
+function buildSchedule(){
+  const days = state.ttDays, periods = state.ttPeriods;
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat'].slice(0,days);
+  state.batches = [...new Set(state.teachers.map(t=>t.batch))];
+  const schedule = {};
+  state.batches.forEach(b=>{
+    schedule[b] = Array.from({length:days}, ()=>Array(periods).fill(null));
+  });
+  const teacherBusy = {};
+  state.teachers.forEach(t=>{ teacherBusy[t.name] = Array.from({length:days}, ()=>Array(periods).fill(false)); });
+  // mark declared unavailability
+  state.teachers.forEach(t=>{
+    t.unavailSlots.forEach(slot=>{
+      const [dName, pStr] = slot.split('-');
+      const dIdx = dayNames.indexOf(dName);
+      const pIdx = parseInt(pStr)-1;
+      if(dIdx>=0 && pIdx>=0 && pIdx<periods) teacherBusy[t.name][dIdx][pIdx] = true;
+    });
+  });
+  // pending lecture counts
+  const pending = state.teachers.map(t=>({...t, remaining:t.lectures}));
+  for(let d=0; d<days; d++){
+    for(let p=0; p<periods; p++){
+      state.batches.forEach(batch=>{
+        if(schedule[batch][d][p]) return;
+        const candidates = pending.filter(t=>t.batch===batch && t.remaining>0 && !teacherBusy[t.name][d][p]);
+        if(candidates.length===0) return;
+        candidates.sort((a,b)=>b.remaining-a.remaining);
+        const chosen = candidates[0];
+        schedule[batch][d][p] = {subject:chosen.subject, teacher:chosen.name};
+        teacherBusy[chosen.name][d][p] = true;
+        chosen.remaining--;
+      });
+    }
+  }
+  return {schedule, dayNames, unmet: pending.filter(t=>t.remaining>0)};
+}
+
+let activeBatchTab = null;
+function renderTimetable(){
+  const wrap = document.getElementById('ttWrap');
+  const tabsEl = document.getElementById('batchTabs');
+  if(!state.schedule){ wrap.innerHTML = '<div class="empty">Add teachers and generate a timetable to see the weekly grid.</div>'; tabsEl.innerHTML=''; return; }
+  const {schedule, dayNames} = state.schedule;
+  tabsEl.innerHTML = '';
+  state.batches.forEach(b=>{
+    const tab = document.createElement('div');
+    tab.className = 'tab' + (b===activeBatchTab ? ' active' : '');
+    tab.textContent = b;
+    tab.addEventListener('click', ()=>{ activeBatchTab = b; renderTimetable(); });
+    tabsEl.appendChild(tab);
+  });
+  if(!activeBatchTab) activeBatchTab = state.batches[0];
+  const grid = schedule[activeBatchTab];
+  const periods = state.ttPeriods;
+  const el = document.createElement('div');
+  el.className = 'tt-grid';
+  el.style.gridTemplateColumns = `70px repeat(${dayNames.length}, 1fr)`;
+  const corner = document.createElement('div'); corner.className='tt-cell head'; corner.textContent='Period';
+  el.appendChild(corner);
+  dayNames.forEach(d=>{ const h=document.createElement('div'); h.className='tt-cell head'; h.textContent=d; el.appendChild(h); });
+  for(let p=0;p<periods;p++){
+    const ph = document.createElement('div'); ph.className='tt-cell head'; ph.textContent = 'P'+(p+1); el.appendChild(ph);
+    for(let d=0;d<dayNames.length;d++){
+      const cell = document.createElement('div');
+      const entry = grid[d][p];
+      if(entry){
+        cell.className = 'tt-cell';
+        cell.innerHTML = `<div class="subj">${entry.subject}</div><div class="tch">${entry.teacher}</div>`;
+      } else {
+        cell.className = 'tt-cell free';
+        cell.textContent = '—';
+      }
+      el.appendChild(cell);
+    }
+  }
+  wrap.innerHTML = '';
+  wrap.appendChild(el);
+}
+
+document.getElementById('genTimetable').addEventListener('click', ()=>{
+  state.ttDays = parseInt(document.getElementById('ttDays').value)||5;
+  state.ttPeriods = parseInt(document.getElementById('ttPeriods').value)||6;
+  if(state.teachers.length===0) return;
+  const result = buildSchedule();
+  state.schedule = result;
+  activeBatchTab = null;
+  renderTimetable();
+});
+
+// ---------- ASSISTANT ----------
+const chatLog = document.getElementById('chatLog');
+function pushMsg(role, text){
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+document.getElementById('chatSend').addEventListener('click', sendChat);
+document.getElementById('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+
+async function sendChat(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  pushMsg('user', text);
+  input.value = '';
+  pushMsg('sys', 'thinking...');
+  try{
+    const res = await fetch('/api/assistant', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        message: text,
+        seatGrid: state.seatGrid,
+        schedule: state.schedule
+      })
+    });
+    chatLog.removeChild(chatLog.lastChild);
+    if(!res.ok){ pushMsg('ai', 'Backend assistant endpoint is not reachable yet — see the setup note below.'); return; }
+    const data = await res.json();
+    pushMsg('ai', data.reply || 'Done.');
+    if(data.seatGrid){ state.seatGrid = data.seatGrid; renderSeatGrid(); }
+    if(data.schedule){ state.schedule = data.schedule; renderTimetable(); }
+  } catch(err){
+    chatLog.removeChild(chatLog.lastChild);
+    pushMsg('ai', 'Could not reach the assistant backend. Make sure /api/assistant is deployed and ANTHROPIC_API_KEY is set.');
+  }
+}
+</script>
+</body>
+</html>
