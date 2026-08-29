@@ -1,12 +1,66 @@
 import os
+import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 import pandas as pd
 import numpy as np
+import httpx
 
 # Initialize FastAPI App
 app = FastAPI(title="EduOps Automator API")
+
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
+
+ASSISTANT_SYSTEM_PROMPT = """You are the in-app assistant for an education institute's operations tool.
+You control exactly two things: a classroom seating grid and a weekly class timetable.
+Your only job is to make requested changes to one or both of those, based on the current state given to you.
+If the request has nothing to do with seating or timetabling, politely say that's outside what you can do here, and change nothing.
+Respond with ONLY a JSON object, no markdown fences, no commentary outside the JSON, in this exact shape:
+{"reply": "short plain-language explanation of what you did or why you couldn't", "seatGrid": <updated seat grid array, or null if unchanged>, "schedule": <updated schedule object, or null if unchanged>}
+Preserve the existing data structure shapes exactly when you modify them - only change the specific cells relevant to the request.
+"""
+
+class AssistantRequest(BaseModel):
+    message: str
+    seatGrid: Optional[Any] = None
+    schedule: Optional[Any] = None
+
+@app.post("/api/assistant")
+async def assistant(req: AssistantRequest):
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not set on the server.")
+    current_state = {"seatGrid": req.seatGrid, "schedule": req.schedule}
+    user_content = f"Current state:\n{json.dumps(current_state)}\n\nRequest: {req.message}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": ANTHROPIC_MODEL,
+                    "max_tokens": 4000,
+                    "system": ASSISTANT_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": user_content}],
+                },
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        parsed = json.loads(text.strip())
+        return parsed
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assistant error: {str(e)}")
 
 # --- Data Models ---
 
@@ -59,9 +113,14 @@ def generate_seating(request: SeatingRequest) -> dict:
 
 # --- Endpoints ---
 
+from fastapi.responses import FileResponse
+
 @app.get("/")
 def root():
-    return {"message": "EduOps Automator API is live. Visit /docs for the interactive API playground."}
+    index_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "EduOps Automator API is live. Place index.html in a /static folder next to main.py, or visit /docs."}
 
 @app.post("/api/seating")
 def create_seating(request: SeatingRequest):
