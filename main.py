@@ -10,8 +10,8 @@ import httpx
 # Initialize FastAPI App
 app = FastAPI(title="EduOps Automator API")
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-ANTHROPIC_MODEL = "claude-sonnet-4-6"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-2.5-flash"
 
 ASSISTANT_SYSTEM_PROMPT = """You are the in-app assistant for an education institute's operations tool.
 You control exactly two things: a classroom seating grid and a weekly class timetable.
@@ -29,29 +29,25 @@ class AssistantRequest(BaseModel):
 
 @app.post("/api/assistant")
 async def assistant(req: AssistantRequest):
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY is not set on the server.")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set on the server.")
     current_state = {"seatGrid": req.seatGrid, "schedule": req.schedule}
     user_content = f"Current state:\n{json.dumps(current_state)}\n\nRequest: {req.message}"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
+                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+                params={"key": GEMINI_API_KEY},
+                headers={"content-type": "application/json"},
                 json={
-                    "model": ANTHROPIC_MODEL,
-                    "max_tokens": 4000,
-                    "system": ASSISTANT_SYSTEM_PROMPT,
-                    "messages": [{"role": "user", "content": user_content}],
+                    "system_instruction": {"parts": [{"text": ASSISTANT_SYSTEM_PROMPT}]},
+                    "contents": [{"role": "user", "parts": [{"text": user_content}]}],
+                    "generationConfig": {"responseMimeType": "application/json"},
                 },
             )
         resp.raise_for_status()
         data = resp.json()
-        text = "".join(block.get("text", "") for block in data.get("content", []) if block.get("type") == "text")
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
         text = text.strip()
         if text.startswith("```"):
             text = text.split("```")[1]
