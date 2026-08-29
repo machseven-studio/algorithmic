@@ -59,6 +59,10 @@ def generate_seating(request: SeatingRequest) -> dict:
 
 # --- Endpoints ---
 
+@app.get("/")
+def root():
+    return {"message": "EduOps Automator API is live. Visit /docs for the interactive API playground."}
+
 @app.post("/api/seating")
 def create_seating(request: SeatingRequest):
     try:
