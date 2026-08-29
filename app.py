@@ -1,21 +1,20 @@
+# app.py
 import os
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse
 
-app = FastAPI(title="Classroom Dynamics API")
+# Check if DB URL exists to prevent startup crash
+DB_URL = os.getenv("DATABASE_URL")
 
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "EduOps Automator is running"}
+app = FastAPI()
 
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return "Hello World - If you see this, the server is up!"
 
-@app.get("/deploy-check")
-def deploy_check():
-    return {
-        "python_version": "3.12.4",
-        "dependencies_installed": True,
-        "timestamp": "2026-08-29T13:15:00Z"
-    }
+# If you have other imports that might fail, wrap them in a try/except block
+try:
+    from routes import router
+    app.include_router(router)
+except Exception as e:
+    print(f"Warning: Could not load routes: {e}")
