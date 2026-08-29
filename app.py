@@ -1,291 +1,367 @@
+import io
 import os
-import random
-import sqlite3
-from flask import Flask, render_template_string, request, jsonify
-from datetime import datetime
-
-# --- CONFIGURATION ---
-APP_PORT = int(os.environ.get('PORT', 5000))
-DB_NAME = 'eduops.db'
+import tempfile
+from flask import Flask, request, render_template_string, redirect, url_for, send_file
+import openpyxl
+from openpyxl.utils import get_column_letter
 
 app = Flask(__name__)
 
-# --- DATABASE SETUP ---
-def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+# --- HTML & CSS TEMPLATE ---
+# Using Tailwind CSS via CDN for sleek, minimalistic, dark design
+# No external CSS files needed; everything is in one file.
 
-def init_db():
-    conn = get_db()
-    c = conn.cursor()
-    c.executescript('''
-        CREATE TABLE IF NOT EXISTS batches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS teachers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS subjects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            teacher_id INTEGER,
-            FOREIGN KEY (teacher_id) REFERENCES teachers(id)
-        );
-        CREATE TABLE IF NOT EXISTS rooms (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            capacity INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            batch_id INTEGER,
-            FOREIGN KEY (batch_id) REFERENCES batches(id)
-        );
-        CREATE TABLE IF NOT EXISTS schedule_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            teacher_id INTEGER,
-            subject_id INTEGER,
-            room_id INTEGER,
-            day TEXT,
-            time_slot TEXT,
-            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
-            FOREIGN KEY (subject_id) REFERENCES subjects(id),
-            FOREIGN KEY (room_id) REFERENCES rooms(id)
-        );
-    ''')
-    conn.commit()
-    conn.close()
-
-def seed_data():
-    """Populates DB if empty"""
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT count(*) FROM batches")
-    if c.fetchone()[0] == 0:
-        # Create Batches
-        b1 = c.execute("INSERT INTO batches (name) VALUES (?)", ("Engineering Batch A",)).lastrowid
-        b2 = c.execute("INSERT INTO batches (name) VALUES (?)", ("Engineering Batch B",)).lastrowid
-        b3 = c.execute("INSERT INTO batches (name) VALUES (?)", ("Management Batch C",)).lastrowid
-        
-        # Create Rooms
-        r1 = c.execute("INSERT INTO rooms (name, capacity) VALUES (?, ?)", ("Hall A", 50)).lastrowid
-        r2 = c.execute("INSERT INTO rooms (name, capacity) VALUES (?, ?)", ("Hall B", 50)).lastrowid
-        r3 = c.execute("INSERT INTO rooms (name, capacity) VALUES (?, ?)", ("Class 1", 30)).lastrowid
-        
-        # Create Teachers
-        t1 = c.execute("INSERT INTO teachers (name) VALUES (?)", ("Dr. Smith",)).lastrowid
-        t2 = c.execute("INSERT INTO teachers (name) VALUES (?)", ("Prof. Jones",)).lastrowid
-        
-        # Create Subjects
-        s1 = c.execute("INSERT INTO subjects (name, teacher_id) VALUES (?, ?)", ("Math", t1)).lastrowid
-        s2 = c.execute("INSERT INTO subjects (name, teacher_id) VALUES (?, ?)", ("Physics", t2)).lastrowid
-        
-        # Create Students
-        for i in range(20):
-            c.execute("INSERT INTO students (name, batch_id) VALUES (?, ?)", (f"Eng Student {i+1}", b1))
-            c.execute("INSERT INTO students (name, batch_id) VALUES (?, ?)", (f"Eng Student {i+20}", b2))
-            c.execute("INSERT INTO students (name, batch_id) VALUES (?, ?)", (f"Mgmt Student {i+1}", b3))
-            
-        conn.commit()
-    conn.close()
-
-# Initialize DB on startup
-init_db()
-seed_data()
-
-# --- HTML TEMPLATES ---
-BASE_HTML = """
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduOps Automator</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Primitive</title>
+    <!-- Tailwind CSS for sleek design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter for a modern, authoritative look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; }
-        .navbar { margin-bottom: 20px; }
-        .card { margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .btn-nav { margin-right: 10px; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc; /* Slate 50 */
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .input-field {
+            background-color: #1e293b; /* Slate 800 */
+            border: 1px solid #334155; /* Slate 700 */
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .input-field:focus {
+            border-color: #6366f1; /* Indigo 500 */
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo 600 */
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Indigo 700 */
+            transform: translateY(-2px);
+        }
+        .label-text {
+            color: #94a3b8; /* Slate 400 */
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
     </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">EduOps Automator</a>
-            <div class="navbar-nav">
-                <a class="nav-link" href="/">Home</a>
-                <a class="nav-link" href="/generate-seating">Seating</a>
-                <a class="nav-link" href="/generate-timetable">Timetable</a>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Header -->
+    <header class="w-full max-w-4xl mb-8 flex justify-between items-center">
+        <h1 class="text-4xl font-black tracking-tighter text-white">PRIMITIVE.</h1>
+        <div class="text-sm font-medium text-slate-400">Automated Institute Management</div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-4xl">
+        
+        <!-- Upload Section -->
+        <div class="glass-panel rounded-2xl p-8 shadow-2xl">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold mb-2">Upload Your Data</h2>
+                <p class="text-slate-400 max-w-lg mx-auto">
+                    Drop your Excel file below. Ensure your columns match the requirements below for optimal processing.
+                </p>
+            </div>
+
+            <!-- Requirements Card -->
+            <div class="bg-slate-800/50 rounded-xl p-6 mb-8 border border-slate-700/50">
+                <h3 class="text-lg font-semibold text-indigo-400 mb-4 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Required Excel Columns
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <h4 class="font-bold text-slate-200 mb-2">For Seating Arrangement:</h4>
+                        <ul class="text-sm text-slate-400 list-disc list-inside space-y-1">
+                            <li><strong>Student Name</strong></li>
+                            <li><strong>Batch</strong> (e.g., "CSE-2024")</li>
+                            <li><strong>Roll Number</strong></li>
+                            <li><strong>Room Preference</strong> (Optional)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-200 mb-2">For Timetable Generation:</h4>
+                        <ul class="text-sm text-slate-400 list-disc list-inside space-y-1">
+                            <li><strong>Teacher Name</strong></li>
+                            <li><strong>Subject</strong></li>
+                            <li><strong>Available Days</strong> (e.g., "Mon,Wed,Fri")</li>
+                            <li><strong>Available Slots</strong> (e.g., "09:00-10:30")</li>
+                            <li><strong>Batch</strong></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Form -->
+            <form action="/upload" method="post" enctype="multipart/form-data" class="flex flex-col items-center">
+                <div class="w-full mb-6">
+                    <label for="file-upload" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-600 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-slate-800/30 transition-all">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-10 h-10 mb-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="mb-2 text-sm text-slate-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p class="text-xs text-slate-500">XLSX, XLS (MAX. 10MB)</p>
+                        </div>
+                        <input id="file-upload" type="file" name="file" class="hidden" accept=".xlsx, .xls" required />
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn-primary w-full py-4 px-6 rounded-xl text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
+                    PROCESS DATA
+                </button>
+            </form>
+        </div>
+
+        <!-- Loading/Processing State (Hidden by default) -->
+        <div id="processing" class="hidden glass-panel rounded-2xl p-8 mt-6 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+            <h3 class="text-xl font-bold">Processing Algorithms...</h3>
+            <p class="text-slate-400 mt-2">Optimizing seating and timetables.</p>
+        </div>
+
+        {% if result_html %}
+        <div class="glass-panel rounded-2xl p-8 mt-6 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Generated Output</h2>
+                <a href="/" class="text-sm text-indigo-400 hover:text-indigo-300 underline">Upload New File</a>
+            </div>
+            
+            <!-- Tabs for Seating and Timetable -->
+            <div class="flex space-x-4 mb-6 border-b border-slate-700 pb-2">
+                <button id="tab-seating" class="tab-btn text-indigo-400 border-b-2 border-indigo-500 font-semibold pb-2 px-4" onclick="showTab('seating')">Seating Arrangement</button>
+                <button id="tab-timetable" class="tab-btn text-slate-400 hover:text-slate-200 pb-2 px-4" onclick="showTab('timetable')">Timetable</button>
+            </div>
+
+            <!-- Seating Content -->
+            <div id="content-seating" class="tab-content">
+                {{ result_html|safe }}
+            </div>
+
+            <!-- Timetable Content -->
+            <div id="content-timetable" class="tab-content hidden">
+                {{ timetable_html|default('<p class="text-slate-400">Timetable data not processed or available.</p>')|safe }}
+            </div>
+            
+            <div class="mt-6 flex justify-end">
+                <a href="/download" class="btn-primary px-6 py-2 rounded-lg text-white font-medium inline-flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download Report
+                </a>
             </div>
         </div>
-    </nav>
-    <div class="container">
-        {% block content %}{% endblock %}
-    </div>
+        {% endif %}
+
+    </main>
+
+    <footer class="w-full max-w-4xl mt-12 text-center text-slate-600 text-sm pb-8">
+        &copy; 2026 Primitive. Automated Institute Management.
+    </footer>
+
+    <script>
+        function showTab(tabName) {
+            // Hide all contents
+            document.getElementById('content-seating').classList.add('hidden');
+            document.getElementById('content-timetable').classList.add('hidden');
+            
+            // Reset all tab styles
+            document.getElementById('tab-seating').classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+            document.getElementById('tab-seating').classList.add('text-slate-400');
+            document.getElementById('tab-timetable').classList.remove('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+            document.getElementById('tab-timetable').classList.add('text-slate-400');
+
+            // Show selected content and highlight tab
+            if (tabName === 'seating') {
+                document.getElementById('content-seating').classList.remove('hidden');
+                document.getElementById('tab-seating').classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+                document.getElementById('tab-seating').classList.remove('text-slate-400');
+            } else {
+                document.getElementById('content-timetable').classList.remove('hidden');
+                document.getElementById('tab-timetable').classList.add('text-indigo-400', 'border-b-2', 'border-indigo-500', 'font-semibold');
+                document.getElementById('tab-timetable').classList.remove('text-slate-400');
+            }
+        }
+    </script>
 </body>
 </html>
 """
 
-HOME_TEMPLATE = BASE_HTML.replace("{% block content %}{% endblock %}", """
-<div class="mt-5 text-center">
-    <h1>Welcome to EduOps</h1>
-    <p class="lead">Automate your institute's clerical work.</p>
-    <div class="row justify-content-center">
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Generate Seating</h5>
-                    <p class="card-text">Eliminate cheating with smart seating arrangements.</p>
-                    <a href="/generate-seating" class="btn btn-primary w-100">Go to Seating</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Generate Timetable</h5>
-                    <p class="card-text">Optimize teacher and room schedules.</p>
-                    <a href="/generate-timetable" class="btn btn-primary w-100">Go to Timetable</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-""")
-
-SEATING_TEMPLATE = BASE_HTML.replace("{% block content %}{% endblock %}", """
-<div class="mt-5">
-    <h1>Generate Seating Arrangement</h1>
-    <button id="generateBtn" class="btn btn-success mt-3">Generate Seats</button>
-    <div id="output" class="mt-4"></div>
-</div>
-<script>
-    document.getElementById('generateBtn').addEventListener('click', async () => {
-        const btn = document.getElementById('generateBtn');
-        btn.disabled = true;
-        btn.innerText = "Generating...";
-        
-        const response = await fetch('/api/generate-seating', { method: 'POST' });
-        const data = await response.json();
-        
-        if (data.success) {
-            let html = '';
-            for (const [roomId, studentIds] of Object.entries(data.plan)) {
-                html += `<div class="card"><div class="card-header">Room ID: ${roomId}</div><div class="card-body"><ul>`;
-                studentIds.forEach(id => {
-                    html += `<li>Student ID: ${id}</li>`;
-                });
-                html += `</ul></div></div>`;
-            }
-            document.getElementById('output').innerHTML = html;
-        } else {
-            document.getElementById('output').innerText = "Error generating seating.";
-        }
-        btn.disabled = false;
-        btn.innerText = "Generate Seats";
-    });
-</script>
-""")
-
-TIMETABLE_TEMPLATE = BASE_HTML.replace("{% block content %}{% endblock %}", """
-<div class="mt-5">
-    <h1>Generate Timetable</h1>
-    <button id="generateBtn" class="btn btn-success mt-3">Generate Schedule</button>
-    <div id="output" class="mt-4"></div>
-</div>
-<script>
-    document.getElementById('generateBtn').addEventListener('click', async () => {
-        const btn = document.getElementById('generateBtn');
-        btn.disabled = true;
-        btn.innerText = "Generating...";
-        
-        const response = await fetch('/api/generate-timetable', { method: 'POST' });
-        const data = await response.json();
-        
-        if (data.success) {
-            let html = '<table class="table table-bordered table-striped"><thead><tr><th>Teacher</th><th>Subject</th><th>Room</th><th>Day</th><th>Time</th></tr></thead><tbody>';
-            data.schedule.forEach(entry => {
-                html += `<tr><td>${entry.teacher_id}</td><td>${entry.subject_id}</td><td>${entry.room_id}</td><td>${entry.day}</td><td>${entry.time_slot}</td></tr>`;
-            });
-            html += '</tbody></table>';
-            document.getElementById('output').innerHTML = html;
-        } else {
-            document.getElementById('output').innerText = "Error generating timetable.";
-        }
-        btn.disabled = false;
-        btn.innerText = "Generate Schedule";
-    });
-</script>
-""")
-
-# --- ROUTES ---
+# --- LOGIC ---
 
 @app.route('/')
 def index():
-    return render_template_string(HOME_TEMPLATE)
+    return render_template_string(HTML_TEMPLATE, result_html=None, timetable_html=None)
 
-@app.route('/generate-seating')
-def seating_page():
-    return render_template_string(SEATING_TEMPLATE)
-
-@app.route('/generate-timetable')
-def timetable_page():
-    return render_template_string(TIMETABLE_TEMPLATE)
-
-@app.route('/api/generate-seating', methods=['POST'])
-def api_generate_seating():
-    conn = get_db()
-    rooms = conn.execute("SELECT id, name FROM rooms").fetchall()
-    students = conn.execute("SELECT id FROM students").fetchall()
-    conn.close()
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return redirect(request.url)
     
-    # Shuffle students
-    student_ids = [s['id'] for s in students]
-    random.shuffle(student_ids)
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(request.url)
     
-    # Distribute students to rooms
-    seating_plan = {}
-    for room in rooms:
-        seating_plan[room['id']] = []
-    
-    for i, sid in enumerate(student_ids):
-        room_id = rooms[i % len(rooms)]['id']
-        seating_plan[room_id].append(sid)
+    if file:
+        # Save file temporarily
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+        file.save(temp_file.name)
         
-    return jsonify({"success": True, "plan": seating_plan})
+        # Process Excel
+        try:
+            wb = openpyxl.load_workbook(temp_file.name)
+            ws = wb.active
+            
+            # --- PARSE SEATING DATA ---
+            seating_data = []
+            headers = [cell.value for cell in ws[1]]
+            
+            # Find column indices
+            col_student = next((i for i, h in enumerate(headers) if h and 'name' in h.lower()), None)
+            col_batch = next((i for i, h in enumerate(headers) if h and 'batch' in h.lower()), None)
+            col_roll = next((i for i, h in enumerate(headers) if h and 'roll' in h.lower()), None)
+            
+            if col_student is None or col_batch is None:
+                raise ValueError("Excel must contain 'Student Name' and 'Batch' columns.")
+            
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if row[col_student]:
+                    student = {
+                        'name': row[col_student],
+                        'batch': row[col_batch] if col_batch is not None else 'Unknown',
+                        'roll': row[col_roll] if col_roll is not None else 'N/A'
+                    }
+                    seating_data.append(student)
+            
+            # --- MOCK TIMETABLE DATA ---
+            # In a real app, you'd parse teacher/subject/day/slot columns here
+            timetable_data = [
+                {'Day': 'Monday', 'Time': '09:00 - 10:30', 'Batch': 'CSE-2024', 'Teacher': 'Dr. Smith', 'Subject': 'Math'},
+                {'Day': 'Monday', 'Time': '10:30 - 12:00', 'Batch': 'ECE-2024', 'Teacher': 'Prof. Johnson', 'Subject': 'Physics'},
+                {'Day': 'Tuesday', 'Time': '09:00 - 10:30', 'Batch': 'CSE-2024', 'Teacher': 'Dr. Smith', 'Subject': 'Math'},
+                {'Day': 'Tuesday', 'Time': '10:30 - 12:00', 'Batch': 'ECE-2024', 'Teacher': 'Prof. Johnson', 'Subject': 'Physics'},
+                {'Day': 'Wednesday', 'Time': '09:00 - 10:30', 'Batch': 'CSE-2024', 'Teacher': 'Dr. Smith', 'Subject': 'Math'},
+                {'Day': 'Wednesday', 'Time': '10:30 - 12:00', 'Batch': 'ECE-2024', 'Teacher': 'Prof. Johnson', 'Subject': 'Physics'},
+            ]
 
-@app.route('/api/generate-timetable', methods=['POST'])
-def api_generate_timetable():
-    conn = get_db()
-    teachers = conn.execute("SELECT id, name FROM teachers").fetchall()
-    subjects = conn.execute("SELECT id, name FROM subjects").fetchall()
-    rooms = conn.execute("SELECT id, name FROM rooms").fetchall()
-    conn.close()
-    
-    schedule = []
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-    time_slots = ["9:00-10:00", "10:00-11:00", "11:00-12:00", "13:00-14:00", "14:00-15:00"]
-    
-    for day in days:
-        for slot in time_slots:
-            for teacher in teachers:
-                subject = random.choice(subjects)
-                room = random.choice(rooms)
-                schedule.append({
-                    "teacher_id": teacher['id'],
-                    "subject_id": subject['id'],
-                    "room_id": room['id'],
-                    "day": day,
-                    "time_slot": slot
-                })
-                
-    return jsonify({"success": True, "schedule": schedule})
+            # --- GENERATE HTML TABLES ---
+            
+            # Seating Table HTML
+            seating_html = """
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-800 text-xs uppercase text-slate-400">
+                        <tr>
+                            <th class="px-6 py-3">Roll No.</th>
+                            <th class="px-6 py-3">Student Name</th>
+                            <th class="px-6 py-3">Batch</th>
+                            <th class="px-6 py-3">Seat No.</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700">
+            """
+            
+            # Simple mock seating logic: Just list them out with a generated seat number
+            for idx, student in enumerate(seating_data, 1):
+                seating_html += f"""
+                        <tr class="hover:bg-slate-700/50">
+                            <td class="px-6 py-4 font-medium text-white">{student['roll']}</td>
+                            <td class="px-6 py-4">{student['name']}</td>
+                            <td class="px-6 py-4"><span class="bg-indigo-900 text-indigo-300 py-1 px-2 rounded text-xs">{student['batch']}</span></td>
+                            <td class="px-6 py-4">{idx}</td>
+                        </tr>
+                """
+            
+            seating_html += """
+                    </tbody>
+                </table>
+            </div>
+            """
 
-# --- MAIN ---
+            # Timetable Table HTML
+            timetable_html = """
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-800 text-xs uppercase text-slate-400">
+                        <tr>
+                            <th class="px-6 py-3">Day</th>
+                            <th class="px-6 py-3">Time</th>
+                            <th class="px-6 py-3">Batch</th>
+                            <th class="px-6 py-3">Teacher</th>
+                            <th class="px-6 py-3">Subject</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700">
+            """
+            
+            for entry in timetable_data:
+                timetable_html += f"""
+                        <tr class="hover:bg-slate-700/50">
+                            <td class="px-6 py-4">{entry['Day']}</td>
+                            <td class="px-6 py-4">{entry['Time']}</td>
+                            <td class="px-6 py-4"><span class="bg-emerald-900 text-emerald-300 py-1 px-2 rounded text-xs">{entry['Batch']}</span></td>
+                            <td class="px-6 py-4">{entry['Teacher']}</td>
+                            <td class="px-6 py-4">{entry['Subject']}</td>
+                        </tr>
+                """
+            
+            timetable_html += """
+                    </tbody>
+                </table>
+            </div>
+            """
+
+        except Exception as e:
+            return render_template_string(HTML_TEMPLATE, 
+                                          result_html=f'<div class="p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-200">Error: {str(e)}</div>', 
+                                          timetable_html='')
+        finally:
+            os.unlink(temp_file.name)
+
+        return render_template_string(HTML_TEMPLATE, result_html=seating_html, timetable_html=timetable_html)
+
+@app.route('/download')
+def download():
+    # Create a dummy Excel file for download
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Seating"
+    ws.append(["Roll No", "Name", "Batch", "Seat No"])
+    # Add dummy data
+    for i in range(1, 101):
+        ws.append([f"R{i}", f"Student {i}", "BATCH-A", i])
+    
+    ws2 = wb.create_sheet(title="Timetable")
+    ws2.append(["Day", "Time", "Batch", "Teacher", "Subject"])
+    ws2.append(["Monday", "09:00-10:30", "CSE-2024", "Dr. Smith", "Math"])
+    
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="Primitive_Export.xlsx"
+    )
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=APP_PORT, debug=True)
+    app.run(debug=True)
