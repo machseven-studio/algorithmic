@@ -77,10 +77,14 @@ def init_db():
             schedule TEXT,
             exam_slots TEXT,
             duty_roster TEXT,
+            invigilators TEXT,
+            attendance TEXT,
             updated_at TEXT
         )
     """)
     _add_column_if_missing(conn, "sessions", "expires_at", "expires_at TEXT")
+    _add_column_if_missing(conn, "workspace", "invigilators", "invigilators TEXT")
+    _add_column_if_missing(conn, "workspace", "attendance", "attendance TEXT")
     conn.commit()
     conn.close()
 
@@ -258,6 +262,8 @@ def get_state(authorization: Optional[str] = Header(None)):
         "schedule": _loads(row["schedule"], None),
         "examSlots": _loads(row["exam_slots"], []),
         "dutyRoster": _loads(row["duty_roster"], None),
+        "invigilators": _loads(row["invigilators"], []),
+        "attendance": _loads(row["attendance"], []),
     }
 
 
@@ -272,6 +278,8 @@ class StateUpdate(BaseModel):
     schedule: Optional[Any] = None
     examSlots: Optional[List[Any]] = None
     dutyRoster: Optional[Any] = None
+    invigilators: Optional[List[Any]] = None
+    attendance: Optional[List[Any]] = None
 
 
 @app.put("/api/state")
@@ -293,6 +301,8 @@ def put_state(update: StateUpdate, authorization: Optional[str] = Header(None)):
         "schedule": ("schedule", json.dumps(update.schedule) if update.schedule is not None else None),
         "examSlots": ("exam_slots", json.dumps(update.examSlots) if update.examSlots is not None else None),
         "dutyRoster": ("duty_roster", json.dumps(update.dutyRoster) if update.dutyRoster is not None else None),
+        "invigilators": ("invigilators", json.dumps(update.invigilators) if update.invigilators is not None else None),
+        "attendance": ("attendance", json.dumps(update.attendance) if update.attendance is not None else None),
     }
     incoming = update.dict(exclude_unset=True)
     for key in incoming:
@@ -315,9 +325,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = "gemini-2.5-flash"
 
 ASSISTANT_SYSTEM_PROMPT = """You are the in-app assistant for an education institute's operations tool.
-You control exactly three things: a classroom seating grid, a weekly class timetable, and an exam duty roster (which staff member supervises which exam slot).
+You control exactly three things: a classroom seating grid, a weekly class timetable, and an invigilator exam duty list (which clerk/invigilator supervises which exam slot — invigilation here is done by hired clerks, not teaching faculty).
 Your only job is to make requested changes to one or more of those, based on the current state given to you.
-If the request has nothing to do with seating, timetabling, or exam duty, politely say that's outside what you can do here, and change nothing.
+If the request has nothing to do with seating, timetabling, or invigilator exam duty, politely say that's outside what you can do here, and change nothing.
 Respond with ONLY a JSON object, no markdown fences, no commentary outside the JSON, in this exact shape:
 {"reply": "short plain-language explanation of what you did or why you couldn't", "seatGrid": <updated seat grid array, or null if unchanged>, "schedule": <updated schedule object, or null if unchanged>, "dutyRoster": <updated duty roster object, or null if unchanged>}
 Preserve the existing data structure shapes exactly when you modify them - only change the specific cells relevant to the request.
