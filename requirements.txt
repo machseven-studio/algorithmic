@@ -1,13 +1,8 @@
-# Core Libraries
-# These versions are specifically chosen for pre-compiled wheels on Python 3.12
-pandas==2.2.3
-numpy==1.26.4
-
 # Web Framework
 fastapi==0.115.6
 uvicorn==0.34.0
 
-# HTTP Client (for sending WhatsApp/Emails)
+# HTTP Client (for calling the Gemini API)
 requests==2.32.3
 httpx==0.28.1
 
