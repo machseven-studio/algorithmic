@@ -3,23 +3,42 @@ import json
 import sqlite3
 import secrets
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Any
-import pandas as pd
-import numpy as np
 import httpx
 
 app = FastAPI(title="Algorithmic API")
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "algorithmic.db")
 
+# How long a login session stays valid before the user has to log in again.
+SESSION_LIFETIME_DAYS = 30
+
+# ---- very simple in-memory login rate limiting ----
+# NOTE: this resets if the server restarts/redeploys. Fine for an MVP; if you
+# outgrow it, move this to a small Redis instance instead of a Python dict.
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+_failed_logins: dict[str, dict[str, Any]] = {}
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _add_column_if_missing(conn, table: str, column: str, ddl: str):
+    """Lightweight migration helper: adds a column to an existing table if it
+    isn't there yet, so upgrading this file doesn't break a database that was
+    created by an older version of it."""
+    cols = [r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
 
 def init_db():
     conn = get_db()
@@ -37,25 +56,72 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
             institute_id INTEGER NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            expires_at TEXT
         )
     """)
+    # workspace holds every piece of saved data for an institute: roster,
+    # seating chart, faculty list, timetable, exam slots, duty roster.
+    # Storing these as JSON blobs keeps this in step with how the frontend
+    # already models the data, rather than inventing a dozen tiny tables.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workspace (
+            institute_id INTEGER PRIMARY KEY,
+            roster TEXT,
+            rows INTEGER,
+            cols INTEGER,
+            seat_grid TEXT,
+            teachers TEXT,
+            tt_days INTEGER,
+            tt_periods INTEGER,
+            schedule TEXT,
+            exam_slots TEXT,
+            duty_roster TEXT,
+            updated_at TEXT
+        )
+    """)
+    _add_column_if_missing(conn, "sessions", "expires_at", "expires_at TEXT")
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 def hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000).hex()
+
 
 class SignupRequest(BaseModel):
     institute_name: str
     email: str
     password: str
 
+
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+def _create_session(conn, institute_id: int) -> str:
+    token = secrets.token_hex(32)
+    expires_at = (datetime.utcnow() + timedelta(days=SESSION_LIFETIME_DAYS)).isoformat()
+    conn.execute(
+        "INSERT INTO sessions (token, institute_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+        (token, institute_id, datetime.utcnow().isoformat(), expires_at),
+    )
+    return token
+
+
+def _ensure_workspace_row(conn, institute_id: int):
+    row = conn.execute("SELECT institute_id FROM workspace WHERE institute_id = ?", (institute_id,)).fetchone()
+    if not row:
+        conn.execute(
+            "INSERT INTO workspace (institute_id, roster, rows, cols, seat_grid, teachers, tt_days, tt_periods, schedule, exam_slots, duty_roster, updated_at) "
+            "VALUES (?, '[]', 6, 6, NULL, '[]', 5, 6, NULL, '[]', NULL, ?)",
+            (institute_id, datetime.utcnow().isoformat()),
+        )
+
 
 @app.post("/api/signup")
 def signup(req: SignupRequest):
@@ -73,26 +139,52 @@ def signup(req: SignupRequest):
         (req.institute_name.strip(), req.email.lower().strip(), pw_hash, salt, datetime.utcnow().isoformat()),
     )
     institute_id = cur.lastrowid
-    token = secrets.token_hex(32)
-    conn.execute("INSERT INTO sessions (token, institute_id, created_at) VALUES (?, ?, ?)",
-                 (token, institute_id, datetime.utcnow().isoformat()))
+    _ensure_workspace_row(conn, institute_id)
+    token = _create_session(conn, institute_id)
     conn.commit()
     conn.close()
     return {"token": token, "institute_name": req.institute_name.strip()}
 
+
+def _check_rate_limit(email: str):
+    entry = _failed_logins.get(email)
+    if not entry:
+        return
+    locked_until = entry.get("locked_until")
+    if locked_until and datetime.utcnow() < locked_until:
+        wait_minutes = max(1, int((locked_until - datetime.utcnow()).total_seconds() // 60) + 1)
+        raise HTTPException(status_code=429, detail=f"Too many failed attempts. Try again in about {wait_minutes} minute(s).")
+
+
+def _record_failed_login(email: str):
+    entry = _failed_logins.setdefault(email, {"count": 0, "locked_until": None})
+    entry["count"] += 1
+    if entry["count"] >= MAX_FAILED_ATTEMPTS:
+        entry["locked_until"] = datetime.utcnow() + timedelta(minutes=LOCKOUT_MINUTES)
+        entry["count"] = 0
+
+
+def _clear_failed_logins(email: str):
+    _failed_logins.pop(email, None)
+
+
 @app.post("/api/login")
 def login(req: LoginRequest):
+    email = req.email.lower().strip()
+    _check_rate_limit(email)
     conn = get_db()
-    row = conn.execute("SELECT * FROM institutes WHERE email = ?", (req.email.lower().strip(),)).fetchone()
+    row = conn.execute("SELECT * FROM institutes WHERE email = ?", (email,)).fetchone()
     if not row or hash_password(req.password, row["salt"]) != row["password_hash"]:
         conn.close()
+        _record_failed_login(email)
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
-    token = secrets.token_hex(32)
-    conn.execute("INSERT INTO sessions (token, institute_id, created_at) VALUES (?, ?, ?)",
-                 (token, row["id"], datetime.utcnow().isoformat()))
+    _clear_failed_logins(email)
+    _ensure_workspace_row(conn, row["id"])
+    token = _create_session(conn, row["id"])
     conn.commit()
     conn.close()
     return {"token": token, "institute_name": row["institute_name"]}
+
 
 def get_current_institute(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -100,19 +192,27 @@ def get_current_institute(authorization: Optional[str] = Header(None)):
     token = authorization.split(" ", 1)[1]
     conn = get_db()
     row = conn.execute("""
-        SELECT institutes.id as id, institutes.institute_name as institute_name
+        SELECT institutes.id as id, institutes.institute_name as institute_name, sessions.expires_at as expires_at
         FROM sessions JOIN institutes ON sessions.institute_id = institutes.id
         WHERE sessions.token = ?
     """, (token,)).fetchone()
-    conn.close()
     if not row:
+        conn.close()
         raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    if row["expires_at"] and datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+        conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        conn.commit()
+        conn.close()
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+    conn.close()
     return {"id": row["id"], "institute_name": row["institute_name"]}
+
 
 @app.get("/api/me")
 def me(authorization: Optional[str] = Header(None)):
     institute = get_current_institute(authorization)
     return institute
+
 
 @app.post("/api/logout")
 def logout(authorization: Optional[str] = Header(None)):
@@ -124,29 +224,119 @@ def logout(authorization: Optional[str] = Header(None)):
         conn.close()
     return {"ok": True}
 
+
+# ---------------- WORKSPACE PERSISTENCE ----------------
+# Everything the frontend builds (roster, seating chart, faculty list,
+# timetable, exam slots, duty roster) gets saved here so a page refresh, a
+# different device, or a server restart doesn't wipe someone's term of work.
+
+def _loads(text: Optional[str], default):
+    if not text:
+        return default
+    try:
+        return json.loads(text)
+    except Exception:
+        return default
+
+
+@app.get("/api/state")
+def get_state(authorization: Optional[str] = Header(None)):
+    institute = get_current_institute(authorization)
+    conn = get_db()
+    _ensure_workspace_row(conn, institute["id"])
+    conn.commit()
+    row = conn.execute("SELECT * FROM workspace WHERE institute_id = ?", (institute["id"],)).fetchone()
+    conn.close()
+    return {
+        "roster": _loads(row["roster"], []),
+        "rows": row["rows"] or 6,
+        "cols": row["cols"] or 6,
+        "seatGrid": _loads(row["seat_grid"], None),
+        "teachers": _loads(row["teachers"], []),
+        "ttDays": row["tt_days"] or 5,
+        "ttPeriods": row["tt_periods"] or 6,
+        "schedule": _loads(row["schedule"], None),
+        "examSlots": _loads(row["exam_slots"], []),
+        "dutyRoster": _loads(row["duty_roster"], None),
+    }
+
+
+class StateUpdate(BaseModel):
+    roster: Optional[List[Any]] = None
+    rows: Optional[int] = None
+    cols: Optional[int] = None
+    seatGrid: Optional[Any] = None
+    teachers: Optional[List[Any]] = None
+    ttDays: Optional[int] = None
+    ttPeriods: Optional[int] = None
+    schedule: Optional[Any] = None
+    examSlots: Optional[List[Any]] = None
+    dutyRoster: Optional[Any] = None
+
+
+@app.put("/api/state")
+def put_state(update: StateUpdate, authorization: Optional[str] = Header(None)):
+    institute = get_current_institute(authorization)
+    conn = get_db()
+    _ensure_workspace_row(conn, institute["id"])
+
+    fields = []
+    values = []
+    mapping = {
+        "roster": ("roster", json.dumps(update.roster) if update.roster is not None else None),
+        "rows": ("rows", update.rows),
+        "cols": ("cols", update.cols),
+        "seatGrid": ("seat_grid", json.dumps(update.seatGrid) if update.seatGrid is not None else None),
+        "teachers": ("teachers", json.dumps(update.teachers) if update.teachers is not None else None),
+        "ttDays": ("tt_days", update.ttDays),
+        "ttPeriods": ("tt_periods", update.ttPeriods),
+        "schedule": ("schedule", json.dumps(update.schedule) if update.schedule is not None else None),
+        "examSlots": ("exam_slots", json.dumps(update.examSlots) if update.examSlots is not None else None),
+        "dutyRoster": ("duty_roster", json.dumps(update.dutyRoster) if update.dutyRoster is not None else None),
+    }
+    incoming = update.dict(exclude_unset=True)
+    for key in incoming:
+        column, value = mapping[key]
+        fields.append(f"{column} = ?")
+        values.append(value)
+
+    if fields:
+        fields.append("updated_at = ?")
+        values.append(datetime.utcnow().isoformat())
+        values.append(institute["id"])
+        conn.execute(f"UPDATE workspace SET {', '.join(fields)} WHERE institute_id = ?", values)
+        conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+# ---------------- AI ASSISTANT ----------------
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = "gemini-2.5-flash"
 
 ASSISTANT_SYSTEM_PROMPT = """You are the in-app assistant for an education institute's operations tool.
-You control exactly two things: a classroom seating grid and a weekly class timetable.
-Your only job is to make requested changes to one or both of those, based on the current state given to you.
-If the request has nothing to do with seating or timetabling, politely say that's outside what you can do here, and change nothing.
+You control exactly three things: a classroom seating grid, a weekly class timetable, and an exam duty roster (which staff member supervises which exam slot).
+Your only job is to make requested changes to one or more of those, based on the current state given to you.
+If the request has nothing to do with seating, timetabling, or exam duty, politely say that's outside what you can do here, and change nothing.
 Respond with ONLY a JSON object, no markdown fences, no commentary outside the JSON, in this exact shape:
-{"reply": "short plain-language explanation of what you did or why you couldn't", "seatGrid": <updated seat grid array, or null if unchanged>, "schedule": <updated schedule object, or null if unchanged>}
+{"reply": "short plain-language explanation of what you did or why you couldn't", "seatGrid": <updated seat grid array, or null if unchanged>, "schedule": <updated schedule object, or null if unchanged>, "dutyRoster": <updated duty roster object, or null if unchanged>}
 Preserve the existing data structure shapes exactly when you modify them - only change the specific cells relevant to the request.
 """
+
 
 class AssistantRequest(BaseModel):
     message: str
     seatGrid: Optional[Any] = None
     schedule: Optional[Any] = None
+    dutyRoster: Optional[Any] = None
+
 
 @app.post("/api/assistant")
 async def assistant(req: AssistantRequest, authorization: Optional[str] = Header(None)):
     get_current_institute(authorization)
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set on the server. Add it in Render's Environment tab.")
-    current_state = {"seatGrid": req.seatGrid, "schedule": req.schedule}
+    current_state = {"seatGrid": req.seatGrid, "schedule": req.schedule, "dutyRoster": req.dutyRoster}
     user_content = f"Current state:\n{json.dumps(current_state)}\n\nRequest: {req.message}"
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -181,31 +371,6 @@ async def assistant(req: AssistantRequest, authorization: Optional[str] = Header
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not parse Gemini's response: {str(e)}")
 
-class Student(BaseModel):
-    id: str
-    name: str
-    batch: str
-
-class Room(BaseModel):
-    id: str
-    capacity: int
-
-class SeatingRequest(BaseModel):
-    students: List[Student]
-    rooms: List[Room]
-
-def generate_seating(request: SeatingRequest) -> dict:
-    if not request.students or not request.rooms:
-        raise HTTPException(status_code=400, detail="Need students and rooms.")
-    df_students = pd.DataFrame([s.dict() for s in request.students])
-    df_students = df_students.sort_values(by='batch')
-    room_counts = {room.id: 0 for room in request.rooms}
-    rooms_bucket = {room.id: [] for room in request.rooms}
-    for student in request.students:
-        min_room_id = min(room_counts, key=room_counts.get)
-        rooms_bucket[min_room_id].append(student.dict())
-        room_counts[min_room_id] += 1
-    return {"seating_plan": rooms_bucket}
 
 @app.get("/")
 def root():
@@ -214,14 +379,6 @@ def root():
         return FileResponse(index_path)
     return {"message": "Algorithmic API is live. Place index.html in a /static folder next to main.py, or visit /docs."}
 
-@app.post("/api/seating")
-def create_seating(request: SeatingRequest, authorization: Optional[str] = Header(None)):
-    get_current_institute(authorization)
-    try:
-        result = generate_seating(request)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 def health_check():
