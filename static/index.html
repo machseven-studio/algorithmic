@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --bg:#0a0a0a;
@@ -28,89 +30,93 @@
   ::selection{background:var(--accent);color:var(--accent-text);}
   h1,h2,h3{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-0.01em;margin:0;text-transform:uppercase;}
   .app{display:flex;min-height:100vh;}
-  .sidebar{width:220px;flex-shrink:0;border-right:1px solid var(--border);padding:28px 20px;display:flex;flex-direction:column;gap:32px;position:sticky;top:0;height:100vh;}
+  .sidebar{width:240px;flex-shrink:0;border-right:1px solid var(--border);padding:28px 20px;display:flex;flex-direction:column;gap:32px;position:sticky;top:0;height:100vh;}
   .brand{display:flex;flex-direction:column;gap:2px;}
-  .brand-mark{font-family:'Archivo',sans-serif;font-weight:900;font-size:22px;letter-spacing:-0.02em;}
+  .brand-mark{font-family:'Archivo',sans-serif;font-weight:900;font-size:23px;letter-spacing:-0.02em;color:var(--accent);}
   .brand-mark span{color:var(--accent);}
-  .brand-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:var(--text-faint);text-transform:uppercase;}
+  .brand-sub{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em;color:var(--accent);text-transform:uppercase;}
   nav{display:flex;flex-direction:column;gap:4px;}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:2px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-dim);border-left:2px solid transparent;transition:all .15s;}
-  .nav-item .num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-faint);}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:2px;cursor:pointer;font-size:14.5px;font-weight:500;color:var(--text-dim);border-left:2px solid transparent;transition:all .15s;}
+  .nav-item .num{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-faint);}
   .nav-item:hover{color:var(--text);background:var(--surface);}
   .nav-item.active{color:var(--text);border-left:2px solid var(--accent);background:var(--surface);}
   .nav-item.active .num{color:var(--accent);}
-  .sidebar-foot{margin-top:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);line-height:1.6;}
-  main{flex:1;padding:40px 48px;max-width:1100px;}
+  .sidebar-foot{margin-top:auto;font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-faint);line-height:1.6;}
+  main{flex:1;padding:40px 48px;max-width:1150px;}
   .view{display:none;}
   .view.active{display:block;}
-  .view-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:16px;}
-  .view-head h1{font-size:26px;}
-  .view-head p{color:var(--text-dim);font-size:13px;margin-top:6px;max-width:520px;}
-  .tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:var(--text-faint);border:1px solid var(--border);padding:4px 8px;text-transform:uppercase;}
+  .view-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px;border-bottom:1px solid var(--border);padding-bottom:16px;gap:20px;}
+  .view-head h1{font-size:31px;color:var(--accent);}
+  .view-head p{color:var(--text-dim);font-size:14.5px;margin-top:8px;max-width:600px;line-height:1.5;}
+  .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.1em;color:var(--accent);border:1px solid var(--border-strong);padding:5px 9px;text-transform:uppercase;flex-shrink:0;}
   .grid2{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start;}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:22px;}
   .card + .card{margin-top:16px;}
-  label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:6px;margin-top:14px;}
+  label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:6px;margin-top:14px;}
   label:first-child{margin-top:0;}
-  input[type=text],input[type=password],input[type=number],textarea,select{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);padding:9px 10px;font-family:'Inter',sans-serif;font-size:13px;border-radius:2px;}
+  input[type=text],input[type=password],input[type=number],input[type=date],textarea,select{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);padding:10px 11px;font-family:'Inter',sans-serif;font-size:14.5px;border-radius:2px;color-scheme:dark;}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  button{cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;border-radius:2px;border:1px solid var(--border-strong);background:transparent;color:var(--text);padding:10px 16px;transition:all .15s;}
+  button{cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;border-radius:2px;border:1px solid var(--border-strong);background:transparent;color:var(--text);padding:11px 17px;transition:all .15s;}
   button:hover{border-color:var(--accent);color:var(--accent);}
   button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);}
   button.primary:hover{background:#e0b52e;color:var(--accent-text);}
   button.ghost{border-color:transparent;color:var(--text-dim);padding:6px 8px;}
   button.ghost:hover{color:var(--text);}
   button:disabled{opacity:0.5;cursor:default;}
-  .btn-row{display:flex;gap:8px;margin-top:16px;}
-  table{width:100%;border-collapse:collapse;font-size:12px;}
-  th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-faint);padding:6px 8px;border-bottom:1px solid var(--border-strong);}
-  td{padding:6px 8px;border-bottom:1px solid var(--border);}
-  .empty{color:var(--text-faint);font-size:12px;padding:24px 0;text-align:center;border:1px dashed var(--border-strong);}
+  .btn-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-faint);padding:7px 9px;border-bottom:1px solid var(--border-strong);}
+  td{padding:7px 9px;border-bottom:1px solid var(--border);}
+  .empty{color:var(--text-faint);font-size:13.5px;padding:24px 0;text-align:center;border:1px dashed var(--border-strong);}
   .blueprint{position:relative;background:var(--surface);border:1px solid var(--border);padding:32px;min-height:420px;}
-  .blueprint-label{position:absolute;top:14px;right:18px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);text-align:right;letter-spacing:0.06em;line-height:1.6;}
+  .blueprint-label{position:absolute;top:14px;right:18px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-faint);text-align:right;letter-spacing:0.06em;line-height:1.6;}
   .seat-grid{display:grid;gap:6px;justify-content:center;}
-  .seat{position:relative;width:52px;height:52px;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;text-align:center;padding:2px;line-height:1.15;background:var(--surface-2);cursor:default;}
+  .seat{position:relative;width:58px;height:58px;border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;text-align:center;padding:2px;line-height:1.15;background:var(--surface-2);cursor:default;}
   .seat .dot{position:absolute;top:3px;left:3px;width:6px;height:6px;border-radius:50%;}
-  .seat span{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;max-width:46px;}
-  .front-label{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:0.2em;margin-bottom:14px;text-transform:uppercase;}
-  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;font-size:11px;color:var(--text-dim);}
+  .seat span{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;max-width:52px;}
+  .front-label{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);letter-spacing:0.2em;margin-bottom:16px;text-transform:uppercase;}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;font-size:12.5px;color:var(--text-dim);}
   .legend .li{display:flex;align-items:center;gap:6px;}
   .legend .dot{width:8px;height:8px;border-radius:50%;}
-  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border);}
-  .tab{padding:8px 14px;font-size:12px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .tabs{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .tab{padding:9px 15px;font-size:13.5px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
   .tab.active{color:var(--accent);border-bottom:2px solid var(--accent);}
-  .tt-grid{display:grid;font-size:11px;border:1px solid var(--border);}
-  .tt-cell{border:1px solid var(--border);padding:8px 6px;min-height:52px;}
-  .tt-cell.head{background:var(--surface-2);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:10px;color:var(--text-faint);text-align:center;display:flex;align-items:center;justify-content:center;}
+  .tt-grid{display:grid;font-size:12.5px;border:1px solid var(--border);}
+  .tt-cell{border:1px solid var(--border);padding:9px 7px;min-height:56px;}
+  .tt-cell.head{background:var(--surface-2);font-family:'IBM Plex Mono',monospace;text-transform:uppercase;font-size:11px;color:var(--text-faint);text-align:center;display:flex;align-items:center;justify-content:center;}
   .tt-cell .subj{font-weight:600;color:var(--text);}
-  .tt-cell .tch{color:var(--text-dim);font-size:10px;margin-top:2px;}
+  .tt-cell .tch{color:var(--text-dim);font-size:11.5px;margin-top:2px;}
   .tt-cell.free{color:var(--text-faint);font-style:italic;display:flex;align-items:center;justify-content:center;}
-  .chat-wrap{display:flex;flex-direction:column;height:560px;border:1px solid var(--border);background:var(--surface);}
+  .chat-wrap{display:flex;flex-direction:column;height:600px;border:1px solid var(--border);background:var(--surface);}
   .chat-log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
-  .msg{max-width:78%;font-size:13px;line-height:1.55;padding:10px 13px;border-radius:2px;}
+  .msg{max-width:78%;font-size:14.5px;line-height:1.55;padding:11px 14px;border-radius:2px;}
   .msg.user{align-self:flex-end;background:var(--accent);color:var(--accent-text);}
   .msg.ai{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);}
-  .msg.sys{align-self:center;color:var(--text-faint);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;}
+  .msg.sys{align-self:center;color:var(--text-faint);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;}
   .chat-input{display:flex;border-top:1px solid var(--border);}
-  .chat-input input{flex:1;border:none;border-radius:0;background:var(--surface);padding:16px;font-size:13px;}
+  .chat-input input{flex:1;border:none;border-radius:0;background:var(--surface);padding:17px;font-size:14.5px;}
   .chat-input input:focus{outline:none;}
   .chat-input button{border:none;border-radius:0;border-left:1px solid var(--border);}
-  .hint{font-size:11px;color:var(--text-faint);margin-top:8px;}
-  .field-note{font-size:11px;color:var(--text-faint);margin-top:4px;}
-  .del{color:var(--danger);cursor:pointer;font-size:11px;}
-  .warn{color:var(--danger);font-size:11px;margin-top:4px;}
-  .save-indicator{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;position:fixed;bottom:16px;right:20px;opacity:0;transition:opacity .3s;}
+  .hint{font-size:12.5px;color:var(--text-faint);margin-top:10px;line-height:1.5;}
+  .field-note{font-size:12.5px;color:var(--text-faint);margin-top:5px;line-height:1.5;}
+  .del{color:var(--danger);cursor:pointer;font-size:12px;}
+  .warn{color:var(--danger);font-size:12.5px;margin-top:4px;}
+  .save-indicator{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;position:fixed;bottom:16px;right:20px;opacity:0;transition:opacity .3s;}
   .save-indicator.show{opacity:1;}
   #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
-  .auth-card{width:360px;border:1px solid var(--border);background:var(--surface);padding:36px 32px;}
-  .auth-brand{font-family:'Archivo',sans-serif;font-weight:900;font-size:24px;text-align:center;margin-bottom:4px;}
+  .auth-card{width:400px;border:1px solid var(--border);background:var(--surface);padding:40px 34px;}
+  .auth-brand{font-family:'Archivo',sans-serif;font-weight:900;font-size:27px;text-align:center;margin-bottom:4px;color:var(--accent);}
   .auth-brand span{color:var(--accent);}
-  .auth-sub{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;color:var(--text-faint);text-transform:uppercase;margin-bottom:28px;}
+  .auth-sub{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.12em;color:var(--text-faint);text-transform:uppercase;margin-bottom:28px;}
   .auth-tabs{display:flex;margin-bottom:20px;border-bottom:1px solid var(--border);}
-  .auth-tab{flex:1;text-align:center;padding:8px;font-size:12px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
+  .auth-tab{flex:1;text-align:center;padding:9px;font-size:13.5px;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;font-weight:500;}
   .auth-tab.active{color:var(--accent);border-bottom:2px solid var(--accent);}
-  .auth-error{font-size:12px;color:var(--danger);margin-top:10px;display:none;}
+  .auth-error{font-size:13.5px;color:var(--danger);margin-top:10px;display:none;}
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;}
+  .stat-cell{border:1px solid var(--border);padding:14px 12px;background:var(--surface-2);}
+  .stat-num{font-family:'Archivo',sans-serif;font-weight:900;font-size:27px;color:var(--accent);line-height:1;}
+  .stat-lab{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-top:7px;}
   .app{display:none;}
   .app.ready{display:flex;}
 </style>
@@ -154,16 +160,17 @@
     <nav>
       <div class="nav-item active" data-view="seating"><span class="num">01</span>&nbsp;&nbsp;Seating</div>
       <div class="nav-item" data-view="timetable"><span class="num">02</span>&nbsp;&nbsp;Timetable</div>
-      <div class="nav-item" data-view="duty"><span class="num">03</span>&nbsp;&nbsp;Duty Roster</div>
-      <div class="nav-item" data-view="assistant"><span class="num">04</span>&nbsp;&nbsp;Assistant</div>
+      <div class="nav-item" data-view="duty"><span class="num">03</span>&nbsp;&nbsp;Invigilator Exam Duty</div>
+      <div class="nav-item" data-view="attendance"><span class="num">04</span>&nbsp;&nbsp;Attendance Report</div>
+      <div class="nav-item" data-view="assistant"><span class="num">05</span>&nbsp;&nbsp;Assistant</div>
     </nav>
     <div class="sidebar-foot">
-      BUILD MVP-02<br>
+      BUILD MVP-03<br>
       NO TWO SAME-BATCH<br>
       ADJACENT / NO CLASH<br>
       TEACHER-SLOT<br><br>
-      <span style="display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Created by</span>
-      <span style="display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;font-size:19px;letter-spacing:0.01em;color:var(--accent);text-transform:none;">Samarth Dave</span>
+      <span style="display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Created by</span>
+      <span style="display:block;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:500;font-size:21px;letter-spacing:0.01em;color:var(--accent);text-transform:none;">Samarth Dave</span>
       <div class="btn-row"><button class="ghost" id="logoutBtn" style="padding:4px 0;">Log out</button></div>
     </div>
   </aside>
@@ -197,7 +204,10 @@
               <div><input type="number" id="roomRows" placeholder="Rows" min="1" value="6" /><div class="field-note">Rows (front to back)</div></div>
               <div><input type="number" id="roomCols" placeholder="Columns" min="1" value="6" /><div class="field-note">Columns (left to right)</div></div>
             </div>
-            <div class="btn-row"><button class="primary" id="genSeating">Generate seating plan</button></div>
+            <div class="btn-row">
+              <button class="primary" id="genSeating">Generate seating plan</button>
+              <button id="seatPdf">Download PDF</button>
+            </div>
             <div class="hint" id="seatCountHint"></div>
           </div>
           <div class="card">
@@ -251,7 +261,11 @@
           <div class="card">
             <label>Faculty list (<span id="teacherCount">0</span>)</label>
             <table id="teacherTable"><thead><tr><th>Teacher</th><th>Subject</th><th>Batch</th><th>/wk</th><th></th></tr></thead><tbody></tbody></table>
-            <div class="btn-row"><button class="primary" id="genTimetable">Generate timetable</button></div>
+            <div class="btn-row">
+              <button class="primary" id="genTimetable">Generate timetable</button>
+              <button id="ttPdf">Download PDF</button>
+            </div>
+            <div class="hint" id="ttHint"></div>
           </div>
         </div>
         <div>
@@ -263,35 +277,92 @@
       </div>
     </section>
 
-    <!-- DUTY ROSTER -->
+    <!-- INVIGILATOR EXAM DUTY -->
     <section class="view" id="view-duty">
       <div class="view-head">
         <div>
-          <h1>Duty roster</h1>
-          <p>List the exam slots that need supervision. Algorithmic spreads duty fairly across your faculty list from Module 02, and keeps a teacher off exams for their own subject where possible.</p>
+          <h1>Invigilator exam duty</h1>
+          <p>Exam supervision here is handled by hired clerks, not teaching faculty. Add your invigilators and the exam slots that need cover — Algorithmic spreads the duty fairly so no one invigilates more than anyone else.</p>
         </div>
         <div class="tag">Module 03</div>
       </div>
       <div class="grid2">
         <div>
           <div class="card">
+            <label>Add an invigilator</label>
+            <input type="text" id="invName" placeholder="Invigilator name" />
+            <div class="field-note">Clerical / invigilation staff — kept separate from the faculty list in Module 02, since teachers don't take exam duty here.</div>
+            <div class="btn-row"><button id="addInvigilator">Add invigilator</button></div>
+          </div>
+          <div class="card">
+            <label>Invigilators (<span id="invCount">0</span>)</label>
+            <table id="invTable"><thead><tr><th>Name</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="card">
             <label>Add an exam slot</label>
             <input type="text" id="dutyLabel" placeholder="e.g. Physics — Day 1, 10:00" />
             <input type="number" id="dutyCount" placeholder="Invigilators needed" min="1" value="1" style="margin-top:10px;" />
-            <div class="field-note">Add one slot per exam session. If a teacher's subject appears in the slot label, they're skipped for that slot where possible.</div>
+            <div class="field-note">Add one slot per exam session, with how many invigilators that hall needs.</div>
             <div class="btn-row"><button id="addDutySlot">Add slot</button></div>
           </div>
           <div class="card">
             <label>Exam slots (<span id="dutySlotCount">0</span>)</label>
             <table id="dutySlotTable"><thead><tr><th>Slot</th><th>Needed</th><th></th></tr></thead><tbody></tbody></table>
-            <div class="btn-row"><button class="primary" id="genDuty">Generate duty roster</button></div>
-            <div class="hint" id="dutyHint">Uses the faculty list from the Timetable module — add teachers there first.</div>
+            <div class="btn-row">
+              <button class="primary" id="genDuty">Generate invigilation roster</button>
+              <button id="dutyPdf">Download PDF</button>
+            </div>
+            <div class="hint" id="dutyHint">Uses the invigilator list above — never the teaching faculty.</div>
           </div>
         </div>
         <div>
           <div class="card">
             <label>Assignments</label>
-            <div id="dutyWrap"><div class="empty">Add exam slots and generate a roster to see assignments.</div></div>
+            <div id="dutyWrap"><div class="empty">Add invigilators and exam slots, then generate the roster to see assignments.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ATTENDANCE REPORT -->
+    <section class="view" id="view-attendance">
+      <div class="view-head">
+        <div>
+          <h1>Attendance report</h1>
+          <p>Log each absentee with the date and the reason for their absence. Algorithmic compiles the running absence record and exports it as a clean PDF for circulation.</p>
+        </div>
+        <div class="tag">Module 04</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <label>Log an absence</label>
+            <input type="date" id="attDate" />
+            <div class="row2" style="margin-top:10px;">
+              <input type="text" id="attName" placeholder="Absentee name" />
+              <input type="text" id="attReason" placeholder="Reason" />
+            </div>
+            <div class="field-note">Reason examples: sick, family emergency, authorised leave. Leave blank to record "not stated".</div>
+            <div class="btn-row"><button id="attAdd">Add record</button></div>
+          </div>
+          <div class="card">
+            <label>Absence record (<span id="attCount">0</span>)</label>
+            <table id="attTable"><thead><tr><th>Date</th><th>Absentee</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table>
+            <div class="btn-row">
+              <button class="primary" id="attPdf">Download PDF</button>
+            </div>
+            <div class="hint" id="attHint"></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <label>Attendance overview</label>
+            <div class="stat-row">
+              <div class="stat-cell"><div class="stat-num" id="statTotal">0</div><div class="stat-lab">Absences logged</div></div>
+              <div class="stat-cell"><div class="stat-num" id="statUnique">0</div><div class="stat-lab">Unique absentees</div></div>
+              <div class="stat-cell"><div class="stat-num" id="statDates">0</div><div class="stat-lab">Dates covered</div></div>
+            </div>
+            <div id="attRepeatWrap"><div class="empty">No absences logged yet — repeat-absence patterns will appear here.</div></div>
           </div>
         </div>
       </div>
@@ -302,13 +373,13 @@
       <div class="view-head">
         <div>
           <h1>Assistant</h1>
-          <p>Handles out-of-script changes to seating, the timetable, or duty roster — "Mr. Sharma is sick, move Wednesday period 3" or "swap seat R2C4 and R5C1." It only touches these jobs.</p>
+          <p>Handles out-of-script changes to seating, the timetable, or invigilator exam duty — "Mr. Sharma is sick, move Wednesday period 3" or "swap seat R2C4 and R5C1." It only touches these jobs.</p>
         </div>
-        <div class="tag">Module 04</div>
+        <div class="tag">Module 05</div>
       </div>
       <div class="chat-wrap">
         <div class="chat-log" id="chatLog">
-          <div class="msg sys">Assistant connected · scope: seating + timetabling + duty roster only</div>
+          <div class="msg sys">Assistant connected · scope: seating + timetabling + invigilator exam duty only</div>
         </div>
         <div class="chat-input">
           <input type="text" id="chatInput" placeholder="Describe the change you need..." />
@@ -324,6 +395,7 @@
 
 <script>
 const BATCH_COLORS = ['c1','c2','c3','c4','c5','c6'];
+const BATCH_HEX = {c1:'#1d9e75', c2:'#d85a30', c3:'#378add', c4:'#7f77dd', c5:'#d4537e', c6:'#ba7517'};
 
 let authToken = localStorage.getItem('algorithmic_token');
 let instituteName = localStorage.getItem('algorithmic_institute');
@@ -418,8 +490,10 @@ let state = {
   teachers: [],
   ttDays: 5, ttPeriods: 6,
   schedule: null,
+  invigilators: [],
   examSlots: [],
-  dutyRoster: null
+  dutyRoster: null,
+  attendance: []
 };
 
 // ---------- PERSISTENCE ----------
@@ -460,8 +534,10 @@ async function loadState(){
     state.ttDays = data.ttDays || 5;
     state.ttPeriods = data.ttPeriods || 6;
     state.schedule = data.schedule || null;
+    state.invigilators = data.invigilators || [];
     state.examSlots = data.examSlots || [];
     state.dutyRoster = data.dutyRoster || null;
+    state.attendance = data.attendance || [];
 
     document.getElementById('roomRows').value = state.rows;
     document.getElementById('roomCols').value = state.cols;
@@ -473,8 +549,10 @@ async function loadState(){
     renderTeachers();
     activeBatchTab = null;
     renderTimetable();
+    renderInvigilators();
     renderDutySlots();
     renderDutyRoster();
+    renderAttendance();
   } catch(e){ /* stay on whatever's in memory if this fails */ }
 }
 
@@ -606,7 +684,7 @@ function renderSeatGrid(){
   wrap.innerHTML = '';
   const gridEl = document.createElement('div');
   gridEl.className = 'seat-grid';
-  gridEl.style.gridTemplateColumns = `repeat(${state.cols}, 52px)`;
+  gridEl.style.gridTemplateColumns = `repeat(${state.cols}, 58px)`;
   grid.forEach(row=>{
     row.forEach(seat=>{
       const el = document.createElement('div');
@@ -737,7 +815,7 @@ function renderTimetable(){
   });
   if(!activeBatchTab) activeBatchTab = state.batches[0];
   const grid = schedule[activeBatchTab];
-  const periods = state.ttPeriods;
+  const periods = grid[0] ? grid[0].length : state.ttPeriods;
   const el = document.createElement('div');
   el.className = 'tt-grid';
   el.style.gridTemplateColumns = `70px repeat(${dayNames.length}, 1fr)`;
@@ -766,15 +844,51 @@ function renderTimetable(){
 document.getElementById('genTimetable').addEventListener('click', ()=>{
   state.ttDays = parseInt(document.getElementById('ttDays').value)||5;
   state.ttPeriods = parseInt(document.getElementById('ttPeriods').value)||6;
-  if(state.teachers.length===0) return;
+  if(state.teachers.length===0){
+    document.getElementById('ttHint').textContent = 'Add teachers first.';
+    return;
+  }
   const result = buildSchedule();
   state.schedule = result;
   activeBatchTab = null;
   renderTimetable();
+  const unmetTotal = (result.unmet||[]).reduce((n,t)=>n+t.remaining,0);
+  document.getElementById('ttHint').textContent = unmetTotal > 0
+    ? `Timetable generated — but ${unmetTotal} lecture(s) couldn't be placed with the current limits. Add more periods or relax unavailability.`
+    : 'Timetable generated cleanly — no clashes, all lectures placed.';
   saveState({ttDays: state.ttDays, ttPeriods: state.ttPeriods, schedule: state.schedule});
 });
 
-// ---------- DUTY ROSTER ----------
+// ---------- INVIGILATOR EXAM DUTY ----------
+function renderInvigilators(){
+  const tbody = document.querySelector('#invTable tbody');
+  tbody.innerHTML = '';
+  state.invigilators.forEach((v,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${v.name}</td><td><span class="del" data-i="${i}">remove</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('invCount').textContent = state.invigilators.length;
+  tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
+    state.invigilators.splice(+e.target.dataset.i,1);
+    renderInvigilators();
+    saveState({invigilators: state.invigilators});
+  }));
+}
+
+document.getElementById('addInvigilator').addEventListener('click', ()=>{
+  const name = document.getElementById('invName').value.trim();
+  if(!name) return;
+  if(state.invigilators.some(v=>v.name.toLowerCase()===name.toLowerCase())){
+    document.getElementById('dutyHint').textContent = 'That invigilator is already on the list.';
+    return;
+  }
+  state.invigilators.push({name});
+  document.getElementById('invName').value='';
+  renderInvigilators();
+  saveState({invigilators: state.invigilators});
+});
+
 function renderDutySlots(){
   const tbody = document.querySelector('#dutySlotTable tbody');
   tbody.innerHTML = '';
@@ -803,38 +917,30 @@ document.getElementById('addDutySlot').addEventListener('click', ()=>{
 });
 
 function buildDutyRoster(){
+  const names = state.invigilators.map(v=>v.name);
   const counts = {};
-  state.teachers.forEach(t=>{ counts[t.name] = 0; });
-  const uniqueNames = [...new Set(state.teachers.map(t=>t.name))];
-  const subjectOf = {};
-  state.teachers.forEach(t=>{ subjectOf[t.name] = t.subject; });
-
+  names.forEach(n=>{ counts[n] = 0; });
+  // Fair spread: each slot takes whoever has the fewest duties so far.
+  // Stable sort keeps ties deterministic in list order.
   const slots = state.examSlots.map(slot=>{
-    const labelLower = slot.label.toLowerCase();
-    // prefer teachers whose own subject doesn't appear in this slot's label
-    const preferred = uniqueNames.filter(n=>{
-      const subj = (subjectOf[n]||'').toLowerCase();
-      return !(subj && labelLower.includes(subj));
-    });
-    const pool = preferred.length >= slot.count ? preferred : uniqueNames;
-    const sorted = [...pool].sort((a,b)=>counts[a]-counts[b]);
+    const sorted = [...names].sort((a,b)=>counts[a]-counts[b]);
     const assigned = sorted.slice(0, slot.count);
     assigned.forEach(n=>{ counts[n] = (counts[n]||0)+1; });
     return {label: slot.label, count: slot.count, assigned, short: assigned.length < slot.count};
   });
-  return {slots};
+  return {slots, load: counts};
 }
 
 document.getElementById('genDuty').addEventListener('click', ()=>{
-  if(state.teachers.length===0){
-    document.getElementById('dutyHint').textContent = 'No faculty yet — add teachers in the Timetable module first.';
+  if(state.invigilators.length===0){
+    document.getElementById('dutyHint').textContent = 'Add invigilators first — exam duty is handled by hired clerks here, not the teaching faculty.';
     return;
   }
   if(state.examSlots.length===0){
     document.getElementById('dutyHint').textContent = 'Add at least one exam slot first.';
     return;
   }
-  document.getElementById('dutyHint').textContent = 'Uses the faculty list from the Timetable module.';
+  document.getElementById('dutyHint').textContent = 'Uses the invigilator list above — never the teaching faculty.';
   state.dutyRoster = buildDutyRoster();
   renderDutyRoster();
   saveState({dutyRoster: state.dutyRoster});
@@ -843,23 +949,370 @@ document.getElementById('genDuty').addEventListener('click', ()=>{
 function renderDutyRoster(){
   const wrap = document.getElementById('dutyWrap');
   if(!state.dutyRoster || !state.dutyRoster.slots || state.dutyRoster.slots.length===0){
-    wrap.innerHTML = '<div class="empty">Add exam slots and generate a roster to see assignments.</div>';
+    wrap.innerHTML = '<div class="empty">Add invigilators and exam slots, then generate the roster to see assignments.</div>';
     return;
   }
   const table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>Slot</th><th>Assigned</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Slot</th><th>Assigned invigilators</th></tr></thead>';
   const tbody = document.createElement('tbody');
   state.dutyRoster.slots.forEach(s=>{
     const tr = document.createElement('tr');
     const names = s.assigned.join(', ') || '—';
-    const warn = s.short ? `<div class="warn">Not enough available faculty for this slot.</div>` : '';
+    const warn = s.short ? `<div class="warn">Not enough invigilators on the list for this slot.</div>` : '';
     tr.innerHTML = `<td>${s.label}</td><td>${names}${warn}</td>`;
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
   wrap.innerHTML = '';
   wrap.appendChild(table);
+  // per-invigilator load summary
+  const load = state.dutyRoster.load || {};
+  const names = Object.keys(load);
+  if(names.length){
+    const lab = document.createElement('label');
+    lab.style.marginTop = '20px';
+    lab.textContent = 'Duty load per invigilator';
+    wrap.appendChild(lab);
+    const loadTable = document.createElement('table');
+    loadTable.innerHTML = '<thead><tr><th>Invigilator</th><th>Duties</th></tr></thead>';
+    const ltb = document.createElement('tbody');
+    names.sort((a,b)=>a.localeCompare(b)).forEach(n=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${n}</td><td>${load[n]||0}</td>`;
+      ltb.appendChild(tr);
+    });
+    loadTable.appendChild(ltb);
+    wrap.appendChild(loadTable);
+  }
 }
+
+// ---------- ATTENDANCE REPORT ----------
+function fmtDate(iso){
+  if(!iso) return '';
+  const d = new Date(iso.length===10 ? iso+'T00:00:00' : iso);
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+}
+
+function renderAttendance(){
+  const tbody = document.querySelector('#attTable tbody');
+  tbody.innerHTML = '';
+  const sorted = state.attendance.map((r,i)=>({...r,i})).sort((a,b)=> (a.date<b.date?1:a.date>b.date?-1:a.i-b.i));
+  sorted.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${fmtDate(r.date)}</td><td>${r.name}</td><td>${r.reason||'—'}</td><td><span class="del" data-i="${r.i}">remove</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('attCount').textContent = state.attendance.length;
+  tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
+    state.attendance.splice(+e.target.dataset.i,1);
+    renderAttendance();
+    saveState({attendance: state.attendance});
+  }));
+
+  // overview stats
+  document.getElementById('statTotal').textContent = state.attendance.length;
+  const names = new Set(state.attendance.map(r=>r.name.toLowerCase()));
+  const dates = new Set(state.attendance.map(r=>r.date));
+  document.getElementById('statUnique').textContent = names.size;
+  document.getElementById('statDates').textContent = dates.size;
+
+  // repeat-absence patterns
+  const wrap = document.getElementById('attRepeatWrap');
+  if(state.attendance.length===0){
+    wrap.innerHTML = '<div class="empty">No absences logged yet — repeat-absence patterns will appear here.</div>';
+    return;
+  }
+  const counts = {};
+  state.attendance.forEach(r=>{ counts[r.name] = (counts[r.name]||0)+1; });
+  const repeats = Object.entries(counts).filter(([n,c])=>c>1).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0]));
+  if(repeats.length===0){
+    wrap.innerHTML = '<div class="empty">No repeat absences so far — every absentee appears only once.</div>';
+    return;
+  }
+  wrap.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>Absentee</th><th>Absences</th></tr></thead>';
+  const tb = document.createElement('tbody');
+  repeats.forEach(([n,c])=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${n}</td><td>${c}</td>`;
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  wrap.appendChild(table);
+  const note = document.createElement('div');
+  note.className = 'hint';
+  note.textContent = 'Students absent more than once — worth a follow-up.';
+  wrap.appendChild(note);
+}
+
+document.getElementById('attAdd').addEventListener('click', ()=>{
+  const date = document.getElementById('attDate').value;
+  const name = document.getElementById('attName').value.trim();
+  const reason = document.getElementById('attReason').value.trim();
+  if(!date || !name){
+    document.getElementById('attHint').textContent = 'A date and an absentee name are required.';
+    return;
+  }
+  state.attendance.push({date, name, reason: reason || 'Not stated'});
+  document.getElementById('attName').value='';
+  document.getElementById('attReason').value='';
+  document.getElementById('attHint').textContent = '';
+  renderAttendance();
+  saveState({attendance: state.attendance});
+});
+
+// ---------- PDF EXPORTS ----------
+function hexToRgb(hex){
+  const m = hex.replace('#','');
+  return [parseInt(m.slice(0,2),16), parseInt(m.slice(2,4),16), parseInt(m.slice(4,6),16)];
+}
+
+function pdfHeader(doc, title){
+  const pageW = doc.internal.pageSize.getWidth();
+  const m = 14;
+  doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.setTextColor(201,162,39);
+  doc.text((instituteName || 'INSTITUTE OPERATIONS').toUpperCase(), m, 12);
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(120,116,106);
+  doc.text(fmtDate(new Date().toISOString().slice(0,10)), pageW-m, 12, {align:'right'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(17);
+  doc.setTextColor(20,20,18);
+  doc.text(title, m, 21);
+  doc.setFontSize(6.5);
+  doc.setTextColor(201,162,39);
+  doc.text('ALGORITHM.IC · INSTITUTE OPERATIONS', pageW-m, 20.5, {align:'right'});
+  doc.setDrawColor(201,162,39); doc.setLineWidth(0.7);
+  doc.line(m, 25.5, pageW-m, 25.5);
+  return 31; // content startY in mm
+}
+
+function pdfFooter(doc){
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  doc.setFont('helvetica','normal'); doc.setFontSize(7.5);
+  doc.setTextColor(150,146,136);
+  doc.text('Generated by Algorithmic — Institute Operations', pageW/2, pageH-8, {align:'center'});
+}
+
+function fitText(doc, text, maxW){
+  if(doc.getTextWidth(text) <= maxW) return text;
+  let t = text;
+  while(t.length && doc.getTextWidth(t+'…') > maxW) t = t.slice(0,-1);
+  return t.length ? t+'…' : '…';
+}
+
+document.getElementById('seatPdf').addEventListener('click', ()=>{
+  if(!state.seatGrid){
+    document.getElementById('seatCountHint').textContent = 'Generate a seating plan first, then export it.';
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const rows = state.rows, cols = state.cols;
+  const landscape = cols >= rows + 2;
+  const doc = new jsPDF({orientation: landscape?'landscape':'portrait', unit:'mm', format:'a4'});
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const topY = pdfHeader(doc, `Seating Plan — ${rows} × ${cols}`);
+  const margin = 14;
+  const bottomReserve = 30;
+  const usableW = pageW - margin*2;
+  const usableH = pageH - topY - bottomReserve;
+  let cell = Math.min(usableW/cols, usableH/rows);
+  cell = Math.min(cell, 25);
+  const gridW = cell*cols, gridH = cell*rows;
+  const startX = (pageW - gridW)/2;
+
+  // front-of-room marker (text + small chevron, avoiding unicode glyphs)
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+  doc.setTextColor(201,162,39);
+  doc.text('F R O N T   O F   R O O M', pageW/2, topY-2.5, {align:'center'});
+
+  const cmap = batchColorMap(state.roster);
+  state.seatGrid.forEach((row, r)=>{
+    row.forEach((seat, c)=>{
+      const x = startX + c*cell, y = topY + r*cell;
+      if(seat){
+        const rgb = hexToRgb(BATCH_HEX[cmap[seat.batch]] || '#888888');
+        doc.setFillColor(247,246,242); doc.setDrawColor(150,146,134);
+        doc.setLineWidth(0.25);
+        doc.rect(x,y,cell,cell,'FD');
+        doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+        doc.rect(x,y,cell,1.1,'F');
+        const fs = Math.max(4.6, Math.min(7.2, cell*0.30));
+        doc.setFont('helvetica','bold'); doc.setFontSize(fs);
+        doc.setTextColor(28,26,22);
+        doc.text(fitText(doc, seat.name, cell-3), x+cell/2, y+cell/2+fs*0.12, {align:'center'});
+        doc.setFont('helvetica','normal'); doc.setFontSize(Math.max(4.2, fs-2.2));
+        doc.setTextColor(140,136,124);
+        doc.text(seat.batch, x+cell/2, y+cell-1.8, {align:'center'});
+      } else {
+        doc.setDrawColor(205,202,192); doc.setLineWidth(0.25);
+        doc.setLineDashPattern([0.9,0.9], 0);
+        doc.rect(x,y,cell,cell);
+        doc.setLineDashPattern([], 0);
+      }
+    });
+  });
+
+  // seated count + legend
+  const seated = state.roster.length;
+  let y = topY + gridH + 8;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.setTextColor(120,116,106);
+  doc.text(`Seated ${seated} of ${rows*cols} seats · no two same-batch students adjacent`, margin, y);
+  y += 7;
+  let x = margin;
+  doc.setFont('helvetica','bold'); doc.setFontSize(8);
+  Object.entries(cmap).forEach(([batch,color])=>{
+    const w = 3 + 1.6 + doc.getTextWidth(batch) + 6;
+    if(x + w > pageW - margin){ x = margin; y += 6; }
+    const rgb = hexToRgb(BATCH_HEX[color]);
+    doc.setFillColor(rgb[0],rgb[1],rgb[2]);
+    doc.rect(x, y-2.6, 3, 3, 'F');
+    doc.setTextColor(60,58,52);
+    doc.text(batch, x+4.6, y);
+    x += w;
+  });
+
+  pdfFooter(doc);
+  doc.save('algorithmic-seating-plan.pdf');
+});
+
+document.getElementById('ttPdf').addEventListener('click', ()=>{
+  if(!state.schedule){
+    document.getElementById('ttHint').textContent = 'Generate a timetable first, then export it.';
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const {schedule, dayNames, unmet} = state.schedule;
+  const batches = Object.keys(schedule);
+  const periods = schedule[batches[0]][0].length;
+  const doc = new jsPDF({orientation: dayNames.length>=6?'landscape':'portrait', unit:'mm', format:'a4'});
+  batches.forEach((b, i)=>{
+    if(i>0) doc.addPage();
+    const startY = pdfHeader(doc, `Weekly Timetable — Batch ${b}`);
+    const head = [['Period', ...dayNames]];
+    const body = [];
+    for(let p=0;p<periods;p++){
+      const row = ['P'+(p+1)];
+      for(let d=0;d<dayNames.length;d++){
+        const entry = schedule[b][d][p];
+        row.push(entry ? `${entry.subject}\n${entry.teacher}` : '—');
+      }
+      body.push(row);
+    }
+    doc.autoTable({
+      startY: startY + 2,
+      head, body,
+      theme: 'grid',
+      styles: {font:'helvetica', fontSize:9.5, cellPadding:{vertical:3.5, horizontal:2.5}, lineColor:[214,210,196], lineWidth:0.2, textColor:[30,28,24], minCellHeight:11, valign:'middle', halign:'center'},
+      headStyles: {fillColor:[20,20,18], textColor:[201,162,39], fontStyle:'bold', halign:'center', fontSize:10},
+      columnStyles: {0:{fillColor:[242,240,234], fontStyle:'bold', textColor:[92,88,78], cellWidth:18}},
+      alternateRowStyles: {fillColor:[250,249,246]},
+      margin: {left:14, right:14}
+    });
+    const myUnmet = (unmet||[]).filter(u=>u.batch===b);
+    let ly = doc.lastAutoTable.finalY + 8;
+    if(myUnmet.length){
+      const msgs = myUnmet.map(u=>`${u.name} (${u.subject}): ${u.remaining} lecture(s) unplaced`).join('  ·  ');
+      doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+      doc.setTextColor(193,84,58);
+      doc.text('Could not place: '+msgs, 14, ly);
+      ly += 8;
+    }
+    pdfFooter(doc);
+  });
+  doc.save('algorithmic-weekly-timetable.pdf');
+});
+
+document.getElementById('dutyPdf').addEventListener('click', ()=>{
+  if(!state.dutyRoster || !state.dutyRoster.slots || state.dutyRoster.slots.length===0){
+    document.getElementById('dutyHint').textContent = 'Generate the invigilation roster first, then export it.';
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const startY = pdfHeader(doc, 'Invigilator Exam Duty');
+  doc.autoTable({
+    startY: startY + 2,
+    head: [['Exam slot', 'Invigilators on duty', 'Cover']],
+    body: state.dutyRoster.slots.map(s=>[
+      s.label,
+      s.assigned.join(', ') || '—',
+      s.short ? `SHORT — needs ${s.count}` : 'Full'
+    ]),
+    theme: 'grid',
+    styles: {font:'helvetica', fontSize:9.5, cellPadding:3.5, lineColor:[214,210,196], lineWidth:0.2, textColor:[30,28,24], valign:'middle'},
+    headStyles: {fillColor:[20,20,18], textColor:[201,162,39], fontStyle:'bold', fontSize:10},
+    columnStyles: {2:{cellWidth:30, halign:'center', fontStyle:'bold'}},
+    alternateRowStyles: {fillColor:[250,249,246]},
+    margin: {left:14, right:14},
+    didParseCell: (data)=>{
+      if(data.section==='body' && data.column.index===2 && String(data.cell.raw).startsWith('SHORT')){
+        data.cell.styles.textColor = [193,84,58];
+      }
+    }
+  });
+  const load = state.dutyRoster.load || {};
+  const names = Object.keys(load);
+  if(names.length){
+    const ty = doc.lastAutoTable.finalY + 12;
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setTextColor(20,20,18);
+    doc.text('Duty load per invigilator', 14, ty);
+    doc.autoTable({
+      startY: ty + 4,
+      head: [['Invigilator','Duties']],
+      body: names.sort((a,b)=>a.localeCompare(b)).map(n=>[n, String(load[n]||0)]),
+      theme: 'grid',
+      styles: {font:'helvetica', fontSize:9.5, cellPadding:3, lineColor:[214,210,196], lineWidth:0.2, textColor:[30,28,24]},
+      headStyles: {fillColor:[20,20,18], textColor:[201,162,39], fontStyle:'bold', fontSize:9.5},
+      columnStyles: {1:{cellWidth:22, halign:'center'}},
+      alternateRowStyles: {fillColor:[250,249,246]},
+      margin: {left:14, right:14}
+    });
+  }
+  pdfFooter(doc);
+  doc.save('algorithmic-invigilator-exam-duty.pdf');
+});
+
+document.getElementById('attPdf').addEventListener('click', ()=>{
+  if(state.attendance.length===0){
+    document.getElementById('attHint').textContent = 'Log at least one absence first, then export it.';
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm', format:'a4'});
+  const startY = pdfHeader(doc, 'Attendance Report — Absentee Record');
+  const rows = [...state.attendance].sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  let lastDate = null;
+  const body = rows.map(r=>{
+    const showDate = r.date !== lastDate;
+    lastDate = r.date;
+    return [showDate ? fmtDate(r.date) : '', r.name, r.reason || 'Not stated'];
+  });
+  doc.autoTable({
+    startY: startY + 2,
+    head: [['Date','Absentee','Reason for absence']],
+    body,
+    theme: 'grid',
+    styles: {font:'helvetica', fontSize:9.5, cellPadding:3.5, lineColor:[214,210,196], lineWidth:0.2, textColor:[30,28,24], valign:'middle'},
+    headStyles: {fillColor:[20,20,18], textColor:[201,162,39], fontStyle:'bold', fontSize:10},
+    columnStyles: {0:{cellWidth:32, fontStyle:'bold', textColor:[92,88,78]}},
+    alternateRowStyles: {fillColor:[250,249,246]},
+    margin: {left:14, right:14}
+  });
+  const ly = doc.lastAutoTable.finalY + 8;
+  const unique = new Set(state.attendance.map(r=>r.name.toLowerCase())).size;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+  doc.setTextColor(120,116,106);
+  doc.text(`Total ${state.attendance.length} absence(s) across ${unique} absentee(s).`, 14, ly);
+  pdfFooter(doc);
+  doc.save('algorithmic-attendance-report.pdf');
+});
 
 // ---------- ASSISTANT ----------
 const chatLog = document.getElementById('chatLog');
@@ -898,7 +1351,7 @@ async function sendChat(){
     pushMsg('ai', data.reply || 'Done.');
     const changed = {};
     if(data.seatGrid){ state.seatGrid = data.seatGrid; renderSeatGrid(); changed.seatGrid = state.seatGrid; }
-    if(data.schedule){ state.schedule = data.schedule; renderTimetable(); changed.schedule = state.schedule; }
+    if(data.schedule){ state.schedule = data.schedule; activeBatchTab = null; renderTimetable(); changed.schedule = state.schedule; }
     if(data.dutyRoster){ state.dutyRoster = data.dutyRoster; renderDutyRoster(); changed.dutyRoster = state.dutyRoster; }
     if(Object.keys(changed).length) saveState(changed);
   } catch(err){
@@ -906,6 +1359,9 @@ async function sendChat(){
     pushMsg('ai', 'Could not reach the backend at all — check that your service is deployed and running.');
   }
 }
+
+// default the attendance date field to today
+document.getElementById('attDate').valueAsDate = new Date();
 </script>
 </body>
 </html>
