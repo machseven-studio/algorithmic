@@ -52,7 +52,7 @@
   .card + .card{margin-top:16px;}
   label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:6px;margin-top:14px;}
   label:first-child{margin-top:0;}
-  input[type=text],input[type=number],textarea,select{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);padding:9px 10px;font-family:'Inter',sans-serif;font-size:13px;border-radius:2px;}
+  input[type=text],input[type=password],input[type=number],textarea,select{width:100%;background:var(--surface-2);border:1px solid var(--border-strong);color:var(--text);padding:9px 10px;font-family:'Inter',sans-serif;font-size:13px;border-radius:2px;}
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   button{cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;border-radius:2px;border:1px solid var(--border-strong);background:transparent;color:var(--text);padding:10px 16px;transition:all .15s;}
@@ -61,6 +61,7 @@
   button.primary:hover{background:#e0b52e;color:var(--accent-text);}
   button.ghost{border-color:transparent;color:var(--text-dim);padding:6px 8px;}
   button.ghost:hover{color:var(--text);}
+  button:disabled{opacity:0.5;cursor:default;}
   .btn-row{display:flex;gap:8px;margin-top:16px;}
   table{width:100%;border-collapse:collapse;font-size:12px;}
   th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-faint);padding:6px 8px;border-bottom:1px solid var(--border-strong);}
@@ -98,6 +99,9 @@
   .hint{font-size:11px;color:var(--text-faint);margin-top:8px;}
   .field-note{font-size:11px;color:var(--text-faint);margin-top:4px;}
   .del{color:var(--danger);cursor:pointer;font-size:11px;}
+  .warn{color:var(--danger);font-size:11px;margin-top:4px;}
+  .save-indicator{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;position:fixed;bottom:16px;right:20px;opacity:0;transition:opacity .3s;}
+  .save-indicator.show{opacity:1;}
   #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
   .auth-card{width:360px;border:1px solid var(--border);background:var(--surface);padding:36px 32px;}
   .auth-brand{font-family:'Archivo',sans-serif;font-weight:900;font-size:24px;text-align:center;margin-bottom:4px;}
@@ -125,7 +129,7 @@
       <label>Email</label>
       <input type="text" id="loginEmail" placeholder="you@institute.edu" />
       <label>Password</label>
-      <input type="text" id="loginPassword" placeholder="Your password" />
+      <input type="password" id="loginPassword" placeholder="Your password" />
       <div class="btn-row"><button class="primary" id="loginBtn" style="width:100%;">Log in</button></div>
     </div>
     <div id="signupForm" style="display:none;">
@@ -134,7 +138,7 @@
       <label>Email</label>
       <input type="text" id="signupEmail" placeholder="you@institute.edu" />
       <label>Password</label>
-      <input type="text" id="signupPassword" placeholder="At least 6 characters" />
+      <input type="password" id="signupPassword" placeholder="At least 6 characters" />
       <div class="btn-row"><button class="primary" id="signupBtn" style="width:100%;">Create account</button></div>
     </div>
     <div class="auth-error" id="authError"></div>
@@ -150,10 +154,11 @@
     <nav>
       <div class="nav-item active" data-view="seating"><span class="num">01</span>&nbsp;&nbsp;Seating</div>
       <div class="nav-item" data-view="timetable"><span class="num">02</span>&nbsp;&nbsp;Timetable</div>
-      <div class="nav-item" data-view="assistant"><span class="num">03</span>&nbsp;&nbsp;Assistant</div>
+      <div class="nav-item" data-view="duty"><span class="num">03</span>&nbsp;&nbsp;Duty Roster</div>
+      <div class="nav-item" data-view="assistant"><span class="num">04</span>&nbsp;&nbsp;Assistant</div>
     </nav>
     <div class="sidebar-foot">
-      BUILD MVP-01<br>
+      BUILD MVP-02<br>
       NO TWO SAME-BATCH<br>
       ADJACENT / NO CLASH<br>
       TEACHER-SLOT<br><br>
@@ -258,28 +263,64 @@
       </div>
     </section>
 
+    <!-- DUTY ROSTER -->
+    <section class="view" id="view-duty">
+      <div class="view-head">
+        <div>
+          <h1>Duty roster</h1>
+          <p>List the exam slots that need supervision. Algorithmic spreads duty fairly across your faculty list from Module 02, and keeps a teacher off exams for their own subject where possible.</p>
+        </div>
+        <div class="tag">Module 03</div>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <label>Add an exam slot</label>
+            <input type="text" id="dutyLabel" placeholder="e.g. Physics — Day 1, 10:00" />
+            <input type="number" id="dutyCount" placeholder="Invigilators needed" min="1" value="1" style="margin-top:10px;" />
+            <div class="field-note">Add one slot per exam session. If a teacher's subject appears in the slot label, they're skipped for that slot where possible.</div>
+            <div class="btn-row"><button id="addDutySlot">Add slot</button></div>
+          </div>
+          <div class="card">
+            <label>Exam slots (<span id="dutySlotCount">0</span>)</label>
+            <table id="dutySlotTable"><thead><tr><th>Slot</th><th>Needed</th><th></th></tr></thead><tbody></tbody></table>
+            <div class="btn-row"><button class="primary" id="genDuty">Generate duty roster</button></div>
+            <div class="hint" id="dutyHint">Uses the faculty list from the Timetable module — add teachers there first.</div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <label>Assignments</label>
+            <div id="dutyWrap"><div class="empty">Add exam slots and generate a roster to see assignments.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ASSISTANT -->
     <section class="view" id="view-assistant">
       <div class="view-head">
         <div>
           <h1>Assistant</h1>
-          <p>Handles out-of-script changes to seating or the timetable — "Mr. Sharma is sick, move Wednesday period 3" or "swap seat R2C4 and R5C1." It only touches these two jobs.</p>
+          <p>Handles out-of-script changes to seating, the timetable, or duty roster — "Mr. Sharma is sick, move Wednesday period 3" or "swap seat R2C4 and R5C1." It only touches these jobs.</p>
         </div>
-        <div class="tag">Module 03</div>
+        <div class="tag">Module 04</div>
       </div>
       <div class="chat-wrap">
         <div class="chat-log" id="chatLog">
-          <div class="msg sys">Assistant connected · scope: seating + timetable only</div>
+          <div class="msg sys">Assistant connected · scope: seating + timetabling + duty roster only</div>
         </div>
         <div class="chat-input">
           <input type="text" id="chatInput" placeholder="Describe the change you need..." />
           <button id="chatSend">Send</button>
         </div>
       </div>
-      <div class="hint">Runs through your backend's <code>/api/assistant</code> endpoint, which holds the Anthropic API key server-side. It will not answer anything outside seating and timetabling.</div>
+      <div class="hint">Runs through your backend's <code>/api/assistant</code> endpoint, which holds the Gemini API key server-side. It will not answer anything outside these modules.</div>
     </section>
   </main>
 </div>
+
+<div class="save-indicator" id="saveIndicator">Saved</div>
 
 <script>
 const BATCH_COLORS = ['c1','c2','c3','c4','c5','c6'];
@@ -306,6 +347,7 @@ async function checkSession(){
     instituteName = data.institute_name;
     localStorage.setItem('algorithmic_institute', instituteName);
     showApp();
+    await loadState();
   } catch(e){ showAuth(); }
 }
 checkSession();
@@ -338,6 +380,7 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     localStorage.setItem('algorithmic_token', authToken);
     localStorage.setItem('algorithmic_institute', instituteName);
     showApp();
+    await loadState();
   } catch(e){ showAuthError('Could not reach the server.'); }
 });
 
@@ -354,6 +397,7 @@ document.getElementById('signupBtn').addEventListener('click', async ()=>{
     localStorage.setItem('algorithmic_token', authToken);
     localStorage.setItem('algorithmic_institute', instituteName);
     showApp();
+    await loadState();
   } catch(e){ showAuthError('Could not reach the server.'); }
 });
 
@@ -374,8 +418,65 @@ let state = {
   teachers: [],
   ttDays: 5, ttPeriods: 6,
   schedule: null,
-  batches: []
+  examSlots: [],
+  dutyRoster: null
 };
+
+// ---------- PERSISTENCE ----------
+let saveTimer = null;
+function saveState(partial){
+  // Debounced so a burst of edits (e.g. adding many students) doesn't fire
+  // a network request per keystroke/click.
+  clearTimeout(saveTimer);
+  Object.assign(saveState._pending = saveState._pending || {}, partial);
+  saveTimer = setTimeout(async ()=>{
+    const payload = saveState._pending;
+    saveState._pending = {};
+    try{
+      const res = await fetch('/api/state', {
+        method:'PUT',
+        headers:{'Content-Type':'application/json', 'Authorization':'Bearer '+authToken},
+        body: JSON.stringify(payload)
+      });
+      if(res.ok){
+        const ind = document.getElementById('saveIndicator');
+        ind.classList.add('show');
+        setTimeout(()=>ind.classList.remove('show'), 1200);
+      }
+    } catch(e){ /* offline or server hiccup - next edit will retry */ }
+  }, 400);
+}
+
+async function loadState(){
+  try{
+    const res = await fetch('/api/state', {headers:{'Authorization':'Bearer '+authToken}});
+    if(!res.ok) return;
+    const data = await res.json();
+    state.roster = data.roster || [];
+    state.rows = data.rows || 6;
+    state.cols = data.cols || 6;
+    state.seatGrid = data.seatGrid || null;
+    state.teachers = data.teachers || [];
+    state.ttDays = data.ttDays || 5;
+    state.ttPeriods = data.ttPeriods || 6;
+    state.schedule = data.schedule || null;
+    state.examSlots = data.examSlots || [];
+    state.dutyRoster = data.dutyRoster || null;
+
+    document.getElementById('roomRows').value = state.rows;
+    document.getElementById('roomCols').value = state.cols;
+    document.getElementById('ttDays').value = state.ttDays;
+    document.getElementById('ttPeriods').value = state.ttPeriods;
+
+    renderRoster();
+    renderSeatGrid();
+    renderTeachers();
+    activeBatchTab = null;
+    renderTimetable();
+    renderDutySlots();
+    renderDutyRoster();
+  } catch(e){ /* stay on whatever's in memory if this fails */ }
+}
 
 document.querySelectorAll('.nav-item').forEach(item=>{
   item.addEventListener('click', ()=>{
@@ -397,7 +498,9 @@ function renderRoster(){
   });
   document.getElementById('rosterCount').textContent = state.roster.length;
   tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
-    state.roster.splice(+e.target.dataset.i,1); renderRoster();
+    state.roster.splice(+e.target.dataset.i,1);
+    renderRoster();
+    saveState({roster: state.roster});
   }));
 }
 
@@ -417,6 +520,7 @@ document.getElementById('seatFile').addEventListener('change', e=>{
     });
     document.getElementById('seatFileStatus').textContent = `Loaded ${added} students from ${file.name}.`;
     renderRoster();
+    saveState({roster: state.roster});
   };
   reader.readAsBinaryString(file);
 });
@@ -428,6 +532,7 @@ document.getElementById('manAdd').addEventListener('click', ()=>{
   state.roster.push({name, batch});
   document.getElementById('manName').value=''; document.getElementById('manBatch').value='';
   renderRoster();
+  saveState({roster: state.roster});
 });
 
 function interleaveByBatch(roster){
@@ -542,6 +647,7 @@ document.getElementById('genSeating').addEventListener('click', ()=>{
   }
   state.seatGrid = buildSeatGrid(state.roster, rows, cols);
   renderSeatGrid();
+  saveState({rows: state.rows, cols: state.cols, seatGrid: state.seatGrid});
 });
 
 // ---------- TIMETABLE ----------
@@ -555,7 +661,9 @@ function renderTeachers(){
   });
   document.getElementById('teacherCount').textContent = state.teachers.length;
   tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
-    state.teachers.splice(+e.target.dataset.i,1); renderTeachers();
+    state.teachers.splice(+e.target.dataset.i,1);
+    renderTeachers();
+    saveState({teachers: state.teachers});
   }));
 }
 
@@ -571,6 +679,7 @@ document.getElementById('addTeacher').addEventListener('click', ()=>{
   ['tName','tSubject','tBatch','tUnavail'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('tLectures').value = 4;
   renderTeachers();
+  saveState({teachers: state.teachers});
 });
 
 function buildSchedule(){
@@ -617,6 +726,7 @@ function renderTimetable(){
   const tabsEl = document.getElementById('batchTabs');
   if(!state.schedule){ wrap.innerHTML = '<div class="empty">Add teachers and generate a timetable to see the weekly grid.</div>'; tabsEl.innerHTML=''; return; }
   const {schedule, dayNames} = state.schedule;
+  if(!state.batches || state.batches.length===0){ state.batches = Object.keys(schedule); }
   tabsEl.innerHTML = '';
   state.batches.forEach(b=>{
     const tab = document.createElement('div');
@@ -661,7 +771,95 @@ document.getElementById('genTimetable').addEventListener('click', ()=>{
   state.schedule = result;
   activeBatchTab = null;
   renderTimetable();
+  saveState({ttDays: state.ttDays, ttPeriods: state.ttPeriods, schedule: state.schedule});
 });
+
+// ---------- DUTY ROSTER ----------
+function renderDutySlots(){
+  const tbody = document.querySelector('#dutySlotTable tbody');
+  tbody.innerHTML = '';
+  state.examSlots.forEach((s,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${s.label}</td><td>${s.count}</td><td><span class="del" data-i="${i}">remove</span></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('dutySlotCount').textContent = state.examSlots.length;
+  tbody.querySelectorAll('.del').forEach(d=>d.addEventListener('click', e=>{
+    state.examSlots.splice(+e.target.dataset.i,1);
+    renderDutySlots();
+    saveState({examSlots: state.examSlots});
+  }));
+}
+
+document.getElementById('addDutySlot').addEventListener('click', ()=>{
+  const label = document.getElementById('dutyLabel').value.trim();
+  const count = parseInt(document.getElementById('dutyCount').value)||1;
+  if(!label) return;
+  state.examSlots.push({label, count});
+  document.getElementById('dutyLabel').value='';
+  document.getElementById('dutyCount').value = 1;
+  renderDutySlots();
+  saveState({examSlots: state.examSlots});
+});
+
+function buildDutyRoster(){
+  const counts = {};
+  state.teachers.forEach(t=>{ counts[t.name] = 0; });
+  const uniqueNames = [...new Set(state.teachers.map(t=>t.name))];
+  const subjectOf = {};
+  state.teachers.forEach(t=>{ subjectOf[t.name] = t.subject; });
+
+  const slots = state.examSlots.map(slot=>{
+    const labelLower = slot.label.toLowerCase();
+    // prefer teachers whose own subject doesn't appear in this slot's label
+    const preferred = uniqueNames.filter(n=>{
+      const subj = (subjectOf[n]||'').toLowerCase();
+      return !(subj && labelLower.includes(subj));
+    });
+    const pool = preferred.length >= slot.count ? preferred : uniqueNames;
+    const sorted = [...pool].sort((a,b)=>counts[a]-counts[b]);
+    const assigned = sorted.slice(0, slot.count);
+    assigned.forEach(n=>{ counts[n] = (counts[n]||0)+1; });
+    return {label: slot.label, count: slot.count, assigned, short: assigned.length < slot.count};
+  });
+  return {slots};
+}
+
+document.getElementById('genDuty').addEventListener('click', ()=>{
+  if(state.teachers.length===0){
+    document.getElementById('dutyHint').textContent = 'No faculty yet — add teachers in the Timetable module first.';
+    return;
+  }
+  if(state.examSlots.length===0){
+    document.getElementById('dutyHint').textContent = 'Add at least one exam slot first.';
+    return;
+  }
+  document.getElementById('dutyHint').textContent = 'Uses the faculty list from the Timetable module.';
+  state.dutyRoster = buildDutyRoster();
+  renderDutyRoster();
+  saveState({dutyRoster: state.dutyRoster});
+});
+
+function renderDutyRoster(){
+  const wrap = document.getElementById('dutyWrap');
+  if(!state.dutyRoster || !state.dutyRoster.slots || state.dutyRoster.slots.length===0){
+    wrap.innerHTML = '<div class="empty">Add exam slots and generate a roster to see assignments.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>Slot</th><th>Assigned</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  state.dutyRoster.slots.forEach(s=>{
+    const tr = document.createElement('tr');
+    const names = s.assigned.join(', ') || '—';
+    const warn = s.short ? `<div class="warn">Not enough available faculty for this slot.</div>` : '';
+    tr.innerHTML = `<td>${s.label}</td><td>${names}${warn}</td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
 
 // ---------- ASSISTANT ----------
 const chatLog = document.getElementById('chatLog');
@@ -690,15 +888,19 @@ async function sendChat(){
       body: JSON.stringify({
         message: text,
         seatGrid: state.seatGrid,
-        schedule: state.schedule
+        schedule: state.schedule,
+        dutyRoster: state.dutyRoster
       })
     });
     chatLog.removeChild(chatLog.lastChild);
     const data = await res.json();
     if(!res.ok){ pushMsg('ai', data.detail || 'The assistant hit an error it did not explain.'); return; }
     pushMsg('ai', data.reply || 'Done.');
-    if(data.seatGrid){ state.seatGrid = data.seatGrid; renderSeatGrid(); }
-    if(data.schedule){ state.schedule = data.schedule; renderTimetable(); }
+    const changed = {};
+    if(data.seatGrid){ state.seatGrid = data.seatGrid; renderSeatGrid(); changed.seatGrid = state.seatGrid; }
+    if(data.schedule){ state.schedule = data.schedule; renderTimetable(); changed.schedule = state.schedule; }
+    if(data.dutyRoster){ state.dutyRoster = data.dutyRoster; renderDutyRoster(); changed.dutyRoster = state.dutyRoster; }
+    if(Object.keys(changed).length) saveState(changed);
   } catch(err){
     chatLog.removeChild(chatLog.lastChild);
     pushMsg('ai', 'Could not reach the backend at all — check that your service is deployed and running.');
