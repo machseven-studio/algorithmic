@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Algorithmic - Institutional Operations Platform</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f3f4f6; }
+    .serif-title { font-family: 'Cinzel', serif; }
+    
+    .animate-gpu-fade {
+      will-change: transform, opacity;
+      animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-gpu-slide {
+      will-change: transform, opacity;
+      animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .glass-panel {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <!-- TOP ALERTS (Fee Urgent Reminders) -->
+  <div id="urgent-fee-banner" class="hidden bg-amber-600 text-white px-4 py-2 text-sm font-semibold text-center animate-gpu-fade">
+    ⚠️ ALERT: Defaulters identified with fee due dates in less than 3 days! Check the Fee Department module immediately.
+  </div>
+
+  <!-- MULTI-BRANCH HEADER -->
+  <header id="app-header" class="hidden glass-panel border-b border-gray-800 px-6 py-4 flex flex-wrap items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <h1 class="text-2xl font-bold tracking-tight text-white serif-title">Algorithmic</h1>
+      <span class="text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2.5 py-1 rounded-full">v2.0 Enterprise</span>
+    </div>
+
+    <!-- Branch Switcher -->
+    <div class="flex items-center space-x-3">
+      <label for="branch-select" class="text-xs font-medium text-gray-400">Current Branch:</label>
+      <select id="branch-select" onchange="switchBranch()" class="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500">
+      </select>
+      <button onclick="renameCurrentBranch()" class="text-xs text-indigo-400 hover:underline">Rename</button>
+      <button onclick="createNewBranch()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">+ New Branch</button>
+    </div>
+
+    <div class="flex items-center space-x-4">
+      <span id="user-display" class="text-sm font-medium text-gray-300"></span>
+      <button onclick="logout()" class="text-xs bg-red-900/40 border border-red-700 text-red-300 hover:bg-red-800/60 px-3 py-1.5 rounded-lg transition">Logout</button>
+    </div>
+  </header>
+
+  <!-- AUTHENTICATION FORM -->
+  <div id="login-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-gpu-fade">
+    <div class="glass-panel p-8 rounded-2xl w-full max-full max-w-md border border-gray-800 shadow-2xl">
+      <h2 class="text-3xl font-extrabold text-white mb-2 serif-title">Algorithmic</h2>
+      <p class="text-sm text-gray-400 mb-6">Enter your details to initiate full-trace session audit access.</p>
+      
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Full Name (Required for Audit Trail)</label>
+          <input id="login-name" type="text" required placeholder="e.g. Samarth Dave" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Email Address</label>
+          <input id="login-email" type="email" required placeholder="admin@institute.edu" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Password</label>
+          <input id="login-pass" type="password" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-lg transition transform active:scale-95 shadow-lg shadow-indigo-600/30">
+          Authenticate Session
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN NAVIGATION & MODULE WORKSPACE -->
+  <main id="app-workspace" class="hidden flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col space-y-8 animate-gpu-fade">
+    
+    <!-- MODULE NAVIGATION BARS -->
+    <nav class="flex space-x-2 border-b border-gray-800 pb-4 overflow-x-auto">
+      <button onclick="switchTab('module-1')" id="tab-module-1" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white transition">Module 1: Algorithmic Homepage</button>
+      <button onclick="switchTab('module-2')" id="tab-module-2" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Module 2: STUDENT DATABASE</button>
+      <button onclick="switchTab('module-3')" id="tab-module-3" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Module 3: Seating Layout</button>
+      <button onclick="switchTab('module-4')" id="tab-module-4" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Fee Department</button>
+    </nav>
+
+    <!-- MODULE 1: ALGORITHMIC HOMEPAGE -->
+    <section id="module-1" class="tab-content flex flex-col items-center justify-center py-12 text-center animate-gpu-slide space-y-6">
+      <div class="space-y-3">
+        <h1 class="text-5xl font-black text-white tracking-wide serif-title animate-gpu-fade">Algorithmic</h1>
+        <p class="text-lg font-semibold text-indigo-400 animate-gpu-fade">Created by Samarth Dave, founder of MachSevenStudios</p>
+        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold animate-gpu-fade">Powered by Metasys (registered)</p>
+      </div>
+
+      <div class="glass-panel p-6 rounded-2xl max-w-xl w-full text-left space-y-4 border border-gray-800 animate-gpu-slide">
+        <h3 class="text-md font-bold text-white border-b border-gray-700 pb-2">Institutional Platform Directives</h3>
+        <p class="text-xs text-gray-300 leading-relaxed">
+          Algorithmic automates core operations across institutional branches: managing student repositories, dynamic fee collection tracking, constraint-safe exam seating, and automated timetables.
+        </p>
+        <div class="text-xs text-gray-400 space-y-1">
+          <p class="font-semibold text-gray-300">Support & Corporate Queries:</p>
+          <p>📧 <a href="mailto:machseven.studio@gmail.com" class="text-indigo-400 hover:underline">machseven.studio@gmail.com</a></p>
+          <p>📧 <a href="mailto:samdave2131@gmail.com" class="text-indigo-400 hover:underline">samdave2131@gmail.com</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODULE 2: STUDENT DATABASE -->
+    <section id="module-2" class="tab-content hidden animate-gpu-slide space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-white serif-title">STUDENT DATABASE</h2>
+          <p class="text-xs text-gray-400">Centralized repository powering seating, fees, and timetables.</p>
+        </div>
+        <button onclick="toggleStudentModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition">+ Enroll Student</button>
+      </div>
+
+      <!-- Student List Table -->
+      <div class="glass-panel rounded-xl overflow-hidden border border-gray-800">
+        <table class="w-full text-left text-sm text-gray-300">
+          <thead class="bg-gray-800/80 text-gray-200 text-xs uppercase font-semibold">
+            <tr>
+              <th class="px-4 py-3">Roll No</th>
+              <th class="px-4 py-3">Full Name</th>
+              <th class="px-4 py-3">Batch</th>
+              <th class="px-4 py-3">Father Details</th>
+              <th class="px-4 py-3">Mother Details</th>
+            </tr>
+          </thead>
+          <tbody id="student-table-body" class="divide-y divide-gray-800">
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- MODULE 3: SEATING LAYOUT -->
+    <section id="module-3" class="tab-content hidden animate-gpu-slide space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-white serif-title">Seating Layout Module</h2>
+          <p class="text-xs text-gray-400">Generates adjacent-conflict free matrices from Module 2 records.</p>
+        </div>
+        <button onclick="generateCreamPDF()" class="bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">Export Cream-Textured PDF</button>
+      </div>
+      <div class="glass-panel p-8 rounded-xl text-center text-gray-400 text-sm border border-gray-800">
+        Seating engine dynamically linked to Module 2 central student database. Click export to generate formatted PDF outputs.
+      </div>
+    </section>
+
+    <!-- MODULE 4: FEE DEPARTMENT -->
+    <section id="module-4" class="tab-content hidden animate-gpu-slide space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-white serif-title">Fee Department</h2>
+          <p class="text-xs text-gray-400">Defaulter rosters and automated 3-day reminder notifications.</p>
+        </div>
+        <button onclick="toggleFeeModal()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition">+ Record Pending Fee</button>
+      </div>
+
+      <div class="glass-panel rounded-xl overflow-hidden border border-gray-800">
+        <table class="w-full text-left text-sm text-gray-300">
+          <thead class="bg-gray-800/80 text-gray-200 text-xs uppercase font-semibold">
+            <tr>
+              <th class="px-4 py-3">Student</th>
+              <th class="px-4 py-3">Roll No</th>
+              <th class="px-4 py-3">Amount Due</th>
+              <th class="px-4 py-3">Due Date</th>
+              <th class="px-4 py-3">Reminders / Status</th>
+            </tr>
+          </thead>
+          <tbody id="fee-table-body" class="divide-y divide-gray-800">
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ADD STUDENT MODAL -->
+  <div id="student-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+    <div class="glass-panel p-6 rounded-2xl w-full max-w-lg border border-gray-800">
+      <h3 class="text-xl font-bold text-white mb-4">Enroll New Student</h3>
+      <form onsubmit="submitStudent(event)" class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <input id="stud-roll" type="text" placeholder="Roll Number" required class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          <input id="stud-name" type="text" placeholder="Full Name" required class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+        </div>
+        <input id="stud-batch" type="text" placeholder="Batch / Class" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+        
+        <!-- Explicit Father & Mother Contact Details -->
+        <div class="grid grid-cols-2 gap-3 border-t border-gray-700 pt-3">
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Father's Name</label>
+            <input id="stud-fname" type="text" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Father's Contact</label>
+            <input id="stud-fcontact" type="tel" placeholder="+91..." required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Mother's Name</label>
+            <input id="stud-mname" type="text" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 block mb-1">Mother's Contact</label>
+            <input id="stud-mcontact" type="tel" placeholder="+91..." required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 border-t border-gray-700 pt-3">
+          <button type="button" onclick="toggleStudentModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 text-sm rounded-lg">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ADD FEE MODAL -->
+  <div id="fee-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+    <div class="glass-panel p-6 rounded-2xl w-full max-w-md border border-gray-800">
+      <h3 class="text-xl font-bold text-white mb-4">Record Pending Fee</h3>
+      <form onsubmit="submitFee(event)" class="space-y-3">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Select Student</label>
+          <select id="fee-student-select" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Amount Due ($)</label>
+          <input id="fee-amount" type="number" step="0.01" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Due Date</label>
+          <input id="fee-date" type="date" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+        </div>
+        <div class="flex justify-end space-x-2 border-t border-gray-700 pt-3">
+          <button type="button" onclick="toggleFeeModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
+          <button type="submit" class="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 text-sm rounded-lg">Save Pending Fee</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentToken = localStorage.getItem("algorithmic_token") || null;
+    let currentUser = localStorage.getItem("algorithmic_user") || null;
+    let branches = [];
+    let selectedBranchId = null;
+    let idleTimer = null;
+
+    // 15-MINUTE IDLE TIMEOUT TRACKER
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      if (currentToken) {
+        idleTimer = setTimeout(() => {
+          alert("Session expired due to 15 minutes of inactivity.");
+          logout();
+        }, 15 * 60 * 1000);
+      }
+    }
+
+    ['mousemove', 'keydown', 'click'].forEach(evt => {
+      window.addEventListener(evt, resetIdleTimer);
+    });
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const full_name = document.getElementById("login-name").value;
+      const email = document.getElementById("login-email").value;
+      const password = document.getElementById("login-pass").value;
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ full_name, email, password })
+        });
+        if (!res.ok) throw new Error("Authentication failed");
+        const data = await res.json();
+        
+        currentToken = data.token;
+        currentUser = data.full_name;
+        localStorage.setItem("algorithmic_token", currentToken);
+        localStorage.setItem("algorithmic_user", currentUser);
+
+        initApp();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem("algorithmic_token");
+      localStorage.removeItem("algorithmic_user");
+      currentToken = null;
+      currentUser = null;
+      document.getElementById("login-modal").classList.remove("hidden");
+      document.getElementById("app-header").classList.add("hidden");
+      document.getElementById("app-workspace").classList.add("hidden");
+    }
+
+    async function initApp() {
+      if (!currentToken) return;
+      document.getElementById("login-modal").classList.add("hidden");
+      document.getElementById("app-header").classList.remove("hidden");
+      document.getElementById("app-workspace").classList.remove("hidden");
+      document.getElementById("user-display").innerText = currentUser;
+      
+      resetIdleTimer();
+      await loadBranches();
+    }
+
+    async function loadBranches() {
+      const res = await fetch("/api/branches");
+      branches = await res.json();
+      const select = document.getElementById("branch-select");
+      select.innerHTML = branches.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
+      
+      if (branches.length > 0) {
+        selectedBranchId = branches[0].id;
+        loadModuleData();
+      }
+    }
+
+    function switchBranch() {
+      selectedBranchId = document.getElementById("branch-select").value;
+      loadModuleData();
+    }
+
+    async function createNewBranch() {
+      const name = prompt("Enter new Branch Name:");
+      if (!name) return;
+      await fetch("/api/branches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
+        body: JSON.stringify({ name })
+      });
+      await loadBranches();
+    }
+
+    async function renameCurrentBranch() {
+      const name = prompt("Enter updated Branch Name:");
+      if (!name) return;
+      await fetch(`/api/branches/${selectedBranchId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
+        body: JSON.stringify({ name })
+      });
+      await loadBranches();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(el => {
+        el.classList.remove("bg-indigo-600", "text-white");
+        el.classList.add("text-gray-400");
+      });
+
+      document.getElementById(tabId).classList.remove("hidden");
+      document.getElementById(`tab-${tabId}`).classList.add("bg-indigo-600", "text-white");
+      document.getElementById(`tab-${tabId}`).classList.remove("text-gray-400");
+    }
+
+    async function loadModuleData() {
+      if (!selectedBranchId) return;
+
+      // Load Students
+      const resStud = await fetch(`/api/students?branch_id=${selectedBranchId}`);
+      const students = await resStud.json();
+      
+      const studTbody = document.getElementById("student-table-body");
+      studTbody.innerHTML = students.map(s => `
+        <tr>
+          <td class="px-4 py-3 font-semibold text-white">${s.roll_number}</td>
+          <td class="px-4 py-3">${s.full_name}</td>
+          <td class="px-4 py-3"><span class="bg-gray-800 border border-gray-700 px-2 py-0.5 rounded text-xs">${s.batch}</span></td>
+          <td class="px-4 py-3 text-xs">Father: ${s.father_name}<br><span class="text-indigo-400">${s.father_contact}</span></td>
+          <td class="px-4 py-3 text-xs">Mother: ${s.mother_name}<br><span class="text-indigo-400">${s.mother_contact}</span></td>
+        </tr>
+      `).join("");
+
+      // Populate Fee Student Select Options
+      const feeSelect = document.getElementById("fee-student-select");
+      feeSelect.innerHTML = students.map(s => `<option value="${s.id}">${s.full_name} (${s.roll_number})</option>`).join("");
+
+      // Load Defaulters
+      const resFees = await fetch(`/api/fees/defaulters?branch_id=${selectedBranchId}`);
+      const defaulters = await resFees.json();
+      
+      let showUrgentBanner = false;
+      const feeTbody = document.getElementById("fee-table-body");
+      feeTbody.innerHTML = defaulters.map(f => {
+        if (f.urgent_alert) showUrgentBanner = true;
+        return `
+          <tr class="${f.urgent_alert ? 'bg-red-950/20' : ''}">
+            <td class="px-4 py-3 font-semibold text-white">${f.student_name}</td>
+            <td class="px-4 py-3">${f.roll_number}</td>
+            <td class="px-4 py-3 text-red-400 font-bold">$${f.amount_due.toFixed(2)}</td>
+            <td class="px-4 py-3">${f.due_date}</td>
+            <td class="px-4 py-3">
+              ${f.urgent_alert ? 
+                `<span class="bg-red-900/60 border border-red-700 text-red-200 text-xs px-2.5 py-1 rounded-full font-bold">⚠️ DUE IN ${f.days_remaining} DAYS</span>` : 
+                `<span class="text-xs text-gray-400">${f.days_remaining} days remaining</span>`}
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      document.getElementById("urgent-fee-banner").style.display = showUrgentBanner ? "block" : "none";
+    }
+
+    function toggleStudentModal() { document.getElementById("student-modal").classList.toggle("hidden"); }
+    function toggleFeeModal() { document.getElementById("fee-modal").classList.toggle("hidden"); }
+
+    async function submitStudent(e) {
+      e.preventDefault();
+      const payload = {
+        branch_id: selectedBranchId,
+        roll_number: document.getElementById("stud-roll").value,
+        full_name: document.getElementById("stud-name").value,
+        batch: document.getElementById("stud-batch").value,
+        father_name: document.getElementById("stud-fname").value,
+        father_contact: document.getElementById("stud-fcontact").value,
+        mother_name: document.getElementById("stud-mname").value,
+        mother_contact: document.getElementById("stud-mcontact").value
+      };
+
+      const res = await fetch("/api/students", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail);
+        return;
+      }
+
+      toggleStudentModal();
+      loadModuleData();
+    }
+
+    async function submitFee(e) {
+      e.preventDefault();
+      const payload = {
+        branch_id: selectedBranchId,
+        student_id: document.getElementById("fee-student-select").value,
+        amount_due: parseFloat(document.getElementById("fee-amount").value),
+        due_date: document.getElementById("fee-date").value
+      };
+
+      await fetch("/api/fees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
+        body: JSON.stringify(payload)
+      });
+
+      toggleFeeModal();
+      loadModuleData();
+    }
+
+    // CREAM-TEXTURED ELEGANT PDF ENGINE
+    function generateCreamPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      const activeBranchName = branches.find(b => b.id === selectedBranchId)?.name || "Main Campus";
+
+      // Cream Textured Fill
+      doc.setFillColor(253, 251, 247);
+      doc.rect(0, 0, 210, 297, "F");
+
+      // Double Frame Borders
+      doc.setDrawColor(180, 160, 120);
+      doc.setLineWidth(1);
+      doc.rect(5, 5, 200, 287);
+      doc.setLineWidth(0.3);
+      doc.rect(7, 7, 196, 283);
+
+      // Header Typography
+      doc.setFont("Cinzel", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(40, 40, 40);
+      doc.text("ALGORITHMIC", 105, 22, { align: "center" });
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.text(`INSTITUTIONAL EXAMINATION MATRIX — ${activeBranchName.toUpperCase()}`, 105, 28, { align: "center" });
+      
+      doc.setDrawColor(140, 120, 90);
+      doc.setLineWidth(0.5);
+      doc.line(20, 32, 190, 32);
+
+      // Dummy Seating Content Formatted nicely
+      doc.autoTable({
+        startY: 40,
+        head: [['Desk ID', 'Student Name', 'Roll Number', 'Batch', 'Room']],
+        body: [
+          ['D-01', 'Samarth Dave', '2026-CS-01', 'Batch A', 'Hall 1'],
+          ['D-02', 'Alex Mercer', '2026-CS-02', 'Batch B', 'Hall 1'],
+          ['D-03', 'Jane Doe', '2026-CS-03', 'Batch A', 'Hall 1'],
+        ],
+        theme: 'plain',
+        headStyles: { fillColor: [240, 235, 220], textColor: [40, 40, 40], fontStyle: 'bold' },
+        styles: { fillColor: [253, 251, 247], textColor: [60, 60, 60] },
+      });
+
+      doc.save("Algorithmic_Seating_Chart.pdf");
+    }
+
+    if (currentToken) initApp();
+  </script>
+</body>
+</html>
