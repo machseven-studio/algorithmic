@@ -1,487 +1,393 @@
-import os
-import sqlite3
-import uuid
-from datetime import datetime, timedelta
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Header, Depends, Query, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
+# main.py
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr
+from fastapi.responses import HTML5App, FileResponse, HTMLResponse
+from pydantic import BaseModel
+import sqlite3
+import os
 
-DB_PATH = os.environ.get("DATABASE_PATH", "algorithmic.db")
+app = FastAPI(title="Algorithmic", version="2.0.0")
 
-app = FastAPI(title="Algorithmic Platform", version="4.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=20.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    try:
-        yield conn
-    finally:
-        conn.close()
+DB_FILE = "algorithmic.db"
 
 def init_db():
-    os.makedirs("uploads", exist_ok=True)
-    os.makedirs("static", exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL;")
-    
-    # Branches
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS branches (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    );
+        CREATE TABLE IF NOT EXISTS branches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL
+        )
     """)
-    
-    # Users & Sessions
     cursor.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        full_name TEXT NOT NULL,
-        institute_name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    );
+        CREATE TABLE IF NOT EXISTS timetables (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_id INTEGER,
+            day TEXT,
+            time_slot TEXT,
+            subject TEXT,
+            teacher TEXT,
+            room TEXT,
+            FOREIGN KEY(branch_id) REFERENCES branches(id)
+        )
     """)
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS sessions (
-        token TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        institute_name TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        expires_at TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 2: Students
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS students (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        roll_number TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        batch TEXT NOT NULL,
-        father_name TEXT NOT NULL,
-        father_contact TEXT NOT NULL,
-        mother_name TEXT NOT NULL,
-        mother_contact TEXT NOT NULL,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 3: Teachers
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS teachers (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        contact_number TEXT NOT NULL,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 4: Classrooms
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS classrooms (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        room_name TEXT NOT NULL,
-        capacity INTEGER NOT NULL,
-        rows INTEGER NOT NULL,
-        columns INTEGER NOT NULL,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 5: Syllabus Database
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS syllabus (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        teacher_name TEXT NOT NULL,
-        lecture_date TEXT NOT NULL,
-        lecture_timings TEXT NOT NULL,
-        topics_covered TEXT NOT NULL,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 7: Attendance Report
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS attendance (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        absentee_name TEXT NOT NULL,
-        absence_date TEXT NOT NULL,
-        lecture_info TEXT NOT NULL,
-        reason TEXT NOT NULL,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 9: Invigilators
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS invigilators (
-        id TEXT PRIMARY KEY,
-        branch_id TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        contact_number TEXT NOT NULL,
-        assigned_room TEXT,
-        document_url TEXT,
-        created_at TEXT NOT NULL,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
-    # Module 10: Fee Department
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS fee_records (
-        id TEXT PRIMARY KEY,
-        student_id TEXT NOT NULL,
-        branch_id TEXT NOT NULL,
-        amount_due REAL NOT NULL,
-        due_date TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'PENDING',
-        document_url TEXT,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
-        FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE
-    );
-    """)
-
+    # Insert default branch if empty
     cursor.execute("SELECT COUNT(*) FROM branches")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("INSERT INTO branches (id, name, created_at) VALUES (?, ?, ?)",
-                       (str(uuid.uuid4()), "Main Campus", datetime.utcnow().isoformat()))
-        
+        cursor.execute("INSERT INTO branches (name) VALUES ('Main Campus')")
     conn.commit()
     conn.close()
 
 init_db()
 
-# SCHEMAS
-class LoginRequest(BaseModel):
-    full_name: str
-    institute_name: str
-    email: EmailStr
-    password: str
-
 class BranchCreate(BaseModel):
     name: str
 
-class StudentCreate(BaseModel):
-    branch_id: str
-    roll_number: str
-    full_name: str
-    batch: str
-    father_name: str
-    father_contact: str
-    mother_name: str
-    mother_contact: str
-    document_url: Optional[str] = None
-
-class TeacherCreate(BaseModel):
-    branch_id: str
-    full_name: str
+class TimetableCreate(BaseModel):
+    branch_id: int
+    day: str
+    time_slot: str
     subject: str
-    contact_number: str
-    document_url: Optional[str] = None
-
-class ClassroomCreate(BaseModel):
-    branch_id: str
-    room_name: str
-    capacity: int
-    rows: int
-    columns: int
-    document_url: Optional[str] = None
-
-class SyllabusCreate(BaseModel):
-    branch_id: str
-    subject: str
-    teacher_name: str
-    lecture_date: str
-    lecture_timings: str
-    topics_covered: str
-    document_url: Optional[str] = None
-
-class AttendanceCreate(BaseModel):
-    branch_id: str
-    absentee_name: str
-    absence_date: str
-    lecture_info: str
-    reason: str
-    document_url: Optional[str] = None
-
-class InvigilatorCreate(BaseModel):
-    branch_id: str
-    full_name: str
-    contact_number: str
-    document_url: Optional[str] = None
-
-class FeeRecordCreate(BaseModel):
-    student_id: str
-    branch_id: str
-    amount_due: float
-    due_date: str
-    document_url: Optional[str] = None
-
-def verify_session(authorization: Optional[str] = Header(None), db: sqlite3.Connection = Depends(get_db)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authentication token required.")
-    token = authorization.split(" ")[1]
-    
-    cursor = db.cursor()
-    cursor.execute("SELECT token, user_id, full_name, institute_name, expires_at FROM sessions WHERE token = ?", (token,))
-    session = cursor.fetchone()
-    
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session token.")
-    
-    expires_at = datetime.fromisoformat(session["expires_at"])
-    if datetime.utcnow() > expires_at:
-        cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
-        db.commit()
-        raise HTTPException(status_code=401, detail="Session expired.")
-    
-    return dict(session)
-
-# ENDPOINTS
-@app.post("/api/auth/login")
-def login(req: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT id FROM users WHERE email = ?", (req.email.lower(),))
-    user = cursor.fetchone()
-    
-    if not user:
-        user_id = str(uuid.uuid4())
-        cursor.execute("INSERT INTO users (id, full_name, institute_name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                       (user_id, req.full_name, req.institute_name, req.email.lower(), req.password, datetime.utcnow().isoformat()))
-    else:
-        user_id = user["id"]
-        cursor.execute("UPDATE users SET full_name = ?, institute_name = ? WHERE id = ?", (req.full_name, req.institute_name, user_id))
-
-    token = str(uuid.uuid4())
-    expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
-    
-    cursor.execute("INSERT INTO sessions (token, user_id, full_name, institute_name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-                   (token, user_id, req.full_name, req.institute_name, datetime.utcnow().isoformat(), expires_at))
-    db.commit()
-    return {"token": token, "full_name": req.full_name, "institute_name": req.institute_name, "expires_at": expires_at}
+    teacher: str
+    room: str
 
 @app.get("/api/branches")
-def get_branches(db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT id, name FROM branches ORDER BY created_at ASC")
-    return [dict(row) for row in cursor.fetchall()]
+def get_branches():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM branches")
+    branches = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return branches
 
 @app.post("/api/branches")
-def create_branch(req: BranchCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    branch_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("INSERT INTO branches (id, name, created_at) VALUES (?, ?, ?)", (branch_id, req.name, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": branch_id, "name": req.name}
+def add_branch(branch: BranchCreate):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO branches (name) VALUES (?)", (branch.name,))
+        conn.commit()
+        branch_id = cursor.lastrowid
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Branch already exists")
+    conn.close()
+    return {"id": branch_id, "name": branch.name}
 
-# Upload Document Endpoint
-@app.post("/api/upload-document")
-def upload_document(file: UploadFile = File(...), session: dict = Depends(verify_session)):
-    file_path = os.path.join("uploads", f"{uuid.uuid4()}_{file.filename}")
-    with open(file_path, "wb") as f:
-        f.write(file.file.read())
-    return {"file_url": f"/{file_path}"}
+@app.get("/api/timetables/{branch_id}")
+def get_timetables(branch_id: int):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM timetables WHERE branch_id = ?", (branch_id,))
+    entries = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return entries
 
-# Students
-@app.post("/api/students")
-def add_student(req: StudentCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    student_id = str(uuid.uuid4())
-    cursor = db.cursor()
+@app.post("/api/timetables")
+def add_timetable(entry: TimetableCreate):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO students (id, branch_id, roll_number, full_name, batch, father_name, father_contact, mother_name, mother_contact, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (student_id, req.branch_id, req.roll_number, req.full_name, req.batch, req.father_name, req.father_contact, req.mother_name, req.mother_contact, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": student_id, "status": "created"}
+        INSERT INTO timetables (branch_id, day, time_slot, subject, teacher, room)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (entry.branch_id, entry.day, entry.time_slot, entry.subject, entry.teacher, entry.room))
+    conn.commit()
+    entry_id = cursor.lastrowid
+    conn.close()
+    return {"id": entry_id, **entry.dict()}
 
-@app.get("/api/students")
-def list_students(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM students WHERE branch_id = ? ORDER BY roll_number ASC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return HTMLResponse(content=HTML_CONTENT, status_code=200)
 
-# Teachers
-@app.post("/api/teachers")
-def add_teacher(req: TeacherCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    teacher_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO teachers (id, branch_id, full_name, subject, contact_number, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (teacher_id, req.branch_id, req.full_name, req.subject, req.contact_number, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": teacher_id, "status": "created"}
+HTML_CONTENT = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALGORITHMIC - Institutional Operations Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0a0a0a;
+            background-image: 
+                radial-gradient(rgba(212, 175, 55, 0.04) 1px, transparent 0),
+                radial-gradient(rgba(212, 175, 55, 0.02) 1px, transparent 0);
+            background-size: 32px 32px;
+            background-position: 0 0, 16px 16px;
+            color: #e5e7eb;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        .gold-text {
+            color: #D4AF37;
+            background: linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .gold-border {
+            border-color: rgba(212, 175, 55, 0.3);
+        }
+        .gold-glow:hover {
+            box-shadow: 0 0 15px rgba(212, 175, 55, 0.2);
+        }
+        .sidebar-item {
+            transition: all 0.2s ease;
+            letter-spacing: 0.05em;
+        }
+        .sidebar-item:hover, .sidebar-item.active {
+            background: rgba(212, 175, 55, 0.1);
+            color: #D4AF37;
+            border-left: 3px solid #D4AF37;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Top Header -->
+    <header class="border-b gold-border bg-[#0d0d0d] px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center space-x-4">
+            <h1 class="text-2xl font-black gold-text tracking-wider">ALGORITHMIC</h1>
+            <span class="text-xs px-2 py-1 rounded bg-[#1a1a1a] gold-text border gold-border">ENTERPRISE v2.0</span>
+        </div>
+        <div class="flex items-center space-x-6 text-sm">
+            <div>Developer: <span class="gold-text font-semibold">Samarth Dave</span></div>
+            <div>Studio: <span class="gold-text font-semibold">MachSevenStudio</span></div>
+            <div class="flex items-center space-x-2">
+                <label class="text-xs text-gray-400">Branch:</label>
+                <select id="branchSelector" class="bg-[#121212] gold-border border text-sm rounded px-3 py-1 text-gray-200 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]">
+                    <!-- Dynamically populated -->
+                </select>
+                <button onclick="openAddBranchModal()" class="text-xs bg-[#1f1f1f] hover:bg-[#2a2a2a] gold-text border gold-border px-2 py-1 rounded">+ Add Branch</button>
+            </div>
+        </div>
+    </header>
 
-@app.get("/api/teachers")
-def list_teachers(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM teachers WHERE branch_id = ? ORDER BY full_name ASC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+    <!-- Main Workspace -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <nav class="w-64 border-r gold-border bg-[#0d0d0d] flex flex-col py-6 space-y-1">
+            <div class="px-6 pb-4 text-xs font-semibold text-gray-500 uppercase tracking-widest">Modules</div>
+            <button onclick="switchModule('students')" class="sidebar-item active w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Students</button>
+            <button onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Teachers</button>
+            <button onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Classrooms</button>
+            <button onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Syllabus</button>
+            <button onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Attendance</button>
+            <button onclick="switchModule('timetable')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Timetable</button>
+            <button onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Invigilator Duty</button>
+            <button onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-sm font-bold uppercase text-gray-300">Fees</button>
+            
+            <div class="mt-auto px-6 pt-6 border-t gold-border text-xs text-gray-400">
+                <p class="mb-2">We simplify the boring clerical work. Not by hiring more clerks, but by never needing to do so.</p>
+            </div>
+        </nav>
 
-# Classrooms
-@app.post("/api/classrooms")
-def add_classroom(req: ClassroomCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    room_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO classrooms (id, branch_id, room_name, capacity, rows, columns, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (room_id, req.branch_id, req.room_name, req.capacity, req.rows, req.columns, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": room_id, "status": "created"}
+        <!-- Content Area -->
+        <main class="flex-1 p-8 overflow-y-auto bg-[#0a0a0a]" id="mainContent">
+            <!-- Dynamic module content renders here -->
+        </main>
+    </div>
 
-@app.get("/api/classrooms")
-def list_classrooms(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM classrooms WHERE branch_id = ? ORDER BY room_name ASC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+    <!-- Add Branch Modal -->
+    <div id="branchModal" class="fixed inset-0 bg-black/70 flex items-center justify-center hidden">
+        <div class="bg-[#121212] border gold-border p-6 rounded-lg w-96 shadow-2xl">
+            <h3 class="text-lg font-bold gold-text mb-4">Add New Branch</h3>
+            <input type="text" id="newBranchName" placeholder="Branch Name (e.g. Downtown Campus)" class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200 mb-4 focus:outline-none focus:ring-1 focus:ring-[#D4AF37]">
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeAddBranchModal()" class="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded">Cancel</button>
+                <button onclick="createNewBranch()" class="px-4 py-2 text-sm bg-[#D4AF37] hover:bg-[#c59b27] text-black font-semibold rounded">Create Branch</button>
+            </div>
+        </div>
+    </div>
 
-# Syllabus
-@app.post("/api/syllabus")
-def add_syllabus(req: SyllabusCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    sys_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO syllabus (id, branch_id, subject, teacher_name, lecture_date, lecture_timings, topics_covered, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (sys_id, req.branch_id, req.subject, req.teacher_name, req.lecture_date, req.lecture_timings, req.topics_covered, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": sys_id, "status": "created"}
+    <script>
+        let branches = [];
+        let currentBranchId = null;
+        let currentModule = 'students';
 
-@app.get("/api/syllabus")
-def list_syllabus(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM syllabus WHERE branch_id = ? ORDER BY lecture_date DESC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+        async function loadBranches() {
+            const res = await fetch('/api/branches');
+            branches = await res.json();
+            const selector = document.getElementById('branchSelector');
+            selector.innerHTML = '';
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = b.name;
+                if (currentBranchId === b.id) opt.selected = true;
+                selector.appendChild(opt);
+            });
+            if (!currentBranchId && branches.length > 0) {
+                currentBranchId = branches[0].id;
+                selector.value = currentBranchId;
+            }
+        }
 
-# Attendance
-@app.post("/api/attendance")
-def add_attendance(req: AttendanceCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    att_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO attendance (id, branch_id, absentee_name, absence_date, lecture_info, reason, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (att_id, req.branch_id, req.absentee_name, req.absence_date, req.lecture_info, req.reason, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": att_id, "status": "created"}
+        document.getElementById('branchSelector').addEventListener('change', (e) => {
+            currentBranchId = parseInt(e.target.value);
+            refreshCurrentModule();
+        });
 
-@app.get("/api/attendance")
-def list_attendance(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM attendance WHERE branch_id = ? ORDER BY absence_date DESC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+        function openAddBranchModal() {
+            document.getElementById('branchModal').classList.remove('hidden');
+        }
 
-# Invigilators
-@app.post("/api/invigilators")
-def add_invigilator(req: InvigilatorCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    inv_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO invigilators (id, branch_id, full_name, contact_number, document_url, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, (inv_id, req.branch_id, req.full_name, req.contact_number, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": inv_id, "status": "created"}
+        function closeAddBranchModal() {
+            document.getElementById('branchModal').classList.add('hidden');
+            document.getElementById('newBranchName').value = '';
+        }
 
-@app.post("/api/invigilators/auto-allocate")
-def auto_allocate_invigilators(branch_id: str = Query(...), session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT id FROM invigilators WHERE branch_id = ?", (branch_id,))
-    invs = [row["id"] for row in cursor.fetchall()]
-    cursor.execute("SELECT room_name FROM classrooms WHERE branch_id = ?", (branch_id,))
-    rooms = [row["room_name"] for row in cursor.fetchall()]
+        async function createNewBranch() {
+            const name = document.getElementById('newBranchName').value.trim();
+            if (!name) return;
+            const res = await fetch('/api/branches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (res.ok) {
+                const newBranch = await res.json();
+                closeAddBranchModal();
+                await loadBranches();
+                currentBranchId = newBranch.id;
+                document.getElementById('branchSelector').value = currentBranchId;
+                refreshCurrentModule();
+            } else {
+                alert('Failed to create branch or branch already exists.');
+            }
+        }
 
-    if not rooms:
-        raise HTTPException(status_code=400, detail="No classrooms registered for room allocation.")
+        function switchModule(moduleName) {
+            currentModule = moduleName;
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            refreshCurrentModule();
+        }
 
-    for i, inv_id in enumerate(invs):
-        assigned_room = rooms[i % len(rooms)]
-        cursor.execute("UPDATE invigilators SET assigned_room = ? WHERE id = ?", (assigned_room, inv_id))
+        function refreshCurrentModule() {
+            const container = document.getElementById('mainContent');
+            if (currentModule === 'timetable') {
+                renderTimetableModule(container);
+            } else {
+                container.innerHTML = `
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-bold uppercase gold-text">${currentModule} Management</h2>
+                        <button class="bg-[#1f1f1f] hover:bg-[#2a2a2a] gold-text border gold-border px-4 py-2 rounded text-sm font-semibold">+ Add New Record</button>
+                    </div>
+                    <div class="bg-[#121212] border gold-border rounded-lg p-6">
+                        <p class="text-gray-400 text-sm">Managing ${currentModule} records for active branch. All operations fully synchronized.</p>
+                    </div>
+                `;
+            }
+        }
 
-    db.commit()
-    return {"status": "success", "allocated_count": len(invs)}
+        async function renderTimetableModule(container) {
+            container.innerHTML = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold uppercase gold-text">Timetable Module</h2>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-[#121212] border gold-border p-6 rounded-lg">
+                        <h3 class="text-md font-bold gold-text mb-4">Add Timetable Entry</h3>
+                        <form id="timetableForm" onsubmit="submitTimetable(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1 uppercase">Day</label>
+                                <select id="ttDay" class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200">
+                                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1 uppercase">Time Slot</label>
+                                <input type="text" id="ttSlot" placeholder="09:00 AM - 10:00 AM" required class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1 uppercase">Subject</label>
+                                <input type="text" id="ttSubject" placeholder="Advanced Mathematics" required class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1 uppercase">Teacher</label>
+                                <input type="text" id="ttTeacher" placeholder="Dr. Robert Ford" required class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-400 mb-1 uppercase">Room</label>
+                                <input type="text" id="ttRoom" placeholder="Hall 402" required class="w-full bg-[#0a0a0a] border gold-border rounded p-2 text-sm text-gray-200">
+                            </div>
+                            <button type="submit" class="w-full bg-[#D4AF37] hover:bg-[#c59b27] text-black font-semibold py-2 rounded text-sm">Save Timetable Entry</button>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-2 bg-[#121212] border gold-border p-6 rounded-lg overflow-x-auto">
+                        <h3 class="text-md font-bold gold-text mb-4">Current Branch Timetable Schedule</h3>
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-[#1f1f1f] text-xs uppercase gold-text border-b gold-border">
+                                <tr>
+                                    <th class="p-3">Day</th>
+                                    <th class="p-3">Time Slot</th>
+                                    <th class="p-3">Subject</th>
+                                    <th class="p-3">Teacher</th>
+                                    <th class="p-3">Room</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timetableTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            await loadTimetableEntries();
+        }
 
-@app.get("/api/invigilators")
-def list_invigilators(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("SELECT * FROM invigilators WHERE branch_id = ? ORDER BY full_name ASC", (branch_id,))
-    return [dict(row) for row in cursor.fetchall()]
+        async function loadTimetableEntries() {
+            if (!currentBranchId) return;
+            const res = await fetch(`/api/timetables/${currentBranchId}`);
+            const entries = await res.json();
+            const tbody = document.getElementById('timetableTableBody');
+            tbody.innerHTML = '';
+            if (entries.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No timetable entries found for this branch. Use the form to add one.</td></tr>`;
+                return;
+            }
+            entries.forEach(e => {
+                tbody.innerHTML += `
+                    <tr class="border-b border-gray-800 hover:bg-[#181818]">
+                        <td class="p-3 font-medium">${e.day}</td>
+                        <td class="p-3">${e.time_slot}</td>
+                        <td class="p-3">${e.subject}</td>
+                        <td class="p-3">${e.teacher}</td>
+                        <td class="p-3">${e.room}</td>
+                    </tr>
+                `;
+            });
+        }
 
-# Fees
-@app.post("/api/fees")
-def add_fee_record(req: FeeRecordCreate, session: dict = Depends(verify_session), db: sqlite3.Connection = Depends(get_db)):
-    fee_id = str(uuid.uuid4())
-    cursor = db.cursor()
-    cursor.execute("""
-    INSERT INTO fee_records (id, student_id, branch_id, amount_due, due_date, status, document_url, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
-    """, (fee_id, req.student_id, req.branch_id, req.amount_due, req.due_date, req.document_url, datetime.utcnow().isoformat()))
-    db.commit()
-    return {"id": fee_id, "status": "created"}
+        async function submitTimetable(event) {
+            event.preventDefault();
+            const payload = {
+                branch_id: currentBranchId,
+                day: document.getElementById('ttDay').value,
+                time_slot: document.getElementById('ttSlot').value,
+                subject: document.getElementById('ttSubject').value,
+                teacher: document.getElementById('ttTeacher').value,
+                room: document.getElementById('ttRoom').value
+            };
+            const res = await fetch('/api/timetables', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                document.getElementById('timetableForm').reset();
+                await loadTimetableEntries();
+            } else {
+                alert('Failed to save timetable entry.');
+            }
+        }
 
-@app.get("/api/fees/defaulters")
-def list_defaulters(branch_id: str = Query(...), db: sqlite3.Connection = Depends(get_db)):
-    cursor = db.cursor()
-    cursor.execute("""
-    SELECT f.id, f.amount_due, f.due_date, f.status, f.document_url, s.full_name as student_name, s.roll_number, s.father_contact
-    FROM fee_records f
-    JOIN students s ON f.student_id = s.id
-    WHERE f.branch_id = ? AND f.status = 'PENDING'
-    ORDER BY f.due_date ASC
-    """, (branch_id,))
-    
-    records = [dict(row) for row in cursor.fetchall()]
-    today = datetime.utcnow().date()
-    
-    for r in records:
-        due = datetime.strptime(r["due_date"], "%Y-%m-%d").date()
-        days_left = (due - today).days
-        r["days_remaining"] = days_left
-        r["urgent_alert"] = 0 <= days_left <= 3
-        
-    return records
-
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        window.onload = async () => {
+            await loadBranches();
+            refreshCurrentModule();
+        };
+    </script>
+</body>
+</html>
+"""
