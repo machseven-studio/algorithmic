@@ -1,9 +1,9 @@
 import os
-from flask import Flask, request, redirect, url_for, flash, session
+from flask import Flask, request, redirect, session, flash
 
 app = Flask(__name__)
 application = app
-app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key')
+app.secret_key = os.environ.get('SECRET_KEY', 'change-me-in-production')
 
 # -----------------------------------------------------------------------------
 # 1. CSS
@@ -27,63 +27,49 @@ h1 { color: #2c3e50; }
 .card h3 { margin: 0; font-size: 2rem; }
 .card p { margin: 5px 0 0; color: #7f8c8d; }
 footer { text-align: center; padding: 20px; color: #7f8c8d; font-size: 0.9rem; }
-.hidden { display: none; }
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
 .modal-content { background: white; padding: 20px; border-radius: 8px; width: 50%; max-width: 500px; }
 .close-btn { float: right; cursor: pointer; font-size: 1.5rem; }
 """
 
 # -----------------------------------------------------------------------------
-# 2. HTML TEMPLATES
+# 2. LAYOUT & CONTENT (Using .replace() to inject Jinja2 logic)
 # -----------------------------------------------------------------------------
 
-# Base Layout (Injected into every page)
-LAYOUT = f"""
-<!DOCTYPE html>
+# Base Layout
+BASE = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title if title else 'School Admin' }}</title>
-    <style>{CSS}</style>
+    <style>{{ CSS }}</style>
 </head>
 <body>
     <header>
         <div class="logo">SCHOOL ADMIN</div>
         <nav>
             <a href="/">Home</a>
-            {% if session.get('logged_in') %}
-                <a href="/dashboard">Dashboard</a>
-                <a href="/seating">Seating</a>
-                <a href="/audit">Audit</a>
-                <a href="/logout">Logout</a>
-            {% else %}
-                <a href="/login">Login</a>
-            {% endif %}
+            {{ NAV }}
         </nav>
     </header>
     <div class="container">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div style="background: #ffebee; color: #c62828; padding: 10px; margin-bottom: 15px; border-radius: 4px;">
-                    {% for message in messages %}
-                        <p>{{ message }}</p>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
-        {{ content | safe }}
+        {{ ALERT }}
+        {{ CONTENT }}
     </div>
     <footer>
         <a href="/privacy" style="color: #7f8c8d;">Privacy Policy</a> | 
         <a href="/terms" style="color: #7f8c8d;">Terms of Service</a>
     </footer>
 </body>
-</html>
-"""
+</html>"""
 
-HOME_CONTENT = """
-<div style="text-align: center; padding: 50px 0;">
+NAV_LOGGED = """<a href="/dashboard">Dashboard</a> <a href="/seating">Seating</a> <a href="/audit">Audit</a> <a href="/logout">Logout</a>"""
+NAV_GUEST = """<a href="/login">Login</a>"""
+ALERT = """{% with messages = get_flashed_messages() %}{% if messages %}<div style="background: #ffebee; color: #c62828; padding: 10px; margin-bottom: 15px; border-radius: 4px;">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}{% endwith %}"""
+
+# Pages
+PAGE_HOME = """<div style="text-align: center; padding: 50px 0;">
     <h1>Welcome to the School Admin Panel</h1>
     <p>Manage students, fees, and seating with ease.</p>
     {% if not session.get('logged_in') %}
@@ -91,11 +77,9 @@ HOME_CONTENT = """
     {% else %}
         <a href="/dashboard"><button class="btn">Go to Dashboard</button></a>
     {% endif %}
-</div>
-"""
+</div>"""
 
-LOGIN_CONTENT = """
-<div style="max-width: 400px; margin: 40px auto;">
+PAGE_LOGIN = """<div style="max-width: 400px; margin: 40px auto;">
     <h2>Admin Login</h2>
     <form method="POST" action="/login">
         <label>Username</label>
@@ -104,119 +88,19 @@ LOGIN_CONTENT = """
         <input type="password" name="password" required style="width: 100%; padding: 8px; margin-bottom: 20px;">
         <button type="submit" class="btn" style="width: 100%;">Login</button>
     </form>
-</div>
-"""
+</div>"""
 
-DASHBOARD_CONTENT = """
-<h1>Dashboard Overview</h1>
+PAGE_DASHBOARD = """<h1>Dashboard Overview</h1>
 <div class="dashboard-grid">
     <div class="card"><h3>1,240</h3><p>Total Students</p></div>
     <div class="card"><h3>$45,000</h3><p>Fees Collected</p></div>
     <div class="card"><h3>98%</h3><p>Attendance Rate</p></div>
-</div>
-"""
+</div>"""
 
-SEATING_CONTENT = """
-<h1>Student Seating</h1>
+PAGE_SEATING = """<h1>Student Seating</h1>
 <button class="btn" onclick="openModal()">Assign Seat</button>
 <table class="table">
     <thead><tr><th>ID</th><th>Name</th><th>Seat No</th><th>Status</th></tr></thead>
     <tbody>
         <tr><td>001</td><td>John Doe</td><td>A-12</td><td class="status-paid">Active</td></tr>
-        <tr><td>002</td><td>Jane Smith</td><td>B-04</td><td class="status-unpaid">Pending</td></tr>
-    </tbody>
-</table>
-<div id="seatModal" class="modal">
-    <div class="modal-content">
-        <span class="close-btn" onclick="closeModal()">&times;</span>
-        <h3>Assign Seat</h3>
-        <form>
-            <input type="text" placeholder="Student ID" style="width: 100%; padding: 8px; margin-bottom: 10px;">
-            <input type="text" placeholder="Seat Number" style="width: 100%; padding: 8px; margin-bottom: 10px;">
-            <button type="button" class="btn" onclick="closeModal()">Save</button>
-        </form>
-    </div>
-</div>
-<script>
-    function openModal() { document.getElementById('seatModal').style.display = 'flex'; }
-    function closeModal() { document.getElementById('seatModal').style.display = 'none'; }
-</script>
-"""
-
-FEES_CONTENT = """
-<h1>Fee Management</h1>
-<table class="table">
-    <thead><tr><th>Student</th><th>Amount Due</th><th>Status</th><th>Action</th></tr></thead>
-    <tbody>
-        <tr><td>John Doe</td><td>$500</td><td class="status-unpaid">Unpaid</td><td><button class="btn" style="padding: 5px 10px; font-size: 0.8rem;">Mark Paid</button></td></tr>
-    </tbody>
-</table>
-"""
-
-AUDIT_CONTENT = """
-<h1>Audit Logs</h1>
-<table class="table">
-    <thead><tr><th>Time</th><th>Action</th><th>User</th></tr></thead>
-    <tbody>
-        <tr><td>2023-10-25 10:00</td><td>Updated Fee Status</td><td>admin</td></tr>
-        <tr><td>2023-10-24 14:30</td><td>Added New Student</td><td>admin</td></tr>
-    </tbody>
-</table>
-"""
-
-PRIVACY_CONTENT = "<h1>Privacy Policy</h1><p>We collect your data to manage school records securely.</p>"
-TERMS_CONTENT = "<h1>Terms of Service</h1><p>By using this panel, you agree to the terms of use.</p>"
-
-# -----------------------------------------------------------------------------
-# 3. APP LOGIC
-# -----------------------------------------------------------------------------
-
-@app.route('/')
-def home():
-    return LAYOUT.replace('{{ content | safe }}', HOME_CONTENT)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        if request.form.get('username') == 'admin' and request.form.get('password') == 'admin':
-            session['logged_in'] = True
-            return redirect('/dashboard')
-        flash('Invalid credentials')
-    return LAYOUT.replace('{{ content | safe }}', LOGIN_CONTENT)
-
-@app.route('/dashboard')
-def dashboard():
-    if not session.get('logged_in'): return redirect('/login')
-    return LAYOUT.replace('{{ content | safe }}', DASHBOARD_CONTENT)
-
-@app.route('/seating')
-def seating():
-    if not session.get('logged_in'): return redirect('/login')
-    return LAYOUT.replace('{{ content | safe }}', SEATING_CONTENT)
-
-@app.route('/fees')
-def fees():
-    if not session.get('logged_in'): return redirect('/login')
-    return LAYOUT.replace('{{ content | safe }}', FEES_CONTENT)
-
-@app.route('/audit')
-def audit():
-    if not session.get('logged_in'): return redirect('/login')
-    return LAYOUT.replace('{{ content | safe }}', AUDIT_CONTENT)
-
-@app.route('/privacy')
-def privacy():
-    return LAYOUT.replace('{{ content | safe }}', PRIVACY_CONTENT)
-
-@app.route('/terms')
-def terms():
-    return LAYOUT.replace('{{ content | safe }}', TERMS_CONTENT)
-
-@app.route('/logout')
-def logout():
-    session.pop('logged_in', None)
-    return redirect('/')
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+        <tr><td>002</td><td>Jane Smith</td><td
