@@ -32,6 +32,7 @@ def get_db():
 
 def init_db():
     os.makedirs("uploads", exist_ok=True)
+    os.makedirs("static", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL;")
