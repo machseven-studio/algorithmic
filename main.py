@@ -1,12 +1,12 @@
 # main.py
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTML5App, FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 import sqlite3
 import os
 
-app = FastAPI(title="Algorithmic", version="2.0.0")
+app = FastAPI(title="ALGORITHMIC", version="2.0.0")
 
 DB_FILE = "algorithmic.db"
 
@@ -31,7 +31,6 @@ def init_db():
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
-    # Insert default branch if empty
     cursor.execute("SELECT COUNT(*) FROM branches")
     if cursor.fetchone()[0] == 0:
         cursor.execute("INSERT INTO branches (name) VALUES ('Main Campus')")
