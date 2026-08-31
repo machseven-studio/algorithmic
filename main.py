@@ -1,4 +1,5 @@
 import os
+import sys
 from flask import Flask, render_template_string, request, redirect, url_for, flash, session, jsonify
 
 # -----------------------------------------------------------------------------
@@ -231,8 +232,8 @@ AUDIT_TEMPLATE = """
             <td>2023-10-24 14:30</td>
             <td>Added New Student</td>
             <td>admin</td>
-        </render>
-</tbody>
+        </tr>
+    </tbody>
 </table>
 {% endblock %}
 """
@@ -258,6 +259,7 @@ TERMS_TEMPLATE = """
 # -----------------------------------------------------------------------------
 
 app = Flask(__name__)
+application = app  # CRITICAL: Makes Gunicorn find the app
 app.secret_key = os.environ.get('SECRET_KEY', 'change-me-in-production')
 
 # Mock Database for demonstration
