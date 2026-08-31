@@ -1,17 +1,2 @@
-# Web Framework
-fastapi==0.115.6
-uvicorn==0.34.0
-
-# HTTP Client (for calling the Gemini API)
-requests==2.32.3
-httpx==0.28.1
-
-# Data Validation
-pydantic==2.10.6
-pydantic-settings==2.7.1
-
-# Environment Variables
-python-dotenv==1.0.1
-
-# Force binary-only installs to prevent compilation errors on Render
---only-binary=:all:
+Flask
+gunicorn
