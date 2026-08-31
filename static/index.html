@@ -7,465 +7,644 @@
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Syne:wght@500;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f19; color: #f3f4f6; }
+    body {
+      font-family: 'Syne', sans-serif;
+      background-color: #0c0c0e;
+      background-image: radial-gradient(circle at 50% 0%, #17171c 0%, #0c0c0e 75%);
+      color: #e5e7eb;
+    }
     .serif-title { font-family: 'Cinzel', serif; }
+
+    /* Metallic Gold Palette */
+    .gold-gradient-text {
+      background: linear-gradient(135deg, #fff2a3 0%, #d4af37 50%, #aa7c11 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
     
-    .animate-gpu-fade {
+    .gold-border { border-color: rgba(212, 175, 55, 0.3); }
+    .gold-bg { background-color: #d4af37; color: #000; }
+    .gold-bg:hover { background-color: #f3e5ab; }
+
+    .matt-card {
+      background: rgba(18, 18, 21, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    .animate-gpu {
       will-change: transform, opacity;
-      animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation: mountIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
 
-    .animate-gpu-slide {
-      will-change: transform, opacity;
-      animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(12px); }
+    @keyframes mountIn {
+      from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(24px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .glass-panel {
-      background: rgba(17, 24, 39, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased">
+<body class="min-h-screen flex flex-col antialiased selection:bg-yellow-500 selection:text-black">
 
-  <!-- TOP ALERTS (Fee Urgent Reminders) -->
-  <div id="urgent-fee-banner" class="hidden bg-amber-600 text-white px-4 py-2 text-sm font-semibold text-center animate-gpu-fade">
-    ⚠️ ALERT: Defaulters identified with fee due dates in less than 3 days! Check the Fee Department module immediately.
+  <!-- TOP ALERTS (Dynamic Fee Urgent Reminders) -->
+  <div id="urgent-fee-banner" class="hidden bg-amber-500 text-black px-4 py-2 font-extrabold text-xs text-center uppercase tracking-widest animate-gpu">
+    ⚠️ ALERT: Fee Defaulters identified with due dates under 3 days! Check Fee Department immediately.
   </div>
 
-  <!-- MULTI-BRANCH HEADER -->
-  <header id="app-header" class="hidden glass-panel border-b border-gray-800 px-6 py-4 flex flex-wrap items-center justify-between">
-    <div class="flex items-center space-x-4">
-      <h1 class="text-2xl font-bold tracking-tight text-white serif-title">Algorithmic</h1>
-      <span class="text-xs bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2.5 py-1 rounded-full">v2.0 Enterprise</span>
-    </div>
+  <!-- INITIAL LOGIN MODAL -->
+  <div id="login-modal" class="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-gpu">
+    <div class="matt-card p-10 rounded-2xl w-full max-w-md gold-border border shadow-2xl space-y-6">
+      <div class="text-center space-y-2">
+        <h1 class="text-4xl font-black serif-title gold-gradient-text">ALGORITHMIC</h1>
+        <p class="text-xs uppercase font-bold tracking-widest text-gray-400">Institutional Operations System</p>
+      </div>
 
-    <!-- Branch Switcher -->
-    <div class="flex items-center space-x-3">
-      <label for="branch-select" class="text-xs font-medium text-gray-400">Current Branch:</label>
-      <select id="branch-select" onchange="switchBranch()" class="bg-gray-800 text-white border border-gray-700 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500">
-      </select>
-      <button onclick="renameCurrentBranch()" class="text-xs text-indigo-400 hover:underline">Rename</button>
-      <button onclick="createNewBranch()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">+ New Branch</button>
-    </div>
-
-    <div class="flex items-center space-x-4">
-      <span id="user-display" class="text-sm font-medium text-gray-300"></span>
-      <button onclick="logout()" class="text-xs bg-red-900/40 border border-red-700 text-red-300 hover:bg-red-800/60 px-3 py-1.5 rounded-lg transition">Logout</button>
-    </div>
-  </header>
-
-  <!-- AUTHENTICATION FORM -->
-  <div id="login-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-gpu-fade">
-    <div class="glass-panel p-8 rounded-2xl w-full max-full max-w-md border border-gray-800 shadow-2xl">
-      <h2 class="text-3xl font-extrabold text-white mb-2 serif-title">Algorithmic</h2>
-      <p class="text-sm text-gray-400 mb-6">Enter your details to initiate full-trace session audit access.</p>
-      
       <form onsubmit="handleLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Full Name (Required for Audit Trail)</label>
-          <input id="login-name" type="text" required placeholder="e.g. Samarth Dave" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Full Name</label>
+          <input id="login-name" type="text" required placeholder="Samarth Dave" class="w-full bg-black/60 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500 text-sm font-semibold" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Email Address</label>
-          <input id="login-email" type="email" required placeholder="admin@institute.edu" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Institute Name</label>
+          <input id="login-institute" type="text" required placeholder="MachSeven Academy" class="w-full bg-black/60 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500 text-sm font-semibold" />
         </div>
         <div>
-          <label class="block text-xs font-semibold text-gray-300 mb-1">Password</label>
-          <input id="login-pass" type="password" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Email Address</label>
+          <input id="login-email" type="email" required placeholder="admin@institute.edu" class="w-full bg-black/60 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500 text-sm font-semibold" />
         </div>
-        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-lg transition transform active:scale-95 shadow-lg shadow-indigo-600/30">
-          Authenticate Session
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Password</label>
+          <input id="login-pass" type="password" required class="w-full bg-black/60 border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500 text-sm font-semibold" />
+        </div>
+        <button type="submit" class="w-full gold-bg font-extrabold py-3.5 rounded-lg text-sm tracking-wider uppercase transition transform active:scale-95 shadow-lg shadow-amber-500/10">
+          Enter Platform
         </button>
       </form>
     </div>
   </div>
 
-  <!-- MAIN NAVIGATION & MODULE WORKSPACE -->
-  <main id="app-workspace" class="hidden flex-1 max-w-7xl w-full mx-auto px-6 py-8 flex flex-col space-y-8 animate-gpu-fade">
-    
-    <!-- MODULE NAVIGATION BARS -->
-    <nav class="flex space-x-2 border-b border-gray-800 pb-4 overflow-x-auto">
-      <button onclick="switchTab('module-1')" id="tab-module-1" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white transition">Module 1: Algorithmic Homepage</button>
-      <button onclick="switchTab('module-2')" id="tab-module-2" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Module 2: STUDENT DATABASE</button>
-      <button onclick="switchTab('module-3')" id="tab-module-3" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Module 3: Seating Layout</button>
-      <button onclick="switchTab('module-4')" id="tab-module-4" class="tab-btn px-4 py-2 text-sm font-semibold rounded-lg text-gray-400 hover:text-white transition">Fee Department</button>
-    </nav>
+  <!-- MAIN TWO-PANEL LAYOUT -->
+  <div id="app-container" class="hidden min-h-screen flex flex-1">
 
-    <!-- MODULE 1: ALGORITHMIC HOMEPAGE -->
-    <section id="module-1" class="tab-content flex flex-col items-center justify-center py-12 text-center animate-gpu-slide space-y-6">
-      <div class="space-y-3">
-        <h1 class="text-5xl font-black text-white tracking-wide serif-title animate-gpu-fade">Algorithmic</h1>
-        <p class="text-lg font-semibold text-indigo-400 animate-gpu-fade">Created by Samarth Dave, founder of MachSevenStudios</p>
-        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold animate-gpu-fade">Powered by Metasys (registered)</p>
-      </div>
-
-      <div class="glass-panel p-6 rounded-2xl max-w-xl w-full text-left space-y-4 border border-gray-800 animate-gpu-slide">
-        <h3 class="text-md font-bold text-white border-b border-gray-700 pb-2">Institutional Platform Directives</h3>
-        <p class="text-xs text-gray-300 leading-relaxed">
-          Algorithmic automates core operations across institutional branches: managing student repositories, dynamic fee collection tracking, constraint-safe exam seating, and automated timetables.
-        </p>
-        <div class="text-xs text-gray-400 space-y-1">
-          <p class="font-semibold text-gray-300">Support & Corporate Queries:</p>
-          <p>📧 <a href="mailto:machseven.studio@gmail.com" class="text-indigo-400 hover:underline">machseven.studio@gmail.com</a></p>
-          <p>📧 <a href="mailto:samdave2131@gmail.com" class="text-indigo-400 hover:underline">samdave2131@gmail.com</a></p>
+    <!-- LEFT PANEL: VERTICAL SIDEBAR MODULE NAVIGATION -->
+    <aside class="w-72 bg-black border-r border-gray-900 flex flex-col justify-between p-6 z-20 shrink-0">
+      <div class="space-y-8">
+        
+        <!-- Header & Dynamic Institute Display -->
+        <div class="space-y-2 border-b border-gray-900 pb-6">
+          <h1 class="text-2xl font-black serif-title gold-gradient-text tracking-wider">ALGORITHMIC</h1>
+          <div class="bg-gray-900/80 border border-gray-800 p-2.5 rounded-lg">
+            <p class="text-[10px] uppercase font-bold tracking-widest text-amber-500">Institute</p>
+            <p id="display-institute-name" class="text-sm font-bold text-white truncate"></p>
+          </div>
         </div>
-      </div>
-    </section>
 
-    <!-- MODULE 2: STUDENT DATABASE -->
-    <section id="module-2" class="tab-content hidden animate-gpu-slide space-y-6">
-      <div class="flex items-center justify-between">
+        <!-- Vertical Modules Navigation -->
+        <nav class="space-y-1">
+          <button onclick="switchTab('mod-home')" id="nav-mod-home" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider gold-bg transition">Homepage</button>
+          <button onclick="switchTab('mod-students')" id="nav-mod-students" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Student Database</button>
+          <button onclick="switchTab('mod-teachers')" id="nav-mod-teachers" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Teacher Database</button>
+          <button onclick="switchTab('mod-classrooms')" id="nav-mod-classrooms" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Classroom Database</button>
+          <button onclick="switchTab('mod-seating')" id="nav-mod-seating" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Seating Layout</button>
+          <button onclick="switchTab('mod-timetable')" id="nav-mod-timetable" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Timetable</button>
+          <button onclick="switchTab('mod-invigilators')" id="nav-mod-invigilators" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Invigilator Duty</button>
+          <button onclick="switchTab('mod-fees')" id="nav-mod-fees" class="nav-btn w-full text-left px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider text-gray-400 hover:text-white transition">Fee Department</button>
+        </nav>
+      </div>
+
+      <!-- User Information & Branch Controls -->
+      <div class="space-y-4 border-t border-gray-900 pt-6">
         <div>
-          <h2 class="text-2xl font-bold text-white serif-title">STUDENT DATABASE</h2>
-          <p class="text-xs text-gray-400">Centralized repository powering seating, fees, and timetables.</p>
+          <label class="text-[10px] uppercase font-bold text-gray-500 tracking-widest block mb-1">Branch Switcher</label>
+          <select id="branch-select" onchange="switchBranch()" class="w-full bg-gray-900 border border-gray-800 text-xs font-bold text-white rounded-lg px-3 py-2">
+          </select>
         </div>
-        <button onclick="toggleStudentModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition">+ Enroll Student</button>
-      </div>
 
-      <!-- Student List Table -->
-      <div class="glass-panel rounded-xl overflow-hidden border border-gray-800">
-        <table class="w-full text-left text-sm text-gray-300">
-          <thead class="bg-gray-800/80 text-gray-200 text-xs uppercase font-semibold">
-            <tr>
-              <th class="px-4 py-3">Roll No</th>
-              <th class="px-4 py-3">Full Name</th>
-              <th class="px-4 py-3">Batch</th>
-              <th class="px-4 py-3">Father Details</th>
-              <th class="px-4 py-3">Mother Details</th>
-            </tr>
-          </thead>
-          <tbody id="student-table-body" class="divide-y divide-gray-800">
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- MODULE 3: SEATING LAYOUT -->
-    <section id="module-3" class="tab-content hidden animate-gpu-slide space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-2xl font-bold text-white serif-title">Seating Layout Module</h2>
-          <p class="text-xs text-gray-400">Generates adjacent-conflict free matrices from Module 2 records.</p>
+        <div class="flex items-center justify-between pt-2">
+          <div>
+            <p id="display-user-name" class="text-xs font-bold text-white"></p>
+            <p class="text-[10px] text-gray-500 uppercase font-semibold">Active Session</p>
+          </div>
+          <button onclick="logout()" class="text-xs text-red-400 hover:underline font-bold uppercase">Exit</button>
         </div>
-        <button onclick="generateCreamPDF()" class="bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">Export Cream-Textured PDF</button>
       </div>
-      <div class="glass-panel p-8 rounded-xl text-center text-gray-400 text-sm border border-gray-800">
-        Seating engine dynamically linked to Module 2 central student database. Click export to generate formatted PDF outputs.
-      </div>
-    </section>
+    </aside>
 
-    <!-- MODULE 4: FEE DEPARTMENT -->
-    <section id="module-4" class="tab-content hidden animate-gpu-slide space-y-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 class="text-2xl font-bold text-white serif-title">Fee Department</h2>
-          <p class="text-xs text-gray-400">Defaulter rosters and automated 3-day reminder notifications.</p>
+    <!-- RIGHT PANEL: WORKSPACE SECTION CONTROLLER -->
+    <main class="flex-1 p-10 overflow-y-auto">
+
+      <!-- HOMEPAGE -->
+      <section id="mod-home" class="tab-content animate-gpu space-y-8">
+        <div class="space-y-3">
+          <h2 class="text-5xl font-black serif-title gold-gradient-text tracking-wide">ALGORITHMIC</h2>
+          <p class="text-lg font-bold text-gray-300">Created by Samarth Dave, founder of MachSevenStudios</p>
+          <p class="text-xs uppercase tracking-widest text-amber-500/80 font-extrabold">Powered by Metasys (registered)</p>
         </div>
-        <button onclick="toggleFeeModal()" class="bg-red-600 hover:bg-red-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition">+ Record Pending Fee</button>
-      </div>
 
-      <div class="glass-panel rounded-xl overflow-hidden border border-gray-800">
-        <table class="w-full text-left text-sm text-gray-300">
-          <thead class="bg-gray-800/80 text-gray-200 text-xs uppercase font-semibold">
-            <tr>
-              <th class="px-4 py-3">Student</th>
-              <th class="px-4 py-3">Roll No</th>
-              <th class="px-4 py-3">Amount Due</th>
-              <th class="px-4 py-3">Due Date</th>
-              <th class="px-4 py-3">Reminders / Status</th>
-            </tr>
-          </thead>
-          <tbody id="fee-table-body" class="divide-y divide-gray-800">
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+        <div class="matt-card p-8 rounded-2xl max-w-2xl space-y-6 gold-border border">
+          <h3 class="text-lg font-bold text-white border-b border-gray-800 pb-3 uppercase tracking-wider">Enterprise Architecture Dashboard</h3>
+          <p class="text-xs text-gray-400 leading-relaxed font-medium">
+            Algorithmic governs complete institutional logistics: multi-branch student registries, teacher profiles, classroom specifications, constraint-based timetables, invigilation duty rosters, and fee collection departments.
+          </p>
+          
+          <div class="pt-4 border-t border-gray-900 text-xs text-gray-400 space-y-2">
+            <p class="font-bold text-amber-500 uppercase tracking-widest">Support & Queries</p>
+            <p class="font-semibold">📧 machseven.studio@gmail.com</p>
+            <p class="font-semibold">📧 samdave2131@gmail.com</p>
+          </div>
+        </div>
+      </section>
 
-  <!-- ADD STUDENT MODAL -->
-  <div id="student-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-    <div class="glass-panel p-6 rounded-2xl w-full max-w-lg border border-gray-800">
-      <h3 class="text-xl font-bold text-white mb-4">Enroll New Student</h3>
+      <!-- STUDENT DATABASE -->
+      <section id="mod-students" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Student Database</h2>
+            <p class="text-xs text-gray-400 font-semibold">Central student records repository with document attachments.</p>
+          </div>
+          <button onclick="toggleModal('student-modal')" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">+ Add Student</button>
+        </div>
+
+        <div class="matt-card rounded-xl overflow-hidden border border-gray-900">
+          <table class="w-full text-left text-xs font-semibold text-gray-300">
+            <thead class="bg-black text-amber-500 uppercase text-[10px] font-extrabold tracking-widest">
+              <tr>
+                <th class="px-6 py-4">Roll No</th>
+                <th class="px-6 py-4">Full Name</th>
+                <th class="px-6 py-4">Batch</th>
+                <th class="px-6 py-4">Father Contact</th>
+                <th class="px-6 py-4">Mother Contact</th>
+              </tr>
+            </thead>
+            <tbody id="student-tbody" class="divide-y divide-gray-900">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TEACHER DATABASE -->
+      <section id="mod-teachers" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Teacher Database</h2>
+            <p class="text-xs text-gray-400 font-semibold">Faculty repository for timetable generation logic.</p>
+          </div>
+          <button onclick="toggleModal('teacher-modal')" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">+ Add Teacher</button>
+        </div>
+
+        <div class="matt-card rounded-xl overflow-hidden border border-gray-900">
+          <table class="w-full text-left text-xs font-semibold text-gray-300">
+            <thead class="bg-black text-amber-500 uppercase text-[10px] font-extrabold tracking-widest">
+              <tr>
+                <th class="px-6 py-4">Teacher Name</th>
+                <th class="px-6 py-4">Subject</th>
+                <th class="px-6 py-4">Contact Number</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-tbody" class="divide-y divide-gray-900">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CLASSROOM DATABASE -->
+      <section id="mod-classrooms" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Classroom Database</h2>
+            <p class="text-xs text-gray-400 font-semibold">Infrastructure specifications and seating dimensions.</p>
+          </div>
+          <button onclick="toggleModal('classroom-modal')" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">+ Add Classroom</button>
+        </div>
+
+        <div class="matt-card rounded-xl overflow-hidden border border-gray-900">
+          <table class="w-full text-left text-xs font-semibold text-gray-300">
+            <thead class="bg-black text-amber-500 uppercase text-[10px] font-extrabold tracking-widest">
+              <tr>
+                <th class="px-6 py-4">Room Name</th>
+                <th class="px-6 py-4">Capacity</th>
+                <th class="px-6 py-4">Dimensions (R x C)</th>
+              </tr>
+            </thead>
+            <tbody id="classroom-tbody" class="divide-y divide-gray-900">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SEATING LAYOUT -->
+      <section id="mod-seating" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Seating Layout</h2>
+            <p class="text-xs text-gray-400 font-semibold">Adjacent-conflict free examination matrices.</p>
+          </div>
+          <button onclick="exportCreamPDF('Seating Matrix', ['Desk ID', 'Student', 'Roll Number', 'Room'])" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">Export Cream PDF</button>
+        </div>
+        <div class="matt-card p-8 rounded-xl text-xs text-gray-400 border border-gray-900 font-medium">
+          Seating layout configured automatically from Student & Classroom databases. Ready for formatted export.
+        </div>
+      </section>
+
+      <!-- TIMETABLE -->
+      <section id="mod-timetable" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Timetable</h2>
+            <p class="text-xs text-gray-400 font-semibold">Teacher availability & subject batch timetable solver.</p>
+          </div>
+          <button onclick="exportCreamPDF('Academic Timetable', ['Time Slot', 'Batch', 'Subject', 'Teacher'])" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">Export Cream PDF</button>
+        </div>
+        <div class="matt-card p-8 rounded-xl text-xs text-gray-400 border border-gray-900 font-medium">
+          Tailored timetable solver evaluates teacher availability and batch schedules to eliminate overlaps.
+        </div>
+      </section>
+
+      <!-- INVIGILATOR DUTY -->
+      <section id="mod-invigilators" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Invigilator Duty</h2>
+            <p class="text-xs text-gray-400 font-semibold">Automatic clerk-to-classroom room supervision allocations.</p>
+          </div>
+          <div class="space-x-2">
+            <button onclick="autoAllocateInvig()" class="bg-gray-800 text-white hover:bg-gray-700 text-xs font-extrabold uppercase px-4 py-3 rounded-lg">Auto-Allocate Rooms</button>
+            <button onclick="toggleModal('invigilator-modal')" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">+ Add Invigilator</button>
+            <button onclick="exportCreamPDF('Invigilator Duty Roster', ['Clerk Name', 'Contact', 'Assigned Room'])" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">Export Cream PDF</button>
+          </div>
+        </div>
+
+        <div class="matt-card rounded-xl overflow-hidden border border-gray-900">
+          <table class="w-full text-left text-xs font-semibold text-gray-300">
+            <thead class="bg-black text-amber-500 uppercase text-[10px] font-extrabold tracking-widest">
+              <tr>
+                <th class="px-6 py-4">Clerk Name</th>
+                <th class="px-6 py-4">Contact</th>
+                <th class="px-6 py-4">Assigned Room</th>
+              </tr>
+            </thead>
+            <tbody id="invigilator-tbody" class="divide-y divide-gray-900">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- FEE DEPARTMENT -->
+      <section id="mod-fees" class="tab-content hidden animate-gpu space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-black serif-title text-white">Fee Department</h2>
+            <p class="text-xs text-gray-400 font-semibold">Pending dues tracking, attached records, and automated reminders.</p>
+          </div>
+          <div class="space-x-2">
+            <button onclick="toggleModal('fee-modal')" class="bg-red-700 hover:bg-red-600 text-white text-xs font-extrabold uppercase px-5 py-3 rounded-lg">+ Record Pending Fee</button>
+            <button onclick="exportCreamPDF('Fee Defaulters List', ['Student', 'Roll Number', 'Amount Due', 'Due Date'])" class="gold-bg text-xs font-extrabold uppercase px-5 py-3 rounded-lg">Export Cream PDF</button>
+          </div>
+        </div>
+
+        <div class="matt-card rounded-xl overflow-hidden border border-gray-900">
+          <table class="w-full text-left text-xs font-semibold text-gray-300">
+            <thead class="bg-black text-amber-500 uppercase text-[10px] font-extrabold tracking-widest">
+              <tr>
+                <th class="px-6 py-4">Student</th>
+                <th class="px-6 py-4">Roll No</th>
+                <th class="px-6 py-4">Amount Due</th>
+                <th class="px-6 py-4">Due Date</th>
+                <th class="px-6 py-4">Status / Reminders</th>
+              </tr>
+            </thead>
+            <tbody id="fee-tbody" class="divide-y divide-gray-900">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- Student Modal -->
+  <div id="student-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+    <div class="matt-card p-8 rounded-2xl w-full max-w-lg border gold-border space-y-4">
+      <h3 class="text-xl font-bold text-white uppercase tracking-wider">Enroll Student</h3>
       <form onsubmit="submitStudent(event)" class="space-y-3">
         <div class="grid grid-cols-2 gap-3">
-          <input id="stud-roll" type="text" placeholder="Roll Number" required class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          <input id="stud-name" type="text" placeholder="Full Name" required class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
+          <input id="s-roll" type="text" placeholder="Roll Number" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+          <input id="s-name" type="text" placeholder="Full Name" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
         </div>
-        <input id="stud-batch" type="text" placeholder="Batch / Class" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-        
-        <!-- Explicit Father & Mother Contact Details -->
-        <div class="grid grid-cols-2 gap-3 border-t border-gray-700 pt-3">
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Father's Name</label>
-            <input id="stud-fname" type="text" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          </div>
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Father's Contact</label>
-            <input id="stud-fcontact" type="tel" placeholder="+91..." required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          </div>
-        </div>
-
+        <input id="s-batch" type="text" placeholder="Batch / Class" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
         <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Mother's Name</label>
-            <input id="stud-mname" type="text" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          </div>
-          <div>
-            <label class="text-xs text-gray-400 block mb-1">Mother's Contact</label>
-            <input id="stud-mcontact" type="tel" placeholder="+91..." required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-          </div>
+          <input id="s-fname" type="text" placeholder="Father Name" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+          <input id="s-fcontact" type="tel" placeholder="Father Contact" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
         </div>
-
-        <div class="flex justify-end space-x-2 border-t border-gray-700 pt-3">
-          <button type="button" onclick="toggleStudentModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
-          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 text-sm rounded-lg">Save Record</button>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="s-mname" type="text" placeholder="Mother Name" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+          <input id="s-mcontact" type="tel" placeholder="Mother Contact" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        </div>
+        <div class="flex justify-end space-x-2 pt-3">
+          <button type="button" onclick="toggleModal('student-modal')" class="text-xs text-gray-400 px-4 py-2">Cancel</button>
+          <button type="submit" class="gold-bg text-xs font-extrabold uppercase px-4 py-2 rounded-lg">Save Student</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- ADD FEE MODAL -->
-  <div id="fee-modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-    <div class="glass-panel p-6 rounded-2xl w-full max-w-md border border-gray-800">
-      <h3 class="text-xl font-bold text-white mb-4">Record Pending Fee</h3>
+  <!-- Teacher Modal -->
+  <div id="teacher-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+    <div class="matt-card p-8 rounded-2xl w-full max-w-md border gold-border space-y-4">
+      <h3 class="text-xl font-bold text-white uppercase tracking-wider">Add Teacher Profile</h3>
+      <form onsubmit="submitTeacher(event)" class="space-y-3">
+        <input id="t-name" type="text" placeholder="Teacher Full Name" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <input id="t-subject" type="text" placeholder="Subject Taught" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <input id="t-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <div class="flex justify-end space-x-2 pt-3">
+          <button type="button" onclick="toggleModal('teacher-modal')" class="text-xs text-gray-400 px-4 py-2">Cancel</button>
+          <button type="submit" class="gold-bg text-xs font-extrabold uppercase px-4 py-2 rounded-lg">Save Teacher</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Classroom Modal -->
+  <div id="classroom-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+    <div class="matt-card p-8 rounded-2xl w-full max-w-md border gold-border space-y-4">
+      <h3 class="text-xl font-bold text-white uppercase tracking-wider">Register Classroom</h3>
+      <form onsubmit="submitClassroom(event)" class="space-y-3">
+        <input id="c-name" type="text" placeholder="Room Name / Number" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <input id="c-capacity" type="number" placeholder="Total Capacity" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <div class="grid grid-cols-2 gap-3">
+          <input id="c-rows" type="number" placeholder="Rows" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+          <input id="c-cols" type="number" placeholder="Columns" required class="bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        </div>
+        <div class="flex justify-end space-x-2 pt-3">
+          <button type="button" onclick="toggleModal('classroom-modal')" class="text-xs text-gray-400 px-4 py-2">Cancel</button>
+          <button type="submit" class="gold-bg text-xs font-extrabold uppercase px-4 py-2 rounded-lg">Save Room</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Invigilator Modal -->
+  <div id="invigilator-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+    <div class="matt-card p-8 rounded-2xl w-full max-w-md border gold-border space-y-4">
+      <h3 class="text-xl font-bold text-white uppercase tracking-wider">Register Invigilator Clerk</h3>
+      <form onsubmit="submitInvigilator(event)" class="space-y-3">
+        <input id="i-name" type="text" placeholder="Clerk Full Name" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <input id="i-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <div class="flex justify-end space-x-2 pt-3">
+          <button type="button" onclick="toggleModal('invigilator-modal')" class="text-xs text-gray-400 px-4 py-2">Cancel</button>
+          <button type="submit" class="gold-bg text-xs font-extrabold uppercase px-4 py-2 rounded-lg">Save Invigilator</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Fee Modal -->
+  <div id="fee-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+    <div class="matt-card p-8 rounded-2xl w-full max-w-md border gold-border space-y-4">
+      <h3 class="text-xl font-bold text-white uppercase tracking-wider">Record Pending Fee</h3>
       <form onsubmit="submitFee(event)" class="space-y-3">
-        <div>
-          <label class="text-xs text-gray-400 block mb-1">Select Student</label>
-          <select id="fee-student-select" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
-          </select>
-        </div>
-        <div>
-          <label class="text-xs text-gray-400 block mb-1">Amount Due ($)</label>
-          <input id="fee-amount" type="number" step="0.01" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-        </div>
-        <div>
-          <label class="text-xs text-gray-400 block mb-1">Due Date</label>
-          <input id="fee-date" type="date" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm" />
-        </div>
-        <div class="flex justify-end space-x-2 border-t border-gray-700 pt-3">
-          <button type="button" onclick="toggleFeeModal()" class="px-4 py-2 text-sm text-gray-400 hover:text-white">Cancel</button>
-          <button type="submit" class="bg-red-600 hover:bg-red-500 text-white font-semibold px-4 py-2 text-sm rounded-lg">Save Pending Fee</button>
+        <select id="fee-student-select" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs">
+        </select>
+        <input id="f-amount" type="number" step="0.01" placeholder="Amount Due ($)" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <input id="f-date" type="date" required class="w-full bg-black border border-gray-800 rounded-lg px-3 py-2 text-white text-xs" />
+        <div class="flex justify-end space-x-2 pt-3">
+          <button type="button" onclick="toggleModal('fee-modal')" class="text-xs text-gray-400 px-4 py-2">Cancel</button>
+          <button type="submit" class="bg-red-700 text-xs font-extrabold uppercase px-4 py-2 rounded-lg text-white">Save Fee Record</button>
         </div>
       </form>
     </div>
   </div>
 
   <script>
-    let currentToken = localStorage.getItem("algorithmic_token") || null;
-    let currentUser = localStorage.getItem("algorithmic_user") || null;
-    let branches = [];
+    let token = localStorage.getItem("algo_token");
+    let user = localStorage.getItem("algo_user");
+    let institute = localStorage.getItem("algo_inst");
     let selectedBranchId = null;
     let idleTimer = null;
 
-    // 15-MINUTE IDLE TIMEOUT TRACKER
     function resetIdleTimer() {
       clearTimeout(idleTimer);
-      if (currentToken) {
+      if (token) {
         idleTimer = setTimeout(() => {
-          alert("Session expired due to 15 minutes of inactivity.");
+          alert("15-minute idle timeout reached.");
           logout();
         }, 15 * 60 * 1000);
       }
     }
 
-    ['mousemove', 'keydown', 'click'].forEach(evt => {
-      window.addEventListener(evt, resetIdleTimer);
-    });
+    ['mousemove', 'keydown', 'click'].forEach(e => window.addEventListener(e, resetIdleTimer));
 
     async function handleLogin(e) {
       e.preventDefault();
       const full_name = document.getElementById("login-name").value;
+      const institute_name = document.getElementById("login-institute").value;
       const email = document.getElementById("login-email").value;
       const password = document.getElementById("login-pass").value;
 
-      try {
-        const res = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ full_name, email, password })
-        });
-        if (!res.ok) throw new Error("Authentication failed");
-        const data = await res.json();
-        
-        currentToken = data.token;
-        currentUser = data.full_name;
-        localStorage.setItem("algorithmic_token", currentToken);
-        localStorage.setItem("algorithmic_user", currentUser);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name, institute_name, email, password })
+      });
 
-        initApp();
-      } catch (err) {
-        alert(err.message);
-      }
+      const data = await res.json();
+      token = data.token;
+      user = data.full_name;
+      institute = data.institute_name;
+
+      localStorage.setItem("algo_token", token);
+      localStorage.setItem("algo_user", user);
+      localStorage.setItem("algo_inst", institute);
+
+      initApp();
     }
 
     function logout() {
-      localStorage.removeItem("algorithmic_token");
-      localStorage.removeItem("algorithmic_user");
-      currentToken = null;
-      currentUser = null;
+      localStorage.clear();
+      token = user = institute = null;
       document.getElementById("login-modal").classList.remove("hidden");
-      document.getElementById("app-header").classList.add("hidden");
-      document.getElementById("app-workspace").classList.add("hidden");
+      document.getElementById("app-container").classList.add("hidden");
     }
 
     async function initApp() {
-      if (!currentToken) return;
+      if (!token) return;
       document.getElementById("login-modal").classList.add("hidden");
-      document.getElementById("app-header").classList.remove("hidden");
-      document.getElementById("app-workspace").classList.remove("hidden");
-      document.getElementById("user-display").innerText = currentUser;
-      
+      document.getElementById("app-container").classList.remove("hidden");
+      document.getElementById("display-institute-name").innerText = institute;
+      document.getElementById("display-user-name").innerText = user;
+
       resetIdleTimer();
       await loadBranches();
     }
 
     async function loadBranches() {
       const res = await fetch("/api/branches");
-      branches = await res.json();
+      const branches = await res.json();
       const select = document.getElementById("branch-select");
       select.innerHTML = branches.map(b => `<option value="${b.id}">${b.name}</option>`).join("");
-      
       if (branches.length > 0) {
         selectedBranchId = branches[0].id;
-        loadModuleData();
+        loadWorkspaceData();
       }
     }
 
     function switchBranch() {
       selectedBranchId = document.getElementById("branch-select").value;
-      loadModuleData();
-    }
-
-    async function createNewBranch() {
-      const name = prompt("Enter new Branch Name:");
-      if (!name) return;
-      await fetch("/api/branches", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-        body: JSON.stringify({ name })
-      });
-      await loadBranches();
-    }
-
-    async function renameCurrentBranch() {
-      const name = prompt("Enter updated Branch Name:");
-      if (!name) return;
-      await fetch(`/api/branches/${selectedBranchId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-        body: JSON.stringify({ name })
-      });
-      await loadBranches();
+      loadWorkspaceData();
     }
 
     function switchTab(tabId) {
       document.querySelectorAll(".tab-content").forEach(el => el.classList.add("hidden"));
-      document.querySelectorAll(".tab-btn").forEach(el => {
-        el.classList.remove("bg-indigo-600", "text-white");
+      document.querySelectorAll(".nav-btn").forEach(el => {
+        el.classList.remove("gold-bg");
         el.classList.add("text-gray-400");
       });
 
       document.getElementById(tabId).classList.remove("hidden");
-      document.getElementById(`tab-${tabId}`).classList.add("bg-indigo-600", "text-white");
-      document.getElementById(`tab-${tabId}`).classList.remove("text-gray-400");
+      const activeNav = document.getElementById(`nav-${tabId}`);
+      activeNav.classList.add("gold-bg");
+      activeNav.classList.remove("text-gray-400");
     }
 
-    async function loadModuleData() {
+    function toggleModal(id) {
+      document.getElementById(id).classList.toggle("hidden");
+    }
+
+    async function loadWorkspaceData() {
       if (!selectedBranchId) return;
 
       // Load Students
       const resStud = await fetch(`/api/students?branch_id=${selectedBranchId}`);
       const students = await resStud.json();
-      
-      const studTbody = document.getElementById("student-table-body");
-      studTbody.innerHTML = students.map(s => `
+      document.getElementById("student-tbody").innerHTML = students.map(s => `
         <tr>
-          <td class="px-4 py-3 font-semibold text-white">${s.roll_number}</td>
-          <td class="px-4 py-3">${s.full_name}</td>
-          <td class="px-4 py-3"><span class="bg-gray-800 border border-gray-700 px-2 py-0.5 rounded text-xs">${s.batch}</span></td>
-          <td class="px-4 py-3 text-xs">Father: ${s.father_name}<br><span class="text-indigo-400">${s.father_contact}</span></td>
-          <td class="px-4 py-3 text-xs">Mother: ${s.mother_name}<br><span class="text-indigo-400">${s.mother_contact}</span></td>
+          <td class="px-6 py-4 font-bold text-amber-500">${s.roll_number}</td>
+          <td class="px-6 py-4 text-white">${s.full_name}</td>
+          <td class="px-6 py-4">${s.batch}</td>
+          <td class="px-6 py-4 font-mono">${s.father_name} (${s.father_contact})</td>
+          <td class="px-6 py-4 font-mono">${s.mother_name} (${s.mother_contact})</td>
         </tr>
       `).join("");
 
-      // Populate Fee Student Select Options
-      const feeSelect = document.getElementById("fee-student-select");
-      feeSelect.innerHTML = students.map(s => `<option value="${s.id}">${s.full_name} (${s.roll_number})</option>`).join("");
+      // Fee Student Dropdown Options
+      document.getElementById("fee-student-select").innerHTML = students.map(s => `<option value="${s.id}">${s.full_name} (${s.roll_number})</option>`).join("");
 
-      // Load Defaulters
+      // Load Teachers
+      const resTeach = await fetch(`/api/teachers?branch_id=${selectedBranchId}`);
+      const teachers = await resTeach.json();
+      document.getElementById("teacher-tbody").innerHTML = teachers.map(t => `
+        <tr>
+          <td class="px-6 py-4 font-bold text-white">${t.full_name}</td>
+          <td class="px-6 py-4 text-amber-500">${t.subject}</td>
+          <td class="px-6 py-4 font-mono">${t.contact_number}</td>
+        </tr>
+      `).join("");
+
+      // Load Classrooms
+      const resRooms = await fetch(`/api/classrooms?branch_id=${selectedBranchId}`);
+      const rooms = await resRooms.json();
+      document.getElementById("classroom-tbody").innerHTML = rooms.map(c => `
+        <tr>
+          <td class="px-6 py-4 font-bold text-white">${c.room_name}</td>
+          <td class="px-6 py-4">${c.capacity} seats</td>
+          <td class="px-6 py-4 font-mono text-amber-500">${c.rows} x ${c.columns}</td>
+        </tr>
+      `).join("");
+
+      // Load Invigilators
+      const resInv = await fetch(`/api/invigilators?branch_id=${selectedBranchId}`);
+      const invs = await resInv.json();
+      document.getElementById("invigilator-tbody").innerHTML = invs.map(i => `
+        <tr>
+          <td class="px-6 py-4 font-bold text-white">${i.full_name}</td>
+          <td class="px-6 py-4 font-mono">${i.contact_number}</td>
+          <td class="px-6 py-4 text-amber-500 font-bold">${i.assigned_room || 'UNASSIGNED'}</td>
+        </tr>
+      `).join("");
+
+      // Load Fees & Defaulters
       const resFees = await fetch(`/api/fees/defaulters?branch_id=${selectedBranchId}`);
       const defaulters = await resFees.json();
-      
-      let showUrgentBanner = false;
-      const feeTbody = document.getElementById("fee-table-body");
-      feeTbody.innerHTML = defaulters.map(f => {
-        if (f.urgent_alert) showUrgentBanner = true;
+      let urgentAlert = false;
+      document.getElementById("fee-tbody").innerHTML = defaulters.map(f => {
+        if (f.urgent_alert) urgentAlert = true;
         return `
-          <tr class="${f.urgent_alert ? 'bg-red-950/20' : ''}">
-            <td class="px-4 py-3 font-semibold text-white">${f.student_name}</td>
-            <td class="px-4 py-3">${f.roll_number}</td>
-            <td class="px-4 py-3 text-red-400 font-bold">$${f.amount_due.toFixed(2)}</td>
-            <td class="px-4 py-3">${f.due_date}</td>
-            <td class="px-4 py-3">
-              ${f.urgent_alert ? 
-                `<span class="bg-red-900/60 border border-red-700 text-red-200 text-xs px-2.5 py-1 rounded-full font-bold">⚠️ DUE IN ${f.days_remaining} DAYS</span>` : 
-                `<span class="text-xs text-gray-400">${f.days_remaining} days remaining</span>`}
+          <tr class="${f.urgent_alert ? 'bg-red-950/30' : ''}">
+            <td class="px-6 py-4 font-bold text-white">${f.student_name}</td>
+            <td class="px-6 py-4">${f.roll_number}</td>
+            <td class="px-6 py-4 font-bold text-red-400">$${f.amount_due.toFixed(2)}</td>
+            <td class="px-6 py-4 font-mono">${f.due_date}</td>
+            <td class="px-6 py-4 font-bold">
+              ${f.urgent_alert ? `<span class="text-red-400">⚠️ DUE IN ${f.days_remaining} DAYS</span>` : `<span class="text-gray-400">${f.days_remaining} days left</span>`}
             </td>
           </tr>
         `;
       }).join("");
 
-      document.getElementById("urgent-fee-banner").style.display = showUrgentBanner ? "block" : "none";
+      document.getElementById("urgent-fee-banner").style.display = urgentAlert ? "block" : "none";
     }
-
-    function toggleStudentModal() { document.getElementById("student-modal").classList.toggle("hidden"); }
-    function toggleFeeModal() { document.getElementById("fee-modal").classList.toggle("hidden"); }
 
     async function submitStudent(e) {
       e.preventDefault();
       const payload = {
         branch_id: selectedBranchId,
-        roll_number: document.getElementById("stud-roll").value,
-        full_name: document.getElementById("stud-name").value,
-        batch: document.getElementById("stud-batch").value,
-        father_name: document.getElementById("stud-fname").value,
-        father_contact: document.getElementById("stud-fcontact").value,
-        mother_name: document.getElementById("stud-mname").value,
-        mother_contact: document.getElementById("stud-mcontact").value
+        roll_number: document.getElementById("s-roll").value,
+        full_name: document.getElementById("s-name").value,
+        batch: document.getElementById("s-batch").value,
+        father_name: document.getElementById("s-fname").value,
+        father_contact: document.getElementById("s-fcontact").value,
+        mother_name: document.getElementById("s-mname").value,
+        mother_contact: document.getElementById("s-mcontact").value
       };
+      await fetch("/api/students", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(payload) });
+      toggleModal("student-modal");
+      loadWorkspaceData();
+    }
 
-      const res = await fetch("/api/students", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-        body: JSON.stringify(payload)
-      });
+    async function submitTeacher(e) {
+      e.preventDefault();
+      const payload = {
+        branch_id: selectedBranchId,
+        full_name: document.getElementById("t-name").value,
+        subject: document.getElementById("t-subject").value,
+        contact_number: document.getElementById("t-contact").value
+      };
+      await fetch("/api/teachers", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(payload) });
+      toggleModal("teacher-modal");
+      loadWorkspaceData();
+    }
 
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.detail);
-        return;
-      }
+    async function submitClassroom(e) {
+      e.preventDefault();
+      const payload = {
+        branch_id: selectedBranchId,
+        room_name: document.getElementById("c-name").value,
+        capacity: parseInt(document.getElementById("c-capacity").value),
+        rows: parseInt(document.getElementById("c-rows").value),
+        columns: parseInt(document.getElementById("c-cols").value)
+      };
+      await fetch("/api/classrooms", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(payload) });
+      toggleModal("classroom-modal");
+      loadWorkspaceData();
+    }
 
-      toggleStudentModal();
-      loadModuleData();
+    async function submitInvigilator(e) {
+      e.preventDefault();
+      const payload = {
+        branch_id: selectedBranchId,
+        full_name: document.getElementById("i-name").value,
+        contact_number: document.getElementById("i-contact").value
+      };
+      await fetch("/api/invigilators", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(payload) });
+      toggleModal("invigilator-modal");
+      loadWorkspaceData();
     }
 
     async function submitFee(e) {
@@ -473,71 +652,63 @@
       const payload = {
         branch_id: selectedBranchId,
         student_id: document.getElementById("fee-student-select").value,
-        amount_due: parseFloat(document.getElementById("fee-amount").value),
-        due_date: document.getElementById("fee-date").value
+        amount_due: parseFloat(document.getElementById("f-amount").value),
+        due_date: document.getElementById("f-date").value
       };
-
-      await fetch("/api/fees", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${currentToken}` },
-        body: JSON.stringify(payload)
-      });
-
-      toggleFeeModal();
-      loadModuleData();
+      await fetch("/api/fees", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify(payload) });
+      toggleModal("fee-modal");
+      loadWorkspaceData();
     }
 
-    // CREAM-TEXTURED ELEGANT PDF ENGINE
-    function generateCreamPDF() {
+    async function autoAllocateInvig() {
+      await fetch(`/api/invigilators/auto-allocate?branch_id=${selectedBranchId}`, { method: "POST", headers: { "Authorization": `Bearer ${token}` } });
+      loadWorkspaceData();
+    }
+
+    // Dynamic Elegant Cream PDF Generation
+    function exportCreamPDF(title, headers) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      
-      const activeBranchName = branches.find(b => b.id === selectedBranchId)?.name || "Main Campus";
 
-      // Cream Textured Fill
       doc.setFillColor(253, 251, 247);
       doc.rect(0, 0, 210, 297, "F");
 
-      // Double Frame Borders
       doc.setDrawColor(180, 160, 120);
       doc.setLineWidth(1);
       doc.rect(5, 5, 200, 287);
       doc.setLineWidth(0.3);
       doc.rect(7, 7, 196, 283);
 
-      // Header Typography
       doc.setFont("Cinzel", "bold");
-      doc.setFontSize(22);
+      doc.setFontSize(20);
       doc.setTextColor(40, 40, 40);
-      doc.text("ALGORITHMIC", 105, 22, { align: "center" });
+      doc.text(institute.toUpperCase(), 105, 20, { align: "center" });
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100, 100, 100);
-      doc.text(`INSTITUTIONAL EXAMINATION MATRIX — ${activeBranchName.toUpperCase()}`, 105, 28, { align: "center" });
-      
+      doc.text(`ALGORITHMIC PLATFORM — ${title.toUpperCase()}`, 105, 27, { align: "center" });
+
       doc.setDrawColor(140, 120, 90);
       doc.setLineWidth(0.5);
-      doc.line(20, 32, 190, 32);
+      doc.line(20, 31, 190, 31);
 
-      // Dummy Seating Content Formatted nicely
       doc.autoTable({
-        startY: 40,
-        head: [['Desk ID', 'Student Name', 'Roll Number', 'Batch', 'Room']],
+        startY: 38,
+        head: [headers],
         body: [
-          ['D-01', 'Samarth Dave', '2026-CS-01', 'Batch A', 'Hall 1'],
-          ['D-02', 'Alex Mercer', '2026-CS-02', 'Batch B', 'Hall 1'],
-          ['D-03', 'Jane Doe', '2026-CS-03', 'Batch A', 'Hall 1'],
+          ['Sample Entry 1', 'Data Field A', 'Data Field B', 'Active Record'],
+          ['Sample Entry 2', 'Data Field A', 'Data Field B', 'Active Record'],
         ],
         theme: 'plain',
         headStyles: { fillColor: [240, 235, 220], textColor: [40, 40, 40], fontStyle: 'bold' },
-        styles: { fillColor: [253, 251, 247], textColor: [60, 60, 60] },
+        styles: { fillColor: [253, 251, 247], textColor: [60, 60, 60] }
       });
 
-      doc.save("Algorithmic_Seating_Chart.pdf");
+      doc.save(`${institute}_${title.replace(/\s+/g, '_')}.pdf`);
     }
 
-    if (currentToken) initApp();
+    if (token) initApp();
   </script>
 </body>
 </html>
