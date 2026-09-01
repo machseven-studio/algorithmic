@@ -1,5 +1,5 @@
-flask
-flask-cors
-bcrypt
-python-magic
+fastapi
+uvicorn
 gunicorn
+pydantic
+python-multipart
