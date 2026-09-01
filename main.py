@@ -1147,11 +1147,17 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
+    # Always serve the external index.html.  The previous fallback embedded
+    # an older copy of the UI inside main.py, which could silently make a
+    # deployment appear unchanged when index.html was missing/not deployed.
     index_path = os.path.join(os.path.dirname(__file__), "index.html")
-    if os.path.exists(index_path):
-        with open(index_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read(), status_code=200)
-    return HTMLResponse(content=HTML_CONTENT, status_code=200)
+    if not os.path.isfile(index_path):
+        return HTMLResponse(
+            content="<h1>Frontend file missing</h1><p>index.html must be deployed alongside main.py.</p>",
+            status_code=500,
+        )
+    with open(index_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
 
 
 HTML_CONTENT = """<!DOCTYPE html>
