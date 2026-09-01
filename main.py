@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
@@ -187,6 +188,35 @@ def init_db():
 
 
 init_db()
+
+
+# Schema migrations for the redesigned academic modules. Existing legacy
+# columns are intentionally retained so old databases remain readable, while
+# the public API/UI expose only the new fields.
+def migrate_academic_schema():
+    conn = get_conn()
+    cursor = conn.cursor()
+    migrations = {
+        "students": [
+            ("roll_number", "TEXT"), ("full_name", "TEXT"), ("batch", "TEXT"),
+            ("parent_contact", "TEXT")
+        ],
+        "teachers": [("full_name", "TEXT"), ("contact_number", "TEXT")],
+        "syllabus": [
+            ("topic", "TEXT"), ("teacher_name", "TEXT"),
+            ("number_of_lectures", "INTEGER"), ("lecture_date", "TEXT")
+        ],
+        "attendance": [("student_id", "INTEGER"), ("batch", "TEXT")]
+    }
+    for table, cols in migrations.items():
+        existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, typ in cols:
+            if name not in existing:
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
+    conn.commit()
+    conn.close()
+
+migrate_academic_schema()
 
 
 # ---------------------------------------------------------------------------
@@ -679,11 +709,11 @@ def delete_record(module: str, record_id: int, institute: CurrentInstitute = Dep
 # Column layout expected in a bulk-import CSV for each module (document/email
 # intentionally excluded - those are handled per-record, not in bulk).
 BULK_IMPORT_COLUMNS = {
-    "students": ["name", "course", "status"],
-    "teachers": ["name", "subject", "department"],
+    "students": ["name", "batch", "roll_number", "parent_contact"],
+    "teachers": ["name", "subject", "contact_number"],
     "classrooms": ["room_no", "capacity"],
-    "syllabus": ["subject", "semester", "units"],
-    "attendance": ["student_name", "date", "status"],
+    "syllabus": ["subject", "topic", "teacher_name", "number_of_lectures", "date"],
+    "attendance": ["student_name", "batch", "date", "status"],
     "invigilation": ["teacher_name", "exam_date", "room"],
     "fees": ["student_name", "amount_inr", "status", "due_date"],
 }
@@ -734,20 +764,26 @@ async def bulk_import_records(
             continue  # skip blank rows
 
         if module == 'students':
-            cursor.execute("INSERT INTO students (branch_id, name, email, course, status, document) VALUES (?, ?, ?, ?, ?, ?)",
-                           (branch_id, row.get('name'), None, row.get('course'), row.get('status', 'Active'), None))
+            cursor.execute(
+                "INSERT INTO students (branch_id, name, roll_number, full_name, batch, parent_contact) VALUES (?, ?, ?, ?, ?, ?)",
+                (branch_id, row.get('name'), row.get('roll_number'), row.get('name'), row.get('batch'), row.get('parent_contact'))
+            )
         elif module == 'teachers':
-            cursor.execute("INSERT INTO teachers (branch_id, name, subject, department, document) VALUES (?, ?, ?, ?, ?)",
-                           (branch_id, row.get('name'), row.get('subject'), row.get('department'), None))
+            cursor.execute(
+                "INSERT INTO teachers (branch_id, name, full_name, subject, contact_number) VALUES (?, ?, ?, ?, ?)",
+                (branch_id, row.get('name'), row.get('name'), row.get('subject'), row.get('contact_number'))
+            )
         elif module == 'classrooms':
             cursor.execute("INSERT INTO classrooms (branch_id, room_no, capacity, building, document) VALUES (?, ?, ?, ?, ?)",
                            (branch_id, row.get('room_no'), row.get('capacity'), None, None))
         elif module == 'syllabus':
-            cursor.execute("INSERT INTO syllabus (branch_id, subject, semester, units, document) VALUES (?, ?, ?, ?, ?)",
-                           (branch_id, row.get('subject'), row.get('semester'), row.get('units'), None))
+            cursor.execute(
+                "INSERT INTO syllabus (branch_id, subject, topic, teacher_name, number_of_lectures, lecture_date) VALUES (?, ?, ?, ?, ?, ?)",
+                (branch_id, row.get('subject'), row.get('topic'), row.get('teacher_name'), row.get('number_of_lectures'), row.get('date'))
+            )
         elif module == 'attendance':
-            cursor.execute("INSERT INTO attendance (branch_id, student_name, date, status, document) VALUES (?, ?, ?, ?, ?)",
-                           (branch_id, row.get('student_name'), row.get('date'), row.get('status'), None))
+            cursor.execute("INSERT INTO attendance (branch_id, student_name, batch, date, status) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('student_name'), row.get('batch'), row.get('date'), row.get('status')))
         elif module == 'invigilation':
             cursor.execute("INSERT INTO invigilation (branch_id, teacher_name, exam_date, room, document) VALUES (?, ?, ?, ?, ?)",
                            (branch_id, row.get('teacher_name'), row.get('exam_date'), row.get('room'), None))
@@ -761,6 +797,242 @@ async def bulk_import_records(
     if inserted == 0:
         raise HTTPException(status_code=400, detail="No valid rows found in that file")
     return {"status": "success", "inserted": inserted}
+
+
+# ---------------------------------------------------------------------------
+# Redesigned academic module APIs
+# ---------------------------------------------------------------------------
+
+class StudentCreate(BaseModel):
+    branch_id: int
+    name: str
+    batch: str
+    roll_number: str
+    parent_contact: str
+
+class TeacherCreate(BaseModel):
+    branch_id: int
+    name: str
+    subject: str
+    contact_number: str
+
+class SyllabusCreate(BaseModel):
+    branch_id: int
+    subject: str
+    topic: str
+    teacher_name: str
+    number_of_lectures: int
+    date: str
+
+class AttendanceMark(BaseModel):
+    branch_id: int
+    student_id: int
+    batch: str
+    date: str
+    status: str
+
+class ClassroomCreate(BaseModel):
+    branch_id: int
+    room_name: str
+    capacity: int
+    rows: int
+    columns: int
+
+class InvigilatorCreate(BaseModel):
+    branch_id: int
+    full_name: str
+    contact_number: str
+
+class FeeCreate(BaseModel):
+    branch_id: int
+    student_id: int
+    amount_due: float
+    due_date: str
+
+
+def _student_public(row):
+    return {
+        "id": row["id"], "name": row["full_name"] or row["name"] or "",
+        "batch": row["batch"] or "", "roll_number": row["roll_number"] or "",
+        "parent_contact": row["parent_contact"] or ""
+    }
+
+@app.get("/api/students")
+def api_students(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("""SELECT id, name, full_name, batch, roll_number, parent_contact
+                         FROM students WHERE branch_id=?
+                         ORDER BY LOWER(COALESCE(batch,'')), LOWER(COALESCE(full_name,name,''))""", (branch_id,)).fetchall()
+    conn.close(); return [_student_public(r) for r in rows]
+
+@app.post("/api/students")
+def api_create_student(req: StudentCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("INSERT INTO students (branch_id,name,full_name,batch,roll_number,parent_contact) VALUES (?,?,?,?,?,?)",
+                (req.branch_id,req.name,req.name,req.batch,req.roll_number,req.parent_contact))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/classrooms")
+def api_classrooms(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("SELECT id, room_no AS room_name, capacity, building, document FROM classrooms WHERE branch_id=? ORDER BY id",(branch_id,)).fetchall()
+    conn.close(); return [dict(r) for r in rows]
+
+@app.post("/api/classrooms")
+def api_create_classroom(req: ClassroomCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("INSERT INTO classrooms (branch_id,room_no,capacity,building,document) VALUES (?,?,?,?,NULL)",(req.branch_id,req.room_name,req.capacity,f"{req.rows} x {req.columns}"))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/invigilators")
+def api_invigilators(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("SELECT id, teacher_name AS full_name, '' AS contact_number, room AS assigned_room FROM invigilation WHERE branch_id=? ORDER BY id",(branch_id,)).fetchall()
+    conn.close(); return [dict(r) for r in rows]
+
+@app.post("/api/invigilators")
+def api_create_invigilator(req: InvigilatorCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("INSERT INTO invigilation (branch_id,teacher_name,exam_date,room,document) VALUES (?,?,?,?,NULL)",(req.branch_id,req.full_name,'',None))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/fees/defaulters")
+def api_fee_defaulters(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("""SELECT f.id, f.student_name, COALESCE(s.roll_number,'') AS roll_number,
+                       f.amount_inr AS amount_due, f.due_date, f.status, f.document
+                       FROM fees f LEFT JOIN students s ON s.id=f.student_name
+                       WHERE f.branch_id=? ORDER BY f.due_date""",(branch_id,)).fetchall()
+    out=[]
+    today=datetime.utcnow().date()
+    for r in rows:
+        try: days=(datetime.fromisoformat(r['due_date']).date()-today).days
+        except Exception: days=999
+        out.append({**dict(r),"days_remaining":days,"urgent_alert":days<=3})
+    conn.close(); return out
+
+@app.post("/api/fees")
+def api_create_fee(req: FeeCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("SELECT COALESCE(full_name,name), roll_number FROM students WHERE id=? AND branch_id=?",(req.student_id,req.branch_id)); st=cur.fetchone()
+    if not st: conn.close(); raise HTTPException(status_code=404,detail="Student not found")
+    cur.execute("INSERT INTO fees (branch_id,student_name,amount_inr,status,due_date,document) VALUES (?,?,?,?,?,NULL)",(req.branch_id,st[0],req.amount_due,'Pending',req.due_date))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/student-batches")
+def api_student_batches(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn()
+    rows=conn.execute("SELECT DISTINCT batch FROM students WHERE branch_id=? AND TRIM(COALESCE(batch,''))<>'' ORDER BY LOWER(batch)", (branch_id,)).fetchall()
+    conn.close(); return [r[0] for r in rows]
+
+@app.get("/api/teachers")
+def api_teachers(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("SELECT id, COALESCE(full_name,name) AS full_name, subject, contact_number FROM teachers WHERE branch_id=? ORDER BY LOWER(COALESCE(full_name,name,''))", (branch_id,)).fetchall()
+    conn.close(); return [dict(r) for r in rows]
+
+@app.post("/api/teachers")
+def api_create_teacher(req: TeacherCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("INSERT INTO teachers (branch_id,name,full_name,subject,contact_number) VALUES (?,?,?,?,?)", (req.branch_id,req.name,req.name,req.subject,req.contact_number))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/syllabus")
+def api_syllabus(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("""SELECT id, subject, topic, teacher_name, number_of_lectures, lecture_date
+                         FROM syllabus WHERE branch_id=? ORDER BY lecture_date DESC, LOWER(subject)""", (branch_id,)).fetchall()
+    conn.close(); return [dict(r) for r in rows]
+
+@app.post("/api/syllabus")
+def api_create_syllabus(req: SyllabusCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    if req.number_of_lectures < 1: raise HTTPException(status_code=400, detail="Number of lectures must be at least 1")
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("INSERT INTO syllabus (branch_id,subject,topic,teacher_name,number_of_lectures,lecture_date) VALUES (?,?,?,?,?,?)",
+                (req.branch_id,req.subject,req.topic,req.teacher_name,req.number_of_lectures,req.date))
+    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
+
+@app.get("/api/attendance/students")
+def api_attendance_students(branch_id: int, batch: str, date: str = None, q: str = "", institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn(); conn.row_factory=sqlite3.Row
+    rows=conn.execute("""SELECT s.id, COALESCE(s.full_name,s.name) AS name, s.batch, s.roll_number,
+                       COALESCE(a.status,'') AS attendance_status
+                       FROM students s LEFT JOIN attendance a
+                       ON a.student_id=s.id AND a.branch_id=s.branch_id AND a.date=?
+                       WHERE s.branch_id=? AND s.batch=? AND LOWER(COALESCE(s.full_name,s.name,'')) LIKE LOWER(?)
+                       ORDER BY LOWER(COALESCE(s.full_name,s.name,''))""", (date or "", branch_id, batch, f"%{q}%" )).fetchall()
+    conn.close(); return [dict(r) for r in rows]
+
+@app.post("/api/attendance/mark")
+def api_mark_attendance(req: AttendanceMark, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(req.branch_id, institute.id)
+    if req.status not in ("Present", "Absent"): raise HTTPException(status_code=400, detail="Status must be Present or Absent")
+    conn=get_conn(); cur=conn.cursor()
+    cur.execute("SELECT id FROM students WHERE id=? AND branch_id=? AND batch=?", (req.student_id, req.branch_id, req.batch))
+    if not cur.fetchone(): conn.close(); raise HTTPException(status_code=404, detail="Student not found in selected batch")
+    cur.execute("SELECT id FROM attendance WHERE branch_id=? AND student_id=? AND date=?", (req.branch_id,req.student_id,req.date))
+    existing=cur.fetchone()
+    if existing:
+        cur.execute("UPDATE attendance SET student_name=(SELECT COALESCE(full_name,name) FROM students WHERE id=?), batch=?, status=?, document=NULL WHERE id=?", (req.student_id,req.batch,req.status,existing[0]))
+    else:
+        cur.execute("INSERT INTO attendance (branch_id,student_id,student_name,batch,date,status) VALUES (?,?,?,?,?,?)", (req.branch_id,req.student_id,None,req.batch,req.date,req.status))
+        cur.execute("UPDATE attendance SET student_name=(SELECT COALESCE(full_name,name) FROM students WHERE id=?) WHERE id=?", (req.student_id,cur.lastrowid))
+    conn.commit(); conn.close(); return {"status":"success","attendance_status":req.status}
+
+@app.post("/api/academic/import-pdf")
+async def import_academic_pdf(module: str = Form(...), branch_id: int = Form(...), file: UploadFile = File(...), institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(branch_id, institute.id)
+    if module not in ("students","teachers","syllabus"): raise HTTPException(status_code=400, detail="PDF import is available for students, teachers and syllabus")
+    if not (file.filename or "").lower().endswith(".pdf"): raise HTTPException(status_code=400, detail="Please upload a PDF file")
+    raw=await file.read()
+    if len(raw)>MAX_UPLOAD_BYTES: raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
+    try:
+        from pypdf import PdfReader
+        import io, csv
+        text="\n".join((page.extract_text() or "") for page in PdfReader(io.BytesIO(raw)).pages)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read this PDF: {exc}")
+    lines=[line.strip() for line in text.splitlines() if line.strip()]
+    expected=BULK_IMPORT_COLUMNS[module]
+    norm={h.lower().replace(" ","_"):h for h in expected}
+    header_idx=None
+    for i,line in enumerate(lines[:40]):
+        parts=[x.strip().lower().replace(" ","_") for x in line.replace("|",",").split(",")]
+        if len(set(parts)&set(norm)) >= max(2, len(expected)-1): header_idx=i; break
+    if header_idx is None: raise HTTPException(status_code=400, detail=f"PDF must contain a tabular header using: {', '.join(expected)}")
+    headers=[x.strip().lower().replace(" ","_") for x in lines[header_idx].replace("|",",").split(",")]
+    conn=get_conn(); cur=conn.cursor(); inserted=0
+    for line in lines[header_idx+1:]:
+        parts=[x.strip() for x in line.replace("|",",").split(",")]
+        if len(parts)<len(headers): continue
+        row=dict(zip(headers,parts))
+        try:
+            if module=="students":
+                cur.execute("INSERT INTO students (branch_id,name,full_name,batch,roll_number,parent_contact) VALUES (?,?,?,?,?,?)",(branch_id,row.get("name"),row.get("name"),row.get("batch"),row.get("roll_number"),row.get("parent_contact")))
+            elif module=="teachers":
+                cur.execute("INSERT INTO teachers (branch_id,name,full_name,subject,contact_number) VALUES (?,?,?,?,?)",(branch_id,row.get("name"),row.get("name"),row.get("subject"),row.get("contact_number")))
+            else:
+                cur.execute("INSERT INTO syllabus (branch_id,subject,topic,teacher_name,number_of_lectures,lecture_date) VALUES (?,?,?,?,?,?)",(branch_id,row.get("subject"),row.get("topic"),row.get("teacher_name"),int(row.get("number_of_lectures",0)),row.get("date")))
+            inserted+=1
+        except (ValueError, sqlite3.Error):
+            continue
+    conn.commit(); conn.close()
+    if not inserted: raise HTTPException(status_code=400, detail="No readable records were found in the PDF")
+    return {"status":"success","inserted":inserted}
 
 
 # ---------------------------------------------------------------------------
@@ -875,6 +1147,10 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
+    index_path = os.path.join(os.path.dirname(__file__), "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read(), status_code=200)
     return HTMLResponse(content=HTML_CONTENT, status_code=200)
 
 
