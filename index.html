@@ -3,74 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Institute Management System</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <title>Tuition Institute Management System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-dark: #0b0f19;
+            --panel-bg: #111827;
+            --border-color: #1f293d;
+            --accent-blue: #3b82f6;
+            --accent-gold: linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-        body { background-color: #0f172a; color: #f8fafc; display: flex; min-height: 100vh; }
-        
-        /* Sidebar */
-        .sidebar { width: 250px; background: #1e293b; padding: 20px; display: flex; flex-direction: column; gap: 15px; border-right: 1px solid #334155; }
-        .sidebar h2 { color: #38bdf8; font-size: 1.2rem; margin-bottom: 20px; }
-        .nav-btn { background: transparent; color: #94a3b8; border: none; padding: 12px; text-align: left; cursor: pointer; border-radius: 8px; font-weight: 600; }
-        .nav-btn:hover, .nav-btn.active { background: #334155; color: #f8fafc; }
-        
-        /* Main Content */
-        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
+        body { background-color: var(--bg-dark); color: var(--text-main); display: flex; min-height: 100vh; overflow-x: hidden; }
+
+        /* Sidebar Navigation */
+        .sidebar { width: 260px; background: var(--panel-bg); border-right: 1px solid var(--border-color); padding: 25px 15px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+        .sidebar-brand { font-family: 'Cinzel', serif; font-size: 1.1rem; color: #f3f4f6; padding: 0 12px 20px 12px; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; font-weight: 700; letter-spacing: 1px; }
+        .nav-btn { background: transparent; color: var(--text-muted); border: none; padding: 12px 16px; text-align: left; cursor: pointer; border-radius: 8px; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; display: flex; align-items: center; gap: 10px; }
+        .nav-btn:hover { background: #1f293d; color: var(--text-main); }
+        .nav-btn.active { background: var(--accent-blue); color: #ffffff; font-weight: 600; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+
+        /* Main Workspace */
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; max-height: 100vh; }
         .module { display: none; }
         .module.active { display: block; }
-        
+
         /* Gold Welcome Header */
         .welcome-title {
             font-family: 'Cinzel', serif;
-            font-size: 2.8rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #BF953F 0%, #FCF6BA 25%, #B38728 50%, #FBF5B7 75%, #AA771C 100%);
+            font-size: 3rem;
+            font-weight: 800;
+            background: var(--accent-gold);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: fadeInWelcome 1.2s ease-in-out;
-            margin-bottom: 30px;
+            animation: fadeInWelcome 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+            margin-top: 20px;
+            letter-spacing: 0.5px;
         }
         @keyframes fadeInWelcome {
-            from { opacity: 0; transform: translateY(-15px); }
+            from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Controls & Inputs */
-        .controls { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
-        input, select { background: #1e293b; border: 1px solid #334155; color: #fff; padding: 10px 14px; border-radius: 6px; outline: none; }
-        input:focus, select:focus { border-color: #38bdf8; }
-        .btn { background: #0284c7; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600; }
-        .btn:hover { background: #0369a1; }
-        .btn-present { background: #16a34a; margin-right: 5px; }
-        .btn-absent { background: #dc2626; }
-        
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #1e293b; border-radius: 8px; overflow: hidden; }
-        th, td { padding: 14px; text-align: left; border-bottom: 1px solid #334155; }
-        th { background: #0f172a; color: #94a3b8; text-transform: uppercase; font-size: 0.85rem; }
-        
-        /* Batch Group Container */
-        .batch-section { margin-bottom: 30px; background: #1e293b; border-radius: 8px; padding: 20px; border: 1px solid #334155; }
-        .batch-header { font-size: 1.3rem; color: #38bdf8; margin-bottom: 10px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+        /* Module Headers & Controls */
+        .module-header { font-size: 1.6rem; font-weight: 700; margin-bottom: 25px; color: #ffffff; display: flex; justify-content: space-between; align-items: center; }
+        .controls { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; align-items: center; }
+        input, select { background: var(--panel-bg); border: 1px solid var(--border-color); color: #fff; padding: 10px 16px; border-radius: 8px; outline: none; font-size: 0.9rem; transition: border-color 0.2s ease; }
+        input:focus, select:focus { border-color: var(--accent-blue); }
+        .search-bar { min-width: 280px; }
 
-        /* Modal */
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; }
-        .modal-content { background: #1e293b; padding: 25px; border-radius: 10px; width: 400px; display: flex; flex-direction: column; gap: 12px; }
+        /* Buttons */
+        .btn { background: var(--accent-blue); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: background 0.2s ease; }
+        .btn:hover { background: #2563eb; }
+        .btn-present { background: #16a34a; padding: 6px 16px; border-radius: 6px; }
+        .btn-present:hover { background: #15803d; }
+        .btn-absent { background: #dc2626; padding: 6px 16px; border-radius: 6px; }
+        .btn-absent:hover { background: #b91c1c; }
+
+        /* Data Tables */
+        table { width: 100%; border-collapse: collapse; background: var(--panel-bg); border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); }
+        th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+        th { background: #172033; color: var(--text-muted); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.8px; font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+
+        /* Batch Grouping Sections */
+        .batch-section { margin-bottom: 35px; background: var(--panel-bg); border-radius: 12px; padding: 20px; border: 1px solid var(--border-color); }
+        .batch-header { font-size: 1.2rem; font-weight: 700; color: #60a5fa; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+
+        /* Modal Overlay */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: var(--panel-bg); padding: 30px; border-radius: 12px; width: 420px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 15px; }
+        .modal-content h3 { color: #fff; font-size: 1.2rem; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 
+    <!-- SIDEBAR NAVIGATION -->
     <div class="sidebar">
-        <h2>Institute Portal</h2>
+        <div class="sidebar-brand">TUITION MANAGEMENT</div>
         <button class="nav-btn active" onclick="showModule('home')">Home</button>
         <button class="nav-btn" onclick="showModule('students')">Student Department</button>
         <button class="nav-btn" onclick="showModule('teachers')">Teacher Department</button>
         <button class="nav-btn" onclick="showModule('syllabus')">Syllabus Department</button>
         <button class="nav-btn" onclick="showModule('attendance')">Attendance</button>
+        <button class="nav-btn" onclick="showModule('timetable')">Timetable</button>
+        <button class="nav-btn" onclick="showModule('invigilation')">Invigilation</button>
+        <button class="nav-btn" onclick="showModule('fees')">Fees Ledger</button>
+        <button class="nav-btn" onclick="showModule('users')">User Management</button>
     </div>
 
+    <!-- MAIN WORKSPACE -->
     <div class="main-content">
+        
         <!-- HOME MODULE -->
         <div id="home" class="module active">
             <h1 class="welcome-title">Welcome, Samarth Dave</h1>
@@ -78,18 +105,20 @@
 
         <!-- STUDENT DEPARTMENT -->
         <div id="students" class="module">
-            <h2>Student Department</h2>
-            <div class="controls">
-                <input type="text" id="studentSearch" placeholder="Search student name..." oninput="renderStudents()">
+            <div class="module-header">
+                <span>Student Department</span>
                 <button class="btn" onclick="openModal('studentModal')">+ Add Student</button>
+            </div>
+            <div class="controls">
+                <input type="text" id="studentSearch" class="search-bar" placeholder="Search student name..." oninput="renderStudents()">
             </div>
             <div id="studentBatchContainer"></div>
         </div>
 
         <!-- TEACHER DEPARTMENT -->
         <div id="teachers" class="module">
-            <h2>Teacher Department</h2>
-            <div class="controls">
+            <div class="module-header">
+                <span>Teacher Department</span>
                 <button class="btn" onclick="openModal('teacherModal')">+ Add Teacher</button>
             </div>
             <table>
@@ -106,9 +135,9 @@
 
         <!-- SYLLABUS DEPARTMENT -->
         <div id="syllabus" class="module">
-            <h2>Syllabus Department</h2>
-            <div class="controls">
-                <button class="btn" onclick="openModal('syllabusModal')">+ Add Syllabus Topic</button>
+            <div class="module-header">
+                <span>Syllabus Department</span>
+                <button class="btn" onclick="openModal('syllabusModal')">+ Add Syllabus Entry</button>
             </div>
             <table>
                 <thead>
@@ -126,10 +155,10 @@
 
         <!-- ATTENDANCE MODULE -->
         <div id="attendance" class="module">
-            <h2>Attendance Module</h2>
+            <div class="module-header">Attendance Management</div>
             <div class="controls">
                 <select id="attendanceBatchSelect" onchange="renderAttendance()"></select>
-                <input type="text" id="attendanceSearch" placeholder="Search student name..." oninput="renderAttendance()">
+                <input type="text" id="attendanceSearch" class="search-bar" placeholder="Search student name..." oninput="renderAttendance()">
             </div>
             <table>
                 <thead>
@@ -142,28 +171,105 @@
                 <tbody id="attendanceTableBody"></tbody>
             </table>
         </div>
+
+        <!-- TIMETABLE MODULE -->
+        <div id="timetable" class="module">
+            <div class="module-header">Timetable Schedule</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time Slot</th>
+                        <th>Batch</th>
+                        <th>Subject</th>
+                        <th>Teacher</th>
+                        <th>Classroom</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>08:00 AM - 09:30 AM</td><td>Batch A</td><td>Physics</td><td>Prof. Verma</td><td>Room 101</td></tr>
+                    <tr><td>09:30 AM - 11:00 AM</td><td>Batch B</td><td>Mathematics</td><td>Prof. Kulkarni</td><td>Room 102</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- INVIGILATION MODULE -->
+        <div id="invigilation" class="module">
+            <div class="module-header">Faculty Exam Duty Allocation</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Exam Date</th>
+                        <th>Batch</th>
+                        <th>Subject</th>
+                        <th>Assigned Invigilator</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>2026-09-10</td><td>Batch A</td><td>Chemistry Prelim</td><td>Prof. Kulkarni</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- FEES LEDGER MODULE -->
+        <div id="fees" class="module">
+            <div class="module-header">Tuition Fee Ledger</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Batch</th>
+                        <th>Total Fees</th>
+                        <th>Paid</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Rahul Sharma</td><td>Batch A</td><td>₹45,000</td><td>₹45,000</td><td style="color:#22c55e;">CLEAR</td></tr>
+                    <tr><td>Priya Patel</td><td>Batch B</td><td>₹50,000</td><td>₹25,000</td><td style="color:#eab308;">PARTIAL</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- USER MANAGEMENT MODULE -->
+        <div id="users" class="module">
+            <div class="module-header">System Accounts</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Last Login</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>samarth_admin</td><td>Director</td><td>Today, 05:22 PM</td></tr>
+                    <tr><td>clerk_desk</td><td>Clerk</td><td>Yesterday</td></tr>
+                </tbody>
+            </table>
+        </div>
+
     </div>
 
     <!-- MODALS -->
     <div id="studentModal" class="modal">
         <div class="modal-content">
-            <h3>Add Student</h3>
+            <h3>Add Student Entry</h3>
             <input type="text" id="s_name" placeholder="Name">
             <input type="text" id="s_batch" placeholder="Batch">
             <input type="text" id="s_roll" placeholder="Roll Number">
             <input type="text" id="s_contact" placeholder="Parent's Contact Number">
-            <button class="btn" onclick="addStudent()">Save</button>
+            <button class="btn" onclick="addStudent()">Save Student</button>
             <button class="btn btn-absent" onclick="closeModal('studentModal')">Cancel</button>
         </div>
     </div>
 
     <div id="teacherModal" class="modal">
         <div class="modal-content">
-            <h3>Add Teacher</h3>
+            <h3>Add Teacher Entry</h3>
             <input type="text" id="t_name" placeholder="Name">
             <input type="text" id="t_subject" placeholder="Subject">
             <input type="text" id="t_contact" placeholder="Contact Number">
-            <button class="btn" onclick="addTeacher()">Save</button>
+            <button class="btn" onclick="addTeacher()">Save Teacher</button>
             <button class="btn btn-absent" onclick="closeModal('teacherModal')">Cancel</button>
         </div>
     </div>
@@ -176,26 +282,34 @@
             <input type="text" id="sy_teacher" placeholder="TEACHER'S NAME">
             <input type="number" id="sy_lectures" placeholder="NUMBER OF LECTURES">
             <input type="date" id="sy_date" placeholder="DATE">
-            <button class="btn" onclick="addSyllabus()">Save</button>
+            <button class="btn" onclick="addSyllabus()">Save Entry</button>
             <button class="btn btn-absent" onclick="closeModal('syllabusModal')">Cancel</button>
         </div>
     </div>
 
     <script>
-        // Central Data Store
+        // Data Store
         let students = [
             { name: "Rahul Sharma", batch: "Batch A", roll: "101", parentContact: "9876543210" },
-            { name: "Priya Patel", batch: "Batch B", roll: "102", parentContact: "9876543211" },
-            { name: "Aman Verma", batch: "Batch A", roll: "103", parentContact: "9876543212" }
+            { name: "Aman Verma", batch: "Batch A", roll: "103", parentContact: "9876543212" },
+            { name: "Priya Patel", batch: "Batch B", roll: "102", parentContact: "9876543211" }
         ];
-        let teachers = [];
-        let syllabus = [];
+        let teachers = [
+            { name: "Prof. Verma", subject: "Physics", contact: "9820098200" },
+            { name: "Prof. Kulkarni", subject: "Mathematics", contact: "9820098201" }
+        ];
+        let syllabus = [
+            { subject: "Physics", topic: "Rotational Dynamics", teacher: "Prof. Verma", lectures: "4", date: "2026-09-05" }
+        ];
 
         function showModule(id) {
             document.querySelectorAll('.module').forEach(m => m.classList.remove('active'));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             
+            // Sync current active button
+            event.target.classList.add('active');
+
             if(id === 'students') renderStudents();
             if(id === 'teachers') renderTeachers();
             if(id === 'syllabus') renderSyllabus();
@@ -205,7 +319,7 @@
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        // STUDENT FUNCTIONS
+        // STUDENT LOGIC
         function addStudent() {
             const name = document.getElementById('s_name').value;
             const batch = document.getElementById('s_batch').value;
@@ -223,16 +337,16 @@
             const search = document.getElementById('studentSearch').value.toLowerCase();
             container.innerHTML = '';
 
-            // Get & Sort Unique Batches Alphabetically
-            const batches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
+            // Alphabetical Sorting of Unique Batch Names
+            const sortedBatches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
 
-            batches.forEach(batch => {
+            sortedBatches.forEach(batch => {
                 const batchStudents = students.filter(s => s.batch === batch && s.name.toLowerCase().includes(search));
                 if(batchStudents.length === 0) return;
 
                 let section = document.createElement('div');
                 section.className = 'batch-section';
-                let html = `<div class="batch-header">${batch}</div><table><thead><tr><th>Name</th><th>Batch</th><th>Roll Number</th><th>Parent's Contact Number</th></tr></thead><tbody>`;
+                let html = `<div class="batch-header"><span>${batch}</span></div><table><thead><tr><th>Name</th><th>Batch</th><th>Roll Number</th><th>Parent's Contact Number</th></tr></thead><tbody>`;
                 
                 batchStudents.forEach(s => {
                     html += `<tr><td>${s.name}</td><td>${s.batch}</td><td>${s.roll}</td><td>${s.parentContact}</td></tr>`;
@@ -243,7 +357,7 @@
             });
         }
 
-        // TEACHER FUNCTIONS
+        // TEACHER LOGIC
         function addTeacher() {
             const name = document.getElementById('t_name').value;
             const subject = document.getElementById('t_subject').value;
@@ -260,7 +374,7 @@
             tbody.innerHTML = teachers.map(t => `<tr><td>${t.name}</td><td>${t.subject}</td><td>${t.contact}</td></tr>`).join('');
         }
 
-        // SYLLABUS FUNCTIONS
+        // SYLLABUS LOGIC
         function addSyllabus() {
             const subject = document.getElementById('sy_subject').value;
             const topic = document.getElementById('sy_topic').value;
@@ -279,11 +393,11 @@
             tbody.innerHTML = syllabus.map(s => `<tr><td>${s.subject}</td><td>${s.topic}</td><td>${s.teacher}</td><td>${s.lectures}</td><td>${s.date}</td></tr>`).join('');
         }
 
-        // ATTENDANCE FUNCTIONS
+        // ATTENDANCE LOGIC
         function setupAttendanceUI() {
             const select = document.getElementById('attendanceBatchSelect');
-            const batches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
-            select.innerHTML = batches.map(b => `<option value="${b}">${b}</option>`).join('');
+            const sortedBatches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
+            select.innerHTML = sortedBatches.map(b => `<option value="${b}">${b}</option>`).join('');
             renderAttendance();
         }
 
@@ -304,6 +418,10 @@
                 </tr>
             `).join('');
         }
+
+        // Initial Page Hydration
+        renderTeachers();
+        renderSyllabus();
     </script>
 </body>
 </html>
