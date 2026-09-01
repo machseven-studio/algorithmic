@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Dashboard</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        button { background: #0066cc; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Application Control Panel</h1>
+    
+    <div class="card">
+        <h3>Secure File Upload</h3>
+        <form action="/upload" method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" required>
+            <button type="submit">Upload File</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Delete Module</h3>
+        <input type="text" id="moduleName" placeholder="Enter module name">
+        <button onclick="deleteModule()">Delete</button>
+    </div>
+
+    <script>
+        async function deleteModule() {
+            const name = document.getElementById('moduleName').value;
+            const res = await fetch('/delete-module', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
+        }
+    </script>
+</body>
+</html>
