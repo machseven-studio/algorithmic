@@ -14,7 +14,6 @@
             --border-subtle: #222222;
             --gold-text: #d4af37;
             --gold-gradient: linear-gradient(135deg, #BF953F 0%, #FCF6BA 25%, #B38728 50%, #FBF5B7 75%, #AA771C 100%);
-            --gold-hover: #e5c158;
             --text-light: #f5f5f5;
             --text-muted: #a3a3a3;
         }
@@ -35,20 +34,25 @@
         .module.active { display: block; }
 
         /* Animated Gold Welcome Header */
+        .welcome-container { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
         .welcome-title {
             font-family: 'Cinzel', serif;
-            font-size: 3.2rem;
+            font-size: 3.5rem;
             font-weight: 800;
             background: var(--gold-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: fadeInWelcome 1.2s ease-in-out;
-            margin-top: 15px;
-            letter-spacing: 1px;
+            animation: fadeInWelcome 1.2s ease-in-out, goldGlow 3s ease-in-out infinite alternate;
+            letter-spacing: 2px;
+            text-align: center;
         }
         @keyframes fadeInWelcome {
-            from { opacity: 0; transform: translateY(-15px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes goldGlow {
+            from { filter: drop-shadow(0 0 2px rgba(212, 175, 55, 0.2)); }
+            to { filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6)); }
         }
 
         /* Module Headers & Controls */
@@ -61,9 +65,9 @@
         /* Buttons */
         .btn { background: var(--gold-gradient); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 0.88rem; font-weight: 700; letter-spacing: 0.5px; transition: opacity 0.2s ease; }
         .btn:hover { opacity: 0.9; }
-        .btn-present { background: #15803d; color: #fff; padding: 6px 16px; border-radius: 4px; font-weight: 600; }
+        .btn-present { background: #15803d; color: #fff; padding: 6px 16px; border-radius: 4px; font-weight: 600; border: none; cursor: pointer; }
         .btn-present:hover { background: #166534; }
-        .btn-absent { background: #b91c1c; color: #fff; padding: 6px 16px; border-radius: 4px; font-weight: 600; }
+        .btn-absent { background: #b91c1c; color: #fff; padding: 6px 16px; border-radius: 4px; font-weight: 600; border: none; cursor: pointer; }
         .btn-absent:hover { background: #991b1b; }
 
         /* Tables */
@@ -103,14 +107,19 @@
         
         <!-- HOME MODULE -->
         <div id="home" class="module active">
-            <h1 class="welcome-title">Welcome, Samarth Dave</h1>
+            <div class="welcome-container">
+                <h1 class="welcome-title">Welcome, Samarth Dave</h1>
+            </div>
         </div>
 
         <!-- STUDENT DEPARTMENT -->
         <div id="students" class="module">
             <div class="module-header">
                 <span>Student Department</span>
-                <button class="btn" onclick="openModal('studentModal')">+ Add Student</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="openModal('pdfModal')">Upload PDF</button>
+                    <button class="btn" onclick="openModal('studentModal')">+ Add Student</button>
+                </div>
             </div>
             <div class="controls">
                 <input type="text" id="studentSearch" class="search-bar" placeholder="Search student name..." oninput="renderStudents()">
@@ -122,7 +131,10 @@
         <div id="teachers" class="module">
             <div class="module-header">
                 <span>Teacher Department</span>
-                <button class="btn" onclick="openModal('teacherModal')">+ Add Teacher</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="openModal('teacherPdfModal')">Upload PDF</button>
+                    <button class="btn" onclick="openModal('teacherModal')">+ Add Teacher</button>
+                </div>
             </div>
             <table>
                 <thead>
@@ -140,7 +152,10 @@
         <div id="syllabus" class="module">
             <div class="module-header">
                 <span>Syllabus Department</span>
-                <button class="btn" onclick="openModal('syllabusModal')">+ Add Syllabus Entry</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn" onclick="openModal('syllabusPdfModal')">Upload PDF</button>
+                    <button class="btn" onclick="openModal('syllabusModal')">+ Add Syllabus Entry</button>
+                </div>
             </div>
             <table>
                 <thead>
@@ -266,6 +281,18 @@
         </div>
     </div>
 
+    <div id="pdfModal" class="modal">
+        <div class="modal-content">
+            <h3>Upload Student Details (PDF)</h3>
+            <p style="font-size:0.8rem; color: var(--text-muted);">Uploaded documents must extract: Name, Batch, Roll Number, Parent's Contact Number.</p>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" required style="width:100%;">
+                <button type="submit" class="btn" style="width:100%; margin-top:10px;">Submit PDF</button>
+            </form>
+            <button class="btn btn-absent" onclick="closeModal('pdfModal')">Cancel</button>
+        </div>
+    </div>
+
     <div id="teacherModal" class="modal">
         <div class="modal-content">
             <h3>Add Teacher Entry</h3>
@@ -274,6 +301,18 @@
             <input type="text" id="t_contact" placeholder="Contact Number">
             <button class="btn" onclick="addTeacher()">Save Teacher</button>
             <button class="btn btn-absent" onclick="closeModal('teacherModal')">Cancel</button>
+        </div>
+    </div>
+
+    <div id="teacherPdfModal" class="modal">
+        <div class="modal-content">
+            <h3>Upload Teacher Details (PDF)</h3>
+            <p style="font-size:0.8rem; color: var(--text-muted);">Uploaded documents must extract: Name, Subject, Contact Number.</p>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" required style="width:100%;">
+                <button type="submit" class="btn" style="width:100%; margin-top:10px;">Submit PDF</button>
+            </form>
+            <button class="btn btn-absent" onclick="closeModal('teacherPdfModal')">Cancel</button>
         </div>
     </div>
 
@@ -290,16 +329,32 @@
         </div>
     </div>
 
+    <div id="syllabusPdfModal" class="modal">
+        <div class="modal-content">
+            <h3>Upload Syllabus Details (PDF)</h3>
+            <p style="font-size:0.8rem; color: var(--text-muted);">Uploaded documents must extract: SUBJECT, TOPIC, TEACHER'S NAME, NUMBER OF LECTURES, DATE.</p>
+            <form action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" required style="width:100%;">
+                <button type="submit" class="btn" style="width:100%; margin-top:10px;">Submit PDF</button>
+            </form>
+            <button class="btn btn-absent" onclick="closeModal('syllabusPdfModal')">Cancel</button>
+        </div>
+    </div>
+
     <script>
+        // Centralized Student Cloud Array
         let students = [
             { name: "Rahul Sharma", batch: "Batch A", roll: "101", parentContact: "9876543210" },
             { name: "Aman Verma", batch: "Batch A", roll: "103", parentContact: "9876543212" },
-            { name: "Priya Patel", batch: "Batch B", roll: "102", parentContact: "9876543211" }
+            { name: "Priya Patel", batch: "Batch B", roll: "102", parentContact: "9876543211" },
+            { name: "Ananya Iyer", batch: "Batch C", roll: "104", parentContact: "9876543213" }
         ];
+
         let teachers = [
             { name: "Prof. Verma", subject: "Physics", contact: "9820098200" },
             { name: "Prof. Kulkarni", subject: "Mathematics", contact: "9820098201" }
         ];
+
         let syllabus = [
             { subject: "Physics", topic: "Rotational Dynamics", teacher: "Prof. Verma", lectures: "4", date: "2026-09-05" }
         ];
@@ -319,7 +374,7 @@
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        // STUDENT LOGIC
+        // STUDENT DEPARTMENT LOGIC
         function addStudent() {
             const name = document.getElementById('s_name').value;
             const batch = document.getElementById('s_batch').value;
@@ -337,6 +392,7 @@
             const search = document.getElementById('studentSearch').value.toLowerCase();
             container.innerHTML = '';
 
+            // Get unique batches sorted ALPHABETICALLY
             const sortedBatches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
 
             sortedBatches.forEach(batch => {
@@ -356,7 +412,7 @@
             });
         }
 
-        // TEACHER LOGIC
+        // TEACHER DEPARTMENT LOGIC
         function addTeacher() {
             const name = document.getElementById('t_name').value;
             const subject = document.getElementById('t_subject').value;
@@ -373,7 +429,7 @@
             tbody.innerHTML = teachers.map(t => `<tr><td>${t.name}</td><td>${t.subject}</td><td>${t.contact}</td></tr>`).join('');
         }
 
-        // SYLLABUS LOGIC
+        // SYLLABUS DEPARTMENT LOGIC
         function addSyllabus() {
             const subject = document.getElementById('sy_subject').value;
             const topic = document.getElementById('sy_topic').value;
@@ -392,7 +448,7 @@
             tbody.innerHTML = syllabus.map(s => `<tr><td>${s.subject}</td><td>${s.topic}</td><td>${s.teacher}</td><td>${s.lectures}</td><td>${s.date}</td></tr>`).join('');
         }
 
-        // ATTENDANCE LOGIC
+        // ATTENDANCE MODULE LOGIC (Fetches directly from central student department cloud)
         function setupAttendanceUI() {
             const select = document.getElementById('attendanceBatchSelect');
             const sortedBatches = [...new Set(students.map(s => s.batch))].sort((a, b) => a.localeCompare(b));
@@ -401,7 +457,9 @@
         }
 
         function renderAttendance() {
-            const selectedBatch = document.getElementById('attendanceBatchSelect').value;
+            const select = document.getElementById('attendanceBatchSelect');
+            if(!select.value) return;
+            const selectedBatch = select.value;
             const search = document.getElementById('attendanceSearch').value.toLowerCase();
             const tbody = document.getElementById('attendanceTableBody');
             
@@ -411,8 +469,8 @@
                     <td>${s.name}</td>
                     <td>${s.roll}</td>
                     <td>
-                        <button class="btn btn-present" onclick="alert('Marked Present: ${s.name}')">Present</button>
-                        <button class="btn btn-absent" onclick="alert('Marked Absent: ${s.name}')">Absent</button>
+                        <button class="btn-present" onclick="alert('Marked Present: ${s.name}')">Present</button>
+                        <button class="btn-absent" onclick="alert('Marked Absent: ${s.name}')">Absent</button>
                     </td>
                 </tr>
             `).join('');
