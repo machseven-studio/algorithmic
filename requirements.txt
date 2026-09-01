@@ -1,4 +1,2 @@
-flask
-flask-cors
-bcrypt
-python-magic-bin
+fastapi
+uvicorn
