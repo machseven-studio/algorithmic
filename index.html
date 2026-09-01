@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Algorithmic - Enterprise Platform</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #050505;
+      color: #d1d5db;
+    }
+    .cinzel { font-family: 'Cinzel', serif; }
+
+    .gold-textured-text {
+      background: linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
+    }
+    
+    .gold-border { border-color: rgba(191, 149, 63, 0.35); }
+    .gold-bg { 
+      background: linear-gradient(135deg, #bf953f 0%, #d4af37 50%, #aa771c 100%);
+      color: #000;
+    }
+
+    .welcome-card-animate {
+      animation: welcomeMount 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes welcomeMount {
+      from { opacity: 0; transform: translateY(-20px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <div id="login-modal" class="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50">
+    <div class="p-10 rounded-xl w-full max-w-md gold-border border bg-[#0d0d0d] space-y-6">
+      <div class="text-center space-y-2">
+        <h1 class="text-4xl font-extrabold cinzel gold-textured-text">Algorithmic</h1>
+        <p class="text-xs tracking-widest text-gray-400">INSTITUTIONAL SYSTEM</p>
+      </div>
+      <form onsubmit="handleLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Full Name</label>
+          <input id="login-name" type="text" required placeholder="Samarth Dave" class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600 text-xs" />
+        </div>
+        <button type="submit" class="w-full gold-bg font-semibold py-3 rounded-md text-xs tracking-wider uppercase">Enter</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-container" class="hidden min-h-screen flex flex-1">
+    <aside class="w-64 bg-black border-r border-gray-900 flex flex-col justify-between p-6 shrink-0">
+      <div class="space-y-6">
+        <h1 class="text-3xl font-extrabold cinzel gold-textured-text tracking-wider">Algorithmic</h1>
+        <nav class="space-y-1">
+          <button onclick="switchTab('mod-home')" class="w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-300">Home</button>
+          <button onclick="switchTab('mod-students')" class="w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white">Student Department</button>
+          <button onclick="switchTab('mod-teachers')" class="w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white">Teacher Department</button>
+          <button onclick="switchTab('mod-syllabus')" class="w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white">Syllabus Department</button>
+          <button onclick="switchTab('mod-attendance')" class="w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white">Attendance</button>
+        </nav>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-8 bg-[#080808]">
+      <section id="mod-home" class="tab-content space-y-6">
+        <div class="welcome-card-animate bg-[#0e0e0e] border gold-border p-12 rounded-2xl text-center shadow-2xl">
+          <h2 id="welcome-message" class="text-5xl font-extrabold cinzel gold-textured-text">Welcome, Samarth Dave</h2>
+        </div>
+      </section>
+
+      <section id="mod-students" class="tab-content hidden space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-3xl font-bold cinzel gold-textured-text">Student Department</h2>
+          <input type="text" id="student-search-input" onkeyup="filterStudentTable()" placeholder="Search Student..." class="bg-black border border-gray-800 rounded-md px-3 py-1.5 text-white text-xs" />
+        </div>
+        <div class="bg-[#0c0c0c] border gold-border rounded-xl p-6">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-zinc-950 text-amber-500 border-b border-gray-800">
+              <tr>
+                <th class="p-3">Name</th>
+                <th class="p-3">Batch</th>
+                <th class="p-3">Roll Number</th>
+                <th class="p-3">Parent's Contact Number</th>
+              </tr>
+            </thead>
+            <tbody id="student-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="mod-teachers" class="tab-content hidden space-y-6">
+        <h2 class="text-3xl font-bold cinzel gold-textured-text">Teacher Department</h2>
+        <div class="bg-[#0c0c0c] border gold-border rounded-xl p-6">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-zinc-950 text-amber-500 border-b border-gray-800">
+              <tr>
+                <th class="p-3">Name</th>
+                <th class="p-3">Subject</th>
+                <th class="p-3">Contact Number</th>
+              </tr>
+            </thead>
+            <tbody id="teacher-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="mod-syllabus" class="tab-content hidden space-y-6">
+        <h2 class="text-3xl font-bold cinzel gold-textured-text">Syllabus Department</h2>
+        <div class="bg-[#0c0c0c] border gold-border rounded-xl p-6">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-[#121212] text-amber-500 border-b border-gray-800">
+              <tr>
+                <th class="p-3">SUBJECT</th>
+                <th class="p-3">TOPIC</th>
+                <th class="p-3">TEACHER'S NAME</th>
+                <th class="p-3">NUMBER OF LECTURES</th>
+                <th class="p-3">DATE</th>
+              </tr>
+            </thead>
+            <tbody id="syllabus-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="mod-attendance" class="tab-content hidden space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-3xl font-bold cinzel gold-textured-text">Attendance</h2>
+          <div class="flex space-x-3">
+            <select id="attendance-batch-select" onchange="renderBatchAttendance()" class="bg-black border border-gray-800 rounded-md px-3 py-1.5 text-white text-xs">
+              <option value="">Select Batch</option>
+            </select>
+            <input type="text" id="attendance-search-input" onkeyup="filterAttendanceTable()" placeholder="Search Student..." class="bg-black border border-gray-800 rounded-md px-3 py-1.5 text-white text-xs" />
+          </div>
+        </div>
+        <div id="attendance-panel" class="bg-[#0c0c0c] border gold-border rounded-xl p-6 text-center text-xs text-gray-500">
+          Select a batch to show students.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    let userName = 'Samarth Dave';
+    let globalStudents = [];
+
+    function handleLogin(e) {
+      e.preventDefault();
+      userName = document.getElementById('login-name').value;
+      document.getElementById('welcome-message').textContent = `Welcome, ${userName}`;
+      document.getElementById('login-modal').classList.add('hidden');
+      document.getElementById('app-container').classList.remove('hidden');
+      loadData();
+    }
+
+    function switchTab(id) {
+      document.querySelectorAll('.tab-content').forEach(s => s.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    async function loadData() {
+      const sRes = await fetch('/api/records/students/1');
+      globalStudents = await sRes.json();
+      
+      const sBody = document.getElementById('student-table-body');
+      sBody.innerHTML = globalStudents.map(s => `
+        <tr class="border-b border-gray-900 s-row" data-name="${s.name.toLowerCase()}">
+          <td class="p-3 text-white font-medium">${s.name}</td>
+          <td class="p-3">${s.batch}</td>
+          <td class="p-3">${s.roll_number}</td>
+          <td class="p-3">${s.parent_contact}</td>
+        </tr>
+      `).join('');
+
+      const batches = [...new Set(globalStudents.map(s => s.batch))].sort();
+      const bSelect = document.getElementById('attendance-batch-select');
+      bSelect.innerHTML = '<option value="">Select Batch</option>' + batches.map(b => `<option value="${b}">${b}</option>`).join('');
+
+      const tRes = await fetch('/api/records/teachers/1');
+      const teachers = await tRes.json();
+      document.getElementById('teacher-table-body').innerHTML = teachers.map(t => `
+        <tr class="border-b border-gray-900">
+          <td class="p-3 text-white font-medium">${t.name}</td>
+          <td class="p-3">${t.subject}</td>
+          <td class="p-3">${t.contact_number}</td>
+        </tr>
+      `).join('');
+
+      const sylRes = await fetch('/api/records/syllabus/1');
+      const syllabus = await sylRes.json();
+      document.getElementById('syllabus-table-body').innerHTML = syllabus.map(sy => `
+        <tr class="border-b border-gray-900">
+          <td class="p-3 text-white font-medium">${sy.subject}</td>
+          <td class="p-3">${sy.topic}</td>
+          <td class="p-3">${sy.teacher_name}</td>
+          <td class="p-3">${sy.num_lectures}</td>
+          <td class="p-3">${sy.date}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterStudentTable() {
+      const q = document.getElementById('student-search-input').value.toLowerCase();
+      document.querySelectorAll('.s-row').forEach(r => {
+        r.style.display = r.getAttribute('data-name').includes(q) ? '' : 'none';
+      });
+    }
+
+    function renderBatchAttendance() {
+      const batch = document.getElementById('attendance-batch-select').value;
+      const panel = document.getElementById('attendance-panel');
+      if (!batch) {
+        panel.innerHTML = 'Select a batch to show students.';
+        return;
+      }
+
+      const filtered = globalStudents.filter(s => s.batch === batch);
+      panel.innerHTML = `
+        <table class="w-full text-left text-xs">
+          <thead class="bg-zinc-950 text-amber-500 border-b border-gray-800">
+            <tr>
+              <th class="p-3">Student Name</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(s => `
+              <tr class="border-b border-gray-900 att-row" data-name="${s.name.toLowerCase()}">
+                <td class="p-3 text-white font-medium">${s.name}</td>
+                <td class="p-3 text-right space-x-2">
+                  <button onclick="setAtt(this, 'Present')" class="bg-green-950 border border-green-700 text-green-300 px-3 py-1 rounded text-xs">Present</button>
+                  <button onclick="setAtt(this, 'Absent')" class="bg-red-950 border border-red-700 text-red-300 px-3 py-1 rounded text-xs">Absent</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function filterAttendanceTable() {
+      const q = document.getElementById('attendance-search-input').value.toLowerCase();
+      document.querySelectorAll('.att-row').forEach(r => {
+        r.style.display = r.getAttribute('data-name').includes(q) ? '' : 'none';
+      });
+    }
+
+    function setAtt(btn, status) {
+      btn.parentElement.innerHTML = `<span class="font-bold ${status === 'Present' ? 'text-green-400' : 'text-red-400'}">${status}</span>`;
+    }
+  </script>
+</body>
+</html>
