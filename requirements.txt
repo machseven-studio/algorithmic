@@ -2,4 +2,5 @@ fastapi
 uvicorn
 gunicorn
 pydantic
+email-validator
 python-multipart
