@@ -1,4 +1,4 @@
 flask
 flask-cors
 bcrypt
-python-magic-bin
+python-magic
