@@ -1,5 +1,4 @@
-fastapi
-uvicorn
-pydantic
-email-validator
-python-multipart
+flask
+flask-cors
+bcrypt
+python-magic-bin
