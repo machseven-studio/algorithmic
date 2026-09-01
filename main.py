@@ -56,7 +56,27 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
             institute_id INTEGER NOT NULL,
+            staff_user_id INTEGER,
             expires_at TEXT NOT NULL,
+            FOREIGN KEY(institute_id) REFERENCES institutes(id)
+        )
+    """)
+    # Migration for pre-existing DBs created before staff_user_id existed.
+    try:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN staff_user_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS staff_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            institute_id INTEGER NOT NULL,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            password_salt TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'read_only',
+            created_at TEXT NOT NULL,
             FOREIGN KEY(institute_id) REFERENCES institutes(id)
         )
     """)
@@ -179,13 +199,13 @@ def hash_password(password: str, salt: str) -> str:
     ).hex()
 
 
-def create_session(institute_id: int) -> str:
+def create_session(institute_id: int, staff_user_id: int = None) -> str:
     token = secrets.token_urlsafe(32)
     expires_at = (datetime.utcnow() + timedelta(days=SESSION_LIFETIME_DAYS)).isoformat()
     conn = get_conn()
     conn.execute(
-        "INSERT INTO sessions (token, institute_id, expires_at) VALUES (?, ?, ?)",
-        (token, institute_id, expires_at),
+        "INSERT INTO sessions (token, institute_id, staff_user_id, expires_at) VALUES (?, ?, ?, ?)",
+        (token, institute_id, staff_user_id, expires_at),
     )
     conn.commit()
     conn.close()
@@ -193,10 +213,12 @@ def create_session(institute_id: int) -> str:
 
 
 class CurrentInstitute(BaseModel):
-    id: int
+    id: int  # institute_id - used for all data scoping, whether owner or staff
     institute_name: str
     full_name: str
     email: str
+    is_owner: bool
+    permission: str  # 'owner' | 'edit' | 'read_only'
 
 
 def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute:
@@ -220,16 +242,49 @@ def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute
 
     cursor.execute("SELECT * FROM institutes WHERE id = ?", (session["institute_id"],))
     institute = cursor.fetchone()
-    conn.close()
+
     if not institute:
+        conn.close()
         raise HTTPException(status_code=401, detail="Invalid session")
 
+    if session["staff_user_id"] is not None:
+        cursor.execute("SELECT * FROM staff_users WHERE id = ?", (session["staff_user_id"],))
+        staff = cursor.fetchone()
+        conn.close()
+        if not staff:
+            raise HTTPException(status_code=401, detail="Invalid session")
+        return CurrentInstitute(
+            id=institute["id"],
+            institute_name=institute["institute_name"],
+            full_name=staff["full_name"],
+            email=staff["email"],
+            is_owner=False,
+            permission=staff["permission"],
+        )
+
+    conn.close()
     return CurrentInstitute(
         id=institute["id"],
         institute_name=institute["institute_name"],
         full_name=institute["full_name"] or "",
         email=institute["email"],
+        is_owner=True,
+        permission="owner",
     )
+
+
+def require_write_access(institute: CurrentInstitute = Depends(get_current_institute)) -> CurrentInstitute:
+    """Blocks any mutating request from a staff login flagged read-only."""
+    if institute.permission == "read_only":
+        raise HTTPException(status_code=403, detail="Your account has read-only access")
+    return institute
+
+
+def require_owner(institute: CurrentInstitute = Depends(get_current_institute)) -> CurrentInstitute:
+    """Manage Users, and other owner-exclusive actions, check this."""
+    if not institute.is_owner:
+        raise HTTPException(status_code=403, detail="Only the institute owner can do this")
+    return institute
 
 
 def verify_branch_ownership(branch_id: int, institute_id: int):
@@ -287,7 +342,13 @@ def signup(req: SignupRequest):
     conn.close()
 
     token = create_session(institute_id)
-    return {"token": token, "institute_name": req.institute_name, "full_name": req.full_name}
+    return {
+        "token": token,
+        "institute_name": req.institute_name,
+        "full_name": req.full_name,
+        "is_owner": True,
+        "permission": "owner",
+    }
 
 
 @app.post("/api/auth/login")
@@ -297,23 +358,53 @@ def login(req: LoginRequest):
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM institutes WHERE email = ?", (req.email.lower(),))
     institute = cursor.fetchone()
-    conn.close()
 
     # Deliberately same error for "no such email" and "wrong password" so
     # attackers can't use this endpoint to find out which emails are registered.
     invalid = HTTPException(status_code=401, detail="Invalid email or password")
-    if not institute:
-        raise invalid
 
-    computed_hash = hash_password(req.password, institute["password_salt"])
-    if not secrets.compare_digest(computed_hash, institute["password_hash"]):
-        raise invalid
+    if institute:
+        computed_hash = hash_password(req.password, institute["password_salt"])
+        if secrets.compare_digest(computed_hash, institute["password_hash"]):
+            conn.close()
+            token = create_session(institute["id"])
+            return {
+                "token": token,
+                "institute_name": institute["institute_name"],
+                "full_name": institute["full_name"] or "",
+                "is_owner": True,
+                "permission": "owner",
+            }
 
-    token = create_session(institute["id"])
+    # Not an owner account (or wrong password) - check staff logins.
+    cursor.execute("SELECT * FROM staff_users WHERE email = ?", (req.email.lower(),))
+    staff = cursor.fetchone()
+    if staff:
+        computed_hash = hash_password(req.password, staff["password_salt"])
+        if secrets.compare_digest(computed_hash, staff["password_hash"]):
+            cursor.execute("SELECT * FROM institutes WHERE id = ?", (staff["institute_id"],))
+            parent_institute = cursor.fetchone()
+            conn.close()
+            token = create_session(staff["institute_id"], staff_user_id=staff["id"])
+            return {
+                "token": token,
+                "institute_name": parent_institute["institute_name"] if parent_institute else "",
+                "full_name": staff["full_name"],
+                "is_owner": False,
+                "permission": staff["permission"],
+            }
+
+    conn.close()
+    raise invalid
+
+
+@app.get("/api/auth/me")
+def whoami(institute: CurrentInstitute = Depends(get_current_institute)):
     return {
-        "token": token,
-        "institute_name": institute["institute_name"],
-        "full_name": institute["full_name"] or "",
+        "institute_name": institute.institute_name,
+        "full_name": institute.full_name,
+        "is_owner": institute.is_owner,
+        "permission": institute.permission,
     }
 
 
@@ -326,6 +417,116 @@ def logout(authorization: str = Header(None)):
         conn.commit()
         conn.close()
     return {"status": "logged out"}
+
+
+# ---------------------------------------------------------------------------
+# Institute profile
+# ---------------------------------------------------------------------------
+
+class InstituteNameUpdate(BaseModel):
+    institute_name: str
+
+
+@app.patch("/api/institute/name")
+def update_institute_name(req: InstituteNameUpdate, institute: CurrentInstitute = Depends(require_write_access)):
+    name = req.institute_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Institute name cannot be empty")
+    conn = get_conn()
+    conn.execute("UPDATE institutes SET institute_name = ? WHERE id = ?", (name, institute.id))
+    conn.commit()
+    conn.close()
+    return {"institute_name": name}
+
+
+# ---------------------------------------------------------------------------
+# Staff users ("Manage Users") - owner-only administration
+# ---------------------------------------------------------------------------
+
+class StaffUserCreate(BaseModel):
+    full_name: str
+    email: EmailStr
+    password: str
+    permission: str  # 'edit' | 'read_only'
+
+
+class StaffPermissionUpdate(BaseModel):
+    permission: str
+
+
+@app.get("/api/users")
+def list_staff_users(institute: CurrentInstitute = Depends(require_owner)):
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, full_name, email, permission, created_at FROM staff_users WHERE institute_id = ?",
+        (institute.id,),
+    )
+    users = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return users
+
+
+@app.post("/api/users")
+def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(require_owner)):
+    if req.permission not in ("edit", "read_only"):
+        raise HTTPException(status_code=400, detail="Permission must be 'edit' or 'read_only'")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    salt = secrets.token_hex(16)
+    password_hash = hash_password(req.password, salt)
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """INSERT INTO staff_users (institute_id, full_name, email, password_hash, password_salt, permission, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (institute.id, req.full_name, req.email.lower(), password_hash, salt, req.permission, datetime.utcnow().isoformat()),
+        )
+        conn.commit()
+        user_id = cursor.lastrowid
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="A user with this email already exists")
+    conn.close()
+    return {"id": user_id, "full_name": req.full_name, "email": req.email.lower(), "permission": req.permission}
+
+
+def verify_staff_ownership(user_id: int, institute_id: int):
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM staff_users WHERE id = ? AND institute_id = ?", (user_id, institute_id))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.patch("/api/users/{user_id}")
+def update_staff_permission(user_id: int, req: StaffPermissionUpdate, institute: CurrentInstitute = Depends(require_owner)):
+    if req.permission not in ("edit", "read_only"):
+        raise HTTPException(status_code=400, detail="Permission must be 'edit' or 'read_only'")
+    verify_staff_ownership(user_id, institute.id)
+    conn = get_conn()
+    conn.execute("UPDATE staff_users SET permission = ? WHERE id = ?", (req.permission, user_id))
+    conn.commit()
+    conn.close()
+    return {"id": user_id, "permission": req.permission}
+
+
+@app.delete("/api/users/{user_id}")
+def remove_staff_user(user_id: int, institute: CurrentInstitute = Depends(require_owner)):
+    verify_staff_ownership(user_id, institute.id)
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM staff_users WHERE id = ?", (user_id,))
+    cursor.execute("DELETE FROM sessions WHERE staff_user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "removed"}
 
 
 # ---------------------------------------------------------------------------
@@ -348,7 +549,7 @@ def get_branches(institute: CurrentInstitute = Depends(get_current_institute)):
 
 
 @app.post("/api/branches")
-def add_branch(branch: BranchCreate, institute: CurrentInstitute = Depends(get_current_institute)):
+def add_branch(branch: BranchCreate, institute: CurrentInstitute = Depends(require_write_access)):
     conn = get_conn()
     cursor = conn.cursor()
     try:
@@ -411,7 +612,7 @@ async def add_record(
     branch_id: int = Form(...),
     data_json: str = Form(...),
     file: UploadFile = File(None),
-    institute: CurrentInstitute = Depends(get_current_institute),
+    institute: CurrentInstitute = Depends(require_write_access),
 ):
     if module not in VALID_MODULES:
         raise HTTPException(status_code=400, detail="Invalid module")
@@ -451,6 +652,117 @@ async def add_record(
     return {"id": record_id, "status": "success"}
 
 
+@app.delete("/api/records/{module}/{record_id}")
+def delete_record(module: str, record_id: int, institute: CurrentInstitute = Depends(require_write_access)):
+    if module not in VALID_MODULES:
+        raise HTTPException(status_code=400, detail="Invalid module")
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    # Confirm the record belongs to a branch owned by this institute before deleting.
+    cursor.execute(
+        f"""SELECT {module}.id FROM {module}
+            JOIN branches ON branches.id = {module}.branch_id
+            WHERE {module}.id = ? AND branches.institute_id = ?""",
+        (record_id, institute.id),
+    )
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    cursor.execute(f"DELETE FROM {module} WHERE id = ?", (record_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "deleted"}
+
+
+# Column layout expected in a bulk-import CSV for each module (document/email
+# intentionally excluded - those are handled per-record, not in bulk).
+BULK_IMPORT_COLUMNS = {
+    "students": ["name", "course", "status"],
+    "teachers": ["name", "subject", "department"],
+    "classrooms": ["room_no", "capacity"],
+    "syllabus": ["subject", "semester", "units"],
+    "attendance": ["student_name", "date", "status"],
+    "invigilation": ["teacher_name", "exam_date", "room"],
+    "fees": ["student_name", "amount_inr", "status", "due_date"],
+}
+
+
+@app.post("/api/records/{module}/bulk")
+async def bulk_import_records(
+    module: str,
+    branch_id: int = Form(...),
+    file: UploadFile = File(...),
+    institute: CurrentInstitute = Depends(require_write_access),
+):
+    """Lets a user drop in a CSV of many rows at once, instead of typing each
+    record in individually through the Add Record form."""
+    if module not in VALID_MODULES:
+        raise HTTPException(status_code=400, detail="Invalid module")
+    verify_branch_ownership(branch_id, institute.id)
+
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Please upload a .csv file")
+
+    import csv
+    import io
+
+    raw = await file.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
+
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Could not read file - please save it as UTF-8 CSV")
+
+    reader = csv.DictReader(io.StringIO(text))
+    expected_cols = BULK_IMPORT_COLUMNS[module]
+    if not reader.fieldnames or not set(expected_cols).issubset(set(c.strip() for c in reader.fieldnames)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV must have these column headers: {', '.join(expected_cols)}",
+        )
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    inserted = 0
+    for row in reader:
+        row = {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()}
+        if not any(row.values()):
+            continue  # skip blank rows
+
+        if module == 'students':
+            cursor.execute("INSERT INTO students (branch_id, name, email, course, status, document) VALUES (?, ?, ?, ?, ?, ?)",
+                           (branch_id, row.get('name'), None, row.get('course'), row.get('status', 'Active'), None))
+        elif module == 'teachers':
+            cursor.execute("INSERT INTO teachers (branch_id, name, subject, department, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('name'), row.get('subject'), row.get('department'), None))
+        elif module == 'classrooms':
+            cursor.execute("INSERT INTO classrooms (branch_id, room_no, capacity, building, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('room_no'), row.get('capacity'), None, None))
+        elif module == 'syllabus':
+            cursor.execute("INSERT INTO syllabus (branch_id, subject, semester, units, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('subject'), row.get('semester'), row.get('units'), None))
+        elif module == 'attendance':
+            cursor.execute("INSERT INTO attendance (branch_id, student_name, date, status, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('student_name'), row.get('date'), row.get('status'), None))
+        elif module == 'invigilation':
+            cursor.execute("INSERT INTO invigilation (branch_id, teacher_name, exam_date, room, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('teacher_name'), row.get('exam_date'), row.get('room'), None))
+        elif module == 'fees':
+            cursor.execute("INSERT INTO fees (branch_id, student_name, amount_inr, status, due_date, document) VALUES (?, ?, ?, ?, ?, ?)",
+                           (branch_id, row.get('student_name'), row.get('amount_inr'), row.get('status'), row.get('due_date'), None))
+        inserted += 1
+
+    conn.commit()
+    conn.close()
+    if inserted == 0:
+        raise HTTPException(status_code=400, detail="No valid rows found in that file")
+    return {"status": "success", "inserted": inserted}
+
+
 # ---------------------------------------------------------------------------
 # Timetable generation
 # ---------------------------------------------------------------------------
@@ -475,7 +787,7 @@ class TimetableGenerateRequest(BaseModel):
 
 
 @app.post("/api/timetable/generate")
-def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitute = Depends(get_current_institute)):
+def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitute = Depends(require_write_access)):
     verify_branch_ownership(req.branch_id, institute.id)
 
     conn = get_conn()
@@ -574,52 +886,62 @@ HTML_CONTENT = """<!DOCTYPE html>
     <title>ALGORITHMIC - Enterprise Institutional Operations</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #070707;
+            background-color: #030303;
             background-image:
-                radial-gradient(rgba(212, 175, 55, 0.05) 1.5px, transparent 1.5px),
-                radial-gradient(rgba(212, 175, 55, 0.02) 1.5px, #070707 1.5px);
-            background-size: 40px 40px;
-            background-position: 0 0, 20px 20px;
+                radial-gradient(rgba(212, 175, 55, 0.06) 1.5px, transparent 1.5px),
+                radial-gradient(rgba(212, 175, 55, 0.025) 1.5px, #030303 1.5px),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+            background-size: 40px 40px, 40px 40px, 120px 120px;
+            background-position: 0 0, 20px 20px, 0 0;
             color: #f3f4f6;
             overflow-x: hidden;
+            font-weight: 500;
         }
 
-        .elegant-font { font-family: 'Playfair Display', serif; }
+        /* Bold display serif used for headlines - premium, editorial, unmistakably "statement" typography */
+        .elegant-font { font-family: 'Fraunces', serif; font-weight: 600; }
+        h1, h2, h3 { font-family: 'Fraunces', serif; letter-spacing: -0.01em; }
 
         .gold-gradient-text {
-            background: linear-gradient(135deg, #BF953F 0%, #FCF6BA 25%, #B38728 50%, #FBF5B7 75%, #AA771C 100%);
+            background: linear-gradient(135deg, #F4E5A1 0%, #E8C767 20%, #BF953F 45%, #8a6a22 60%, #E8C767 80%, #F4E5A1 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
         }
 
-        .gold-border { border-color: rgba(212, 175, 55, 0.22); }
+        .gold-border { border-color: rgba(212, 175, 55, 0.28); }
 
         .gold-border-glow:focus, .gold-border-glow:hover {
             border-color: #D4AF37;
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.15);
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.18);
         }
 
-        .gold-bg { background: linear-gradient(135deg, #D4AF37, #AA771C); }
+        .gold-bg { background: linear-gradient(135deg, #EACD6E, #AA771C); }
 
         .glass-panel {
-            background: rgba(13, 13, 13, 0.85);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(212, 175, 55, 0.15);
+            background:
+                linear-gradient(160deg, rgba(20,17,10,0.55), rgba(8,8,8,0.9)),
+                repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+            background-color: rgba(10, 10, 10, 0.92);
+            border: 1px solid rgba(212, 175, 55, 0.18);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.55);
         }
 
-        .sidebar-item { transition: all 0.2s ease; letter-spacing: 0.06em; }
+        .sidebar-item { transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease; letter-spacing: 0.06em; }
         .sidebar-item:hover, .sidebar-item.active {
-            background: rgba(212, 175, 55, 0.1);
-            color: #D4AF37;
+            background: rgba(212, 175, 55, 0.12);
+            color: #E8C767;
             border-left: 3px solid #D4AF37;
             padding-left: 1.75rem;
         }
 
-        .fast-transition { transition: all 0.15s ease-in-out; }
+        /* Snappy, low-cost transitions everywhere - no blur/shadow animation, just color/opacity/transform */
+        .fast-transition { transition: background-color 0.1s ease, color 0.1s ease, opacity 0.1s ease, transform 0.1s ease; }
+        .fast-transition:active { transform: scale(0.97); }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: #0a0a0a; }
@@ -627,6 +949,16 @@ HTML_CONTENT = """<!DOCTYPE html>
         ::-webkit-scrollbar-thumb:hover { background: #D4AF37; }
 
         .auth-error { color: #f87171; font-size: 11px; margin-top: 6px; min-height: 14px; }
+
+        .editable-name { cursor: text; border-bottom: 1px dashed rgba(212,175,55,0.4); }
+        .editable-name:hover { border-bottom-color: #D4AF37; }
+
+        .perm-badge { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+        .perm-edit { background: rgba(212,175,55,0.15); color: #E8C767; border: 1px solid rgba(212,175,55,0.35); }
+        .perm-readonly { background: rgba(148,163,184,0.1); color: #9ca3af; border: 1px solid rgba(148,163,184,0.25); }
+
+        .row-delete-btn { color: #6b7280; transition: color 0.1s ease; }
+        .row-delete-btn:hover { color: #f87171; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -695,13 +1027,11 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     <!-- MAIN APP CONTAINER -->
     <div id="appContainer" class="min-h-screen flex flex-col hidden">
-        <header class="border-b gold-border bg-[#0a0a0a]/95 backdrop-blur-md px-8 py-4 flex justify-between items-center sticky top-0 z-40">
-            <div class="flex items-center space-x-6">
-                <h1 class="text-xl font-black gold-gradient-text tracking-wider">ALGORITHMIC</h1>
-                <div class="h-5 w-[1px] bg-yellow-600/30"></div>
-                <div class="flex items-center space-x-2">
-                    <span class="text-xs uppercase tracking-widest text-gray-400">Institute:</span>
-                    <span id="headerInstituteName" class="text-sm font-bold text-gray-200 tracking-wide bg-[#141414] px-3 py-1 rounded-lg border gold-border">—</span>
+        <header class="border-b gold-border bg-[#0a0a0a] px-8 py-4 flex justify-between items-center sticky top-0 z-40">
+            <div class="flex items-center space-x-4">
+                <div class="group flex items-center space-x-2">
+                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name elegant-font text-3xl font-black gold-gradient-text tracking-tight leading-none">—</h1>
+                    <button onclick="openRenameInstituteModal()" title="Rename institute" class="text-gray-600 hover:text-yellow-500 text-sm fast-transition opacity-0 group-hover:opacity-100">✎</button>
                 </div>
             </div>
             <div class="flex items-center space-x-6 text-sm">
@@ -713,6 +1043,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <div class="text-xs text-right border-l pl-6 gold-border">
                     <div class="text-gray-400">Logged in as</div>
                     <div id="headerFullName" class="font-bold gold-gradient-text">—</div>
+                    <div id="headerPermBadge" class="mt-0.5"></div>
                 </div>
                 <button onclick="handleLogout()" class="text-xs bg-[#161616] hover:bg-[#222] text-red-400 border border-red-900/40 px-3 py-2 rounded-lg fast-transition">Logout</button>
             </div>
@@ -720,6 +1051,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         <div class="flex flex-1 overflow-hidden">
             <nav class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
+                <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
                 <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
                 <button onclick="switchModule('home')" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
                 <button onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
@@ -730,15 +1062,71 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <button onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
                 <button onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
                 <button onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
+                <button id="navManageUsers" onclick="switchModule('users')" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
 
                 <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
-                    <p class="elegant-font text-sm gold-gradient-text tracking-wide">created by Samarth Dave</p>
-                    <p class="text-gray-300">Founder of <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
+                    <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
                     <p class="text-[10px] text-yellow-600 font-bold uppercase tracking-widest pt-1">Powered by Metasys<sup>®</sup></p>
                 </div>
             </nav>
 
             <main class="flex-1 p-10 overflow-y-auto bg-[#070707]" id="mainContent"></main>
+        </div>
+    </div>
+
+    <!-- Rename Institute Modal -->
+    <div id="renameInstituteModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Rename Institute</h3>
+                <button onclick="closeRenameInstituteModal()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="renameInstituteInput" placeholder="Institute Name" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <div id="renameInstituteError" class="auth-error"></div>
+                <button onclick="submitRenameInstitute()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Save Name</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Staff User Modal -->
+    <div id="userModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add User</h3>
+                <button onclick="closeUserModal()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="newUserName" placeholder="Full Name" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <input type="email" id="newUserEmail" placeholder="Email Address" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <input type="password" id="newUserPassword" placeholder="Password (min 8 characters)" minlength="8" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Permission</label>
+                    <select id="newUserPermission" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                        <option value="edit">Edit Access</option>
+                        <option value="read_only">Read Only</option>
+                    </select>
+                </div>
+                <div id="userModalError" class="auth-error"></div>
+                <button onclick="submitNewUser()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal (the "Add Document" adjacent action) -->
+    <div id="bulkImportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="bulkImportTitle" class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Bulk Import via Document</h3>
+                <button onclick="closeBulkImportModal()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <p class="text-xs text-gray-400 leading-relaxed">Upload a single <span class="text-yellow-500 font-semibold">.csv</span> file to create many records at once, instead of typing each one in individually. The first row must be a header row with these exact column names:</p>
+                <div id="bulkImportColumns" class="text-xs font-mono bg-[#0c0c0c] border gold-border rounded-xl p-3 text-yellow-500"></div>
+                <input type="file" id="bulkImportFile" accept=".csv" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-2.5 text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#221c0c] file:text-yellow-500 hover:file:bg-[#332a0f]">
+                <div id="bulkImportError" class="auth-error"></div>
+                <button onclick="submitBulkImport()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Upload &amp; Create Records</button>
+            </div>
         </div>
     </div>
 
@@ -751,10 +1139,7 @@ HTML_CONTENT = """<!DOCTYPE html>
             </div>
             <form id="recordForm" onsubmit="submitRecordForm(event)" class="space-y-4">
                 <div id="modalFields" class="space-y-4"></div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Attach Document (PDF/JPG/PNG/DOC, max 5MB)</label>
-                    <input type="file" id="recordFile" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-2.5 text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#221c0c] file:text-yellow-500 hover:file:bg-[#332a0f]">
-                </div>
+                <p class="text-[11px] text-gray-500">Need to attach a document, or add many records at once? Use the <span class="text-yellow-500 font-semibold">+ Add Document</span> button next to this one instead.</p>
                 <div id="recordFormError" class="auth-error"></div>
                 <div class="flex justify-end space-x-3 pt-4 border-t gold-border">
                     <button type="button" onclick="closeRecordModal()" class="px-5 py-2.5 text-xs font-bold uppercase bg-gray-900 hover:bg-gray-800 text-gray-300 rounded-xl fast-transition">Cancel</button>
@@ -783,6 +1168,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         let currentBranchId = null;
         let currentModule = 'home';
         let authToken = localStorage.getItem('algorithmic_token');
+        let isOwner = false;
+        let myPermission = 'owner';
+        let bulkImportModule = null;
 
         // ---- Auth ----
 
@@ -827,11 +1215,22 @@ HTML_CONTENT = """<!DOCTYPE html>
             } catch (err) { errorEl.textContent = 'Network error. Please try again.'; }
         }
 
+        function applyIdentity(data) {
+            isOwner = !!data.is_owner;
+            myPermission = data.permission || 'owner';
+            document.getElementById('headerInstituteName').textContent = data.institute_name;
+            document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
+            document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
+            const badge = document.getElementById('headerPermBadge');
+            if (isOwner) { badge.innerHTML = ''; }
+            else if (myPermission === 'read_only') { badge.innerHTML = '<span class="perm-badge perm-readonly">Read Only</span>'; }
+            else { badge.innerHTML = '<span class="perm-badge perm-edit">Edit Access</span>'; }
+        }
+
         function completeAuth(data) {
             authToken = data.token;
             localStorage.setItem('algorithmic_token', authToken);
-            document.getElementById('headerInstituteName').textContent = data.institute_name;
-            document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
+            applyIdentity(data);
             document.getElementById('authOverlay').classList.add('hidden');
             document.getElementById('appContainer').classList.remove('hidden');
             initApp();
@@ -868,10 +1267,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         (async function tryResumeSession() {
             if (!authToken) return;
             try {
-                const res = await authFetch('/api/branches');
+                const res = await authFetch('/api/auth/me');
                 if (res.ok) {
-                    // We don't have a dedicated "who am I" endpoint response with names here,
-                    // so pull them from the first branches call context via a lightweight ping.
+                    const data = await res.json();
+                    applyIdentity(data);
                     document.getElementById('authOverlay').classList.add('hidden');
                     document.getElementById('appContainer').classList.remove('hidden');
                     initApp();
@@ -930,7 +1329,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         function switchModule(moduleName) {
             currentModule = moduleName;
             document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            if (window.event && window.event.currentTarget) window.event.currentTarget.classList.add('active');
             refreshCurrentModule();
         }
 
@@ -945,6 +1344,8 @@ HTML_CONTENT = """<!DOCTYPE html>
                 renderHomeModule(container);
             } else if (currentModule === 'timetables') {
                 renderTimetableModule(container);
+            } else if (currentModule === 'users') {
+                await renderUsersModule(container);
             } else {
                 await renderDataModule(container, currentModule);
             }
@@ -994,6 +1395,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
 
         async function renderDataModule(container, moduleName) {
+            const canWrite = myPermission !== 'read_only';
             container.innerHTML = `
                 <div class="space-y-6">
                     <div class="flex justify-between items-center">
@@ -1001,7 +1403,11 @@ HTML_CONTENT = """<!DOCTYPE html>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${moduleName} Department</h2>
                             <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Branch Synchronized • Document Supported</p>
                         </div>
-                        <button onclick="openRecordModal('${moduleName}')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg flex items-center space-x-2"><span>+ Add New Record</span></button>
+                        ${canWrite ? `
+                        <div class="flex items-center space-x-3">
+                            <button onclick="openRecordModal('${moduleName}')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add New Record</button>
+                            <button onclick="openBulkImportModal('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>
+                        </div>` : ''}
                     </div>
                     <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
                         <table class="w-full text-left text-sm text-gray-300">
@@ -1016,19 +1422,23 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         async function loadModuleRecords(moduleName) {
             if (!currentBranchId) return;
+            const canWrite = myPermission !== 'read_only';
             const res = await authFetch(`/api/records/${moduleName}/${currentBranchId}`);
             const records = await res.json();
             const thead = document.getElementById('moduleTableHead');
             const tbody = document.getElementById('moduleTableBody');
 
+            // 'building' is retired from classrooms, and record ownership fields never render.
+            const hiddenKeys = ['id', 'branch_id', 'building'];
+
             if (records.length === 0) {
                 thead.innerHTML = `<tr><th class="p-4">Status</th></tr>`;
-                tbody.innerHTML = `<tr><td class="p-8 text-center text-gray-500">No records found for ${moduleName}. Click '+ Add New Record' to create one.</td></tr>`;
+                tbody.innerHTML = `<tr><td class="p-8 text-center text-gray-500">No records found for ${moduleName}. ${canWrite ? "Click '+ Add New Record' to create one." : ''}</td></tr>`;
                 return;
             }
 
-            const keys = Object.keys(records[0]).filter(k => k !== 'id' && k !== 'branch_id');
-            thead.innerHTML = `<tr>${keys.map(k => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${k.replace('_', ' ')}</th>`).join('')}</tr>`;
+            const keys = Object.keys(records[0]).filter(k => !hiddenKeys.includes(k));
+            thead.innerHTML = `<tr>${keys.map(k => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${k.replace('_', ' ')}</th>`).join('')}${canWrite ? '<th class="p-4"></th>' : ''}</tr>`;
             tbody.innerHTML = records.map(r => `
                 <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
                     ${keys.map(k => {
@@ -1036,10 +1446,188 @@ HTML_CONTENT = """<!DOCTYPE html>
                         if (moduleName === 'fees' && k === 'amount_inr') { val = `₹${parseFloat(val || 0).toLocaleString('en-IN')}`; }
                         if (k === 'document' && val) { val = `<a href="/uploads/${val}" target="_blank" class="text-yellow-500 underline text-xs font-semibold">View File</a>`; }
                         else if (k === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
-                        return `<td class="p-4 font-medium">${val}</td>`;
+                        return `<td class="p-4 font-medium">${val ?? ''}</td>`;
                     }).join('')}
+                    ${canWrite ? `<td class="p-4 text-right"><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
                 </tr>
             `).join('');
+        }
+
+        async function deleteRecord(moduleName, recordId) {
+            if (!confirm('Remove this record permanently? This cannot be undone.')) return;
+            const res = await authFetch(`/api/records/${moduleName}/${recordId}`, { method: 'DELETE' });
+            if (res.ok) {
+                await loadModuleRecords(moduleName);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Failed to delete record.');
+            }
+        }
+
+        // ---- Bulk import ("+ Add Document") ----
+
+        function openBulkImportModal(moduleName) {
+            bulkImportModule = moduleName;
+            document.getElementById('bulkImportTitle').textContent = `Bulk Import ${moduleName}`;
+            document.getElementById('bulkImportColumns').textContent = BULK_IMPORT_COLUMNS[moduleName].join(', ');
+            document.getElementById('bulkImportFile').value = '';
+            document.getElementById('bulkImportError').textContent = '';
+            document.getElementById('bulkImportModal').classList.remove('hidden');
+        }
+        function closeBulkImportModal() { document.getElementById('bulkImportModal').classList.add('hidden'); }
+
+        async function submitBulkImport() {
+            const errorEl = document.getElementById('bulkImportError');
+            errorEl.textContent = '';
+            const fileInput = document.getElementById('bulkImportFile');
+            if (!fileInput.files[0]) { errorEl.textContent = 'Please choose a CSV file first.'; return; }
+
+            const formData = new FormData();
+            formData.append('branch_id', currentBranchId);
+            formData.append('file', fileInput.files[0]);
+
+            const res = await authFetch(`/api/records/${bulkImportModule}/bulk`, { method: 'POST', body: formData });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                closeBulkImportModal();
+                await loadModuleRecords(bulkImportModule);
+                alert(`Imported ${data.inserted} record(s) successfully.`);
+            } else {
+                errorEl.textContent = data.detail || 'Import failed.';
+            }
+        }
+
+        const BULK_IMPORT_COLUMNS = {
+            students: ['name', 'course', 'status'],
+            teachers: ['name', 'subject', 'department'],
+            classrooms: ['room_no', 'capacity'],
+            syllabus: ['subject', 'semester', 'units'],
+            attendance: ['student_name', 'date', 'status'],
+            invigilation: ['teacher_name', 'exam_date', 'room'],
+            fees: ['student_name', 'amount_inr', 'status', 'due_date'],
+        };
+
+        // ---- Institute rename ----
+
+        function openRenameInstituteModal() {
+            if (myPermission === 'read_only') return;
+            document.getElementById('renameInstituteInput').value = document.getElementById('headerInstituteName').textContent.trim();
+            document.getElementById('renameInstituteError').textContent = '';
+            document.getElementById('renameInstituteModal').classList.remove('hidden');
+        }
+        function closeRenameInstituteModal() { document.getElementById('renameInstituteModal').classList.add('hidden'); }
+
+        async function submitRenameInstitute() {
+            const errorEl = document.getElementById('renameInstituteError');
+            const name = document.getElementById('renameInstituteInput').value.trim();
+            if (!name) { errorEl.textContent = 'Institute name cannot be empty.'; return; }
+            const res = await authFetch('/api/institute/name', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ institute_name: name })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                document.getElementById('headerInstituteName').textContent = data.institute_name;
+                closeRenameInstituteModal();
+            } else {
+                errorEl.textContent = data.detail || 'Failed to rename institute.';
+            }
+        }
+
+        // ---- Manage Users ----
+
+        async function renderUsersModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Manage Users</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Grant, monitor, and revoke staff access</p>
+                        </div>
+                        <button onclick="openUserModal()" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add User</button>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
+                                <tr><th class="p-4">Full Name</th><th class="p-4">Email</th><th class="p-4">Permission</th><th class="p-4"></th></tr>
+                            </thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            await loadUsers();
+        }
+
+        async function loadUsers() {
+            const res = await authFetch('/api/users');
+            const users = await res.json();
+            const tbody = document.getElementById('usersTableBody');
+            if (users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = users.map(u => `
+                <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                    <td class="p-4 font-medium text-white">${u.full_name}</td>
+                    <td class="p-4 text-gray-400">${u.email}</td>
+                    <td class="p-4">
+                        <select onchange="changeUserPermission(${u.id}, this.value)" class="bg-[#0c0c0c] border gold-border rounded-lg px-2 py-1 text-xs text-gray-200 focus:outline-none">
+                            <option value="edit" ${u.permission === 'edit' ? 'selected' : ''}>Edit Access</option>
+                            <option value="read_only" ${u.permission === 'read_only' ? 'selected' : ''}>Read Only</option>
+                        </select>
+                    </td>
+                    <td class="p-4 text-right"><button onclick="removeUser(${u.id})" title="Revoke access" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function openUserModal() {
+            document.getElementById('newUserName').value = '';
+            document.getElementById('newUserEmail').value = '';
+            document.getElementById('newUserPassword').value = '';
+            document.getElementById('newUserPermission').value = 'edit';
+            document.getElementById('userModalError').textContent = '';
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+        function closeUserModal() { document.getElementById('userModal').classList.add('hidden'); }
+
+        async function submitNewUser() {
+            const errorEl = document.getElementById('userModalError');
+            const full_name = document.getElementById('newUserName').value.trim();
+            const email = document.getElementById('newUserEmail').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const permission = document.getElementById('newUserPermission').value;
+            if (!full_name || !email || !password) { errorEl.textContent = 'All fields are required.'; return; }
+
+            const res = await authFetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name, email, password, permission })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                closeUserModal();
+                await loadUsers();
+            } else {
+                errorEl.textContent = data.detail || 'Failed to create user.';
+            }
+        }
+
+        async function changeUserPermission(userId, permission) {
+            const res = await authFetch(`/api/users/${userId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ permission })
+            });
+            if (!res.ok) { alert('Failed to update permission.'); await loadUsers(); }
+        }
+
+        async function removeUser(userId) {
+            if (!confirm('Revoke this user\\'s access permanently?')) return;
+            const res = await authFetch(`/api/users/${userId}`, { method: 'DELETE' });
+            if (res.ok) { await loadUsers(); } else { alert('Failed to remove user.'); }
         }
 
         async function renderTimetableModule(container) {
@@ -1145,13 +1733,11 @@ HTML_CONTENT = """<!DOCTYPE html>
             document.getElementById('modalTitle').textContent = `Add New ${moduleName} Record`;
             document.getElementById('recordFormError').textContent = '';
             const fieldsContainer = document.getElementById('modalFields');
-            document.getElementById('recordFile').value = '';
 
             let fieldsConfig = [];
             if (moduleName === 'students') {
                 fieldsConfig = [
                     { id: 'name', label: 'Full Name', type: 'text', placeholder: 'Aarav Sharma' },
-                    { id: 'email', label: 'Email Address', type: 'email', placeholder: 'aarav@institution.edu' },
                     { id: 'course', label: 'Course / Program', type: 'text', placeholder: 'B.Tech Computer Science' },
                     { id: 'status', label: 'Status', type: 'text', placeholder: 'Active' }
                 ];
@@ -1164,8 +1750,7 @@ HTML_CONTENT = """<!DOCTYPE html>
             } else if (moduleName === 'classrooms') {
                 fieldsConfig = [
                     { id: 'room_no', label: 'Room Number', type: 'text', placeholder: 'Lecture Hall 402' },
-                    { id: 'capacity', label: 'Seating Capacity', type: 'number', placeholder: '120' },
-                    { id: 'building', label: 'Building Name', type: 'text', placeholder: 'Apex Tower' }
+                    { id: 'capacity', label: 'Seating Capacity', type: 'number', placeholder: '120' }
                 ];
             } else if (moduleName === 'syllabus') {
                 fieldsConfig = [
@@ -1218,8 +1803,6 @@ HTML_CONTENT = """<!DOCTYPE html>
             const formData = new FormData();
             formData.append('branch_id', currentBranchId);
             formData.append('data_json', JSON.stringify(data));
-            const fileInput = document.getElementById('recordFile');
-            if (fileInput.files[0]) { formData.append('file', fileInput.files[0]); }
 
             const res = await authFetch(`/api/records/${moduleName}`, { method: 'POST', body: formData });
 
