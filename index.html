@@ -1,4 +1,3 @@
-```html
 <!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ALGORITHMIC — Institutional Operations</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box}body{font-family:Inter,sans-serif;background:#050505;color:#d4d4d4}.card{background:#0b0b0b;border:1px solid #1b1b1b;border-radius:12px}.input{background:#050505;border:1px solid #242424;border-radius:8px;padding:10px 12px;width:100%;outline:0;color:#eee}.input:focus{border-color:#8b6b2c}.btn{border:1px solid #292929;border-radius:8px;padding:9px 13px;font-size:12px}.gold{background:#b18a3a;color:#080808;border-color:#b18a3a;font-weight:700}.nav.active{background:#16120a;color:#d4af55;border-color:#392d18}.nav{border:1px solid transparent}.hidden{display:none!important}</style></head><body>
 
 <div id="login" class="min-h-screen grid place-items-center p-5">
@@ -11,29 +10,46 @@
 <input id="email" class="input" type="email" placeholder="Email" required>
 <input id="password" class="input" type="password" placeholder="Password" required>
 
-<button class="btn gold w-full">ENTER PLATFORM</button>
+<button class="btn gold w-full">LOGIN</button>
 
 <p id="loginerr" class="text-red-400 text-xs"></p>
 
-<button type="button" onclick="showSignup()" class="btn w-full text-zinc-400 hover:text-white">
-CREATE ACCOUNT
+<button type="button" onclick="showSetupCode()" class="btn w-full text-zinc-400 hover:text-white">
+ENTER INITIAL SETUP CODE
 </button>
 </form>
 
-<form id="signupForm" onsubmit="signup(event)" class="card p-8 w-full max-w-md space-y-5 hidden">
+<form id="setupCodeForm" onsubmit="verifySetupCode(event)" class="card p-8 w-full max-w-md space-y-5 hidden">
 <div>
-<div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">CREATE ACCOUNT</div>
-<div class="text-[10px] tracking-[.3em] text-zinc-600 mt-2">INITIAL BOSS / OWNER ACCOUNT</div>
+<div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">INITIAL SETUP</div>
+<div class="text-[10px] tracking-[.3em] text-zinc-600 mt-2">OWNER AUTHORIZATION REQUIRED</div>
 </div>
 
-<input id="signupInstitute" class="input" type="text" placeholder="Institute Name" required>
-<input id="signupName" class="input" type="text" placeholder="Full Name" required>
-<input id="signupEmail" class="input" type="email" placeholder="Email" required>
-<input id="signupPassword" class="input" type="password" placeholder="Password — minimum 8 characters" minlength="8" required>
+<input id="setupCode" class="input" type="password" placeholder="Enter Code" autocomplete="off" required>
 
-<button class="btn gold w-full">CREATE ACCOUNT</button>
+<button class="btn gold w-full">ENTER CODE</button>
 
-<p id="signuperr" class="text-red-400 text-xs"></p>
+<p id="setupCodeErr" class="text-red-400 text-xs"></p>
+
+<button type="button" onclick="showLogin()" class="btn w-full text-zinc-400 hover:text-white">
+BACK TO LOGIN
+</button>
+</form>
+
+<form id="setupForm" onsubmit="completeSetup(event)" class="card p-8 w-full max-w-md space-y-5 hidden">
+<div>
+<div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">INITIAL SETUP</div>
+<div class="text-[10px] tracking-[.3em] text-zinc-600 mt-2">CREATE BOSS / OWNER ACCOUNT</div>
+</div>
+
+<input id="setupName" class="input" type="text" placeholder="ENTER FULL NAME" required>
+<input id="setupInstitute" class="input" type="text" placeholder="ENTER THE INSTITUTE'S NAME" required>
+<input id="setupEmail" class="input" type="email" placeholder="OWNER EMAIL" required>
+<input id="setupPassword" class="input" type="password" placeholder="PASSWORD — minimum 8 characters" minlength="8" required>
+
+<button class="btn gold w-full">COMPLETE INITIAL SETUP</button>
+
+<p id="setupErr" class="text-red-400 text-xs"></p>
 
 <button type="button" onclick="showLogin()" class="btn w-full text-zinc-400 hover:text-white">
 BACK TO LOGIN
@@ -88,48 +104,78 @@ throw Error(e.detail||'Request failed')
 return r.json()
 }
 
-function showSignup(){
+let setupCode='';
+
+function hideAuthForms(){
 document.getElementById('loginForm').classList.add('hidden');
-document.getElementById('signupForm').classList.remove('hidden');
-document.getElementById('signuperr').textContent='';
+document.getElementById('setupCodeForm').classList.add('hidden');
+document.getElementById('setupForm').classList.add('hidden');
 }
 
 function showLogin(){
-document.getElementById('signupForm').classList.add('hidden');
+hideAuthForms();
 document.getElementById('loginForm').classList.remove('hidden');
 document.getElementById('loginerr').textContent='';
+document.getElementById('setupCodeErr').textContent='';
+document.getElementById('setupErr').textContent='';
+document.getElementById('setupCode').value='';
+setupCode='';
 }
 
-async function signup(e){
+function showSetupCode(){
+hideAuthForms();
+document.getElementById('setupCodeForm').classList.remove('hidden');
+document.getElementById('setupCodeErr').textContent='';
+setTimeout(()=>document.getElementById('setupCode').focus(),50);
+}
+
+async function verifySetupCode(e){
 e.preventDefault();
-
-const err=document.getElementById('signuperr');
+const err=document.getElementById('setupCodeErr');
 err.textContent='';
+const code=document.getElementById('setupCode').value.trim();
+try{
+const x=await fetch('/api/auth/verify-setup-code',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({code})
+});
+const d=await x.json();
+if(!x.ok)throw Error(d.detail||'Invalid setup code');
+setupCode=code;
+document.getElementById('setupCodeForm').classList.add('hidden');
+document.getElementById('setupForm').classList.remove('hidden');
+document.getElementById('setupErr').textContent='';
+setTimeout(()=>document.getElementById('setupName').focus(),50);
+}catch(error){
+err.textContent=error.message;
+}
+}
 
+async function completeSetup(e){
+e.preventDefault();
+const err=document.getElementById('setupErr');
+err.textContent='';
 try{
 const payload={
-institute_name:document.getElementById('signupInstitute').value.trim(),
-full_name:document.getElementById('signupName').value.trim(),
-email:document.getElementById('signupEmail').value.trim(),
-password:document.getElementById('signupPassword').value
+code:setupCode,
+full_name:document.getElementById('setupName').value.trim(),
+institute_name:document.getElementById('setupInstitute').value.trim(),
+email:document.getElementById('setupEmail').value.trim(),
+password:document.getElementById('setupPassword').value
 };
-
-let x=await fetch('/api/auth/signup',{
+const x=await fetch('/api/auth/setup',{
 method:'POST',
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify(payload)
 });
-
-let d=await x.json();
-
-if(!x.ok) throw Error(d.detail||'Unable to create account');
-
+const d=await x.json();
+if(!x.ok)throw Error(d.detail||'Unable to complete initial setup');
 token=d.token;
 localStorage.setItem('algorithmic_token',token);
-
 await boot();
-}catch(err){
-err=document.getElementById('signuperr').textContent=err.message;
+}catch(error){
+err.textContent=error.message;
 }
 }
 
@@ -391,4 +437,3 @@ location.reload()
 if(token)boot();
 </script>
 </body></html>
-```
