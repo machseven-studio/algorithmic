@@ -1,517 +1,2016 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Algorithmic - Institutional Operations Platform</title>
-  
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALGORITHMIC - Enterprise Institutional Operations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Archivo+Black&display=swap');
 
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #050505;
-      color: #d1d5db;
-    }
-    .cormorant { font-family: 'Cormorant Garamond', serif; }
-    .welcome-font { font-family: 'DM Serif Display', 'Cormorant Garamond', serif; letter-spacing: .02em; }
-    .welcome-gold { background: linear-gradient(115deg,#8a641c 0%,#d4af37 24%,#f1df91 46%,#a8781d 67%,#d9b84f 84%,#7d5918 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow: 0 0 22px rgba(191,149,63,.12); }
-    .welcome-line { animation: welcomeRise .9s cubic-bezier(.16,1,.3,1) both; }
-    @keyframes welcomeRise { from{opacity:0;transform:translateY(18px) scale(.985);filter:blur(5px)} to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)} }
-    .batch-chip { cursor:pointer; transition:all .2s ease; }
-    .batch-chip.active { border-color:rgba(191,149,63,.8); background:#151109; color:#d4af37; }
-    .attendance-action { min-width:78px; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #030303;
+            background-image:
+                radial-gradient(rgba(212, 175, 55, 0.06) 1.5px, transparent 1.5px),
+                radial-gradient(rgba(212, 175, 55, 0.025) 1.5px, #030303 1.5px),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+            background-size: 40px 40px, 40px 40px, 120px 120px;
+            background-position: 0 0, 20px 20px, 0 0;
+            color: #f3f4f6;
+            overflow-x: hidden;
+            font-weight: 500;
+        }
 
+        /* Bold display serif used for headlines */
+        .elegant-font { font-family: 'Fraunces', serif; font-weight: 600; }
+        h1, h2, h3 { font-family: 'Fraunces', serif; letter-spacing: -0.01em; }
 
-    /* Metallic Gold Textured Gradient */
-    .gold-textured-text {
-      background: linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    
-    .gold-border { border-color: rgba(191, 149, 63, 0.35); }
-    .gold-bg { 
-      background: linear-gradient(135deg, #bf953f 0%, #d4af37 50%, #aa771c 100%);
-      color: #000;
-    }
-    .gold-bg:hover { filter: brightness(1.15); }
+        /* Ultra-bold, ALL-CAPS display face reserved for the institute name
+           and the homepage welcome line. */
+        .premium-heading-font {
+            font-family: 'Archivo Black', 'Arial Black', sans-serif;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
 
-    /* Shiny Silver Link Accent */
-    .silver-link {
-      background: linear-gradient(135deg, #e0e0e0 0%, #ffffff 50%, #999999 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      transition: all 0.3s ease;
-    }
-    .silver-link:hover { opacity: 0.8; }
+        .gold-gradient-text {
+            background: linear-gradient(135deg, #F4E5A1 0%, #E8C767 20%, #BF953F 45%, #8a6a22 60%, #E8C767 80%, #F4E5A1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+        }
 
-    /* Literal Matt-Black Surfaces */
-    .matt-black-bg {
-      background-color: #080808;
-      box-shadow: inset 0 0 100px rgba(0,0,0,0.95);
-    }
-    .matt-card {
-      background: #0d0d0d;
-      border: 1px solid #1a1a1a;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-    }
+        .gold-border { border-color: rgba(212, 175, 55, 0.28); }
 
-    .animate-gpu {
-      will-change: transform, opacity;
-      animation: mountIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
+        .gold-border-glow:focus, .gold-border-glow:hover {
+            border-color: #D4AF37;
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.18);
+        }
 
-    @keyframes mountIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  </style>
+        .gold-bg { background: linear-gradient(135deg, #EACD6E, #AA771C); }
+
+        .glass-panel {
+            background:
+                linear-gradient(160deg, rgba(20,17,10,0.55), rgba(8,8,8,0.9)),
+                repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+            background-color: rgba(10, 10, 10, 0.92);
+            border: 1px solid rgba(212, 175, 55, 0.18);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+        }
+
+        .sidebar-item { transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease; letter-spacing: 0.06em; }
+        .sidebar-item:hover, .sidebar-item.active {
+            background: rgba(212, 175, 55, 0.12);
+            color: #E8C767;
+            border-left: 3px solid #D4AF37;
+            padding-left: 1.75rem;
+        }
+
+        .fast-transition { transition: background-color 0.1s ease, color 0.1s ease, opacity 0.1s ease, transform 0.1s ease; }
+        .fast-transition:active { transform: scale(0.97); }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #332d16; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #D4AF37; }
+
+        .auth-error { color: #f87171; font-size: 11px; margin-top: 6px; min-height: 14px; }
+
+        .editable-name { cursor: text; border-bottom: 1px dashed rgba(212,175,55,0.4); }
+        .editable-name:hover { border-bottom-color: #D4AF37; }
+
+        .perm-badge { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+        .perm-edit { background: rgba(212,175,55,0.15); color: #E8C767; border: 1px solid rgba(212,175,55,0.35); }
+        .perm-readonly { background: rgba(148,163,184,0.1); color: #9ca3af; border: 1px solid rgba(148,163,184,0.25); }
+        .desig-badge { background: rgba(96,165,250,0.12); color: #93c5fd; border: 1px solid rgba(96,165,250,0.3); }
+
+        .row-delete-btn { color: #6b7280; transition: color 0.1s ease; }
+        .row-delete-btn:hover { color: #f87171; }
+        .row-edit-btn { color: #6b7280; transition: color 0.1s ease; }
+        .row-edit-btn:hover { color: #E8C767; }
+
+        @keyframes welcomeFadeSlide {
+            0% { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .welcome-animate { animation: welcomeFadeSlide 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
+
+        .batch-group-row td { background: rgba(212, 175, 55, 0.06); }
+
+        .day-chip { font-size: 9px; font-weight: 800; letter-spacing: .04em; padding: 3px 7px; border-radius: 6px; border: 1px solid rgba(148,163,184,.25); color: #9ca3af; cursor: pointer; user-select: none; }
+        .day-chip.on { border-color: rgba(248,113,113,.6); background: rgba(248,113,113,.12); color: #fca5a5; }
+
+        .batch-chip { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(212,175,55,.25); color: #9ca3af; cursor: pointer; }
+        .batch-chip.active { border-color: #D4AF37; background: rgba(212,175,55,.12); color: #E8C767; }
+
+        .tt-cell { min-height: 74px; }
+        .tt-cell .tt-edit { opacity: 0; }
+        .tt-cell:hover .tt-edit { opacity: 1; }
+
+        .live-dot { width: 7px; height: 7px; border-radius: 999px; background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,.8); animation: livePulse 1.4s ease infinite; display: inline-block; }
+        @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+        .module-chip { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; background: rgba(212,175,55,.08); border: 1px solid rgba(212,175,55,.2); color: #cdb96a; }
+    </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased matt-black-bg selection:bg-amber-500 selection:text-black">
+<body class="min-h-screen flex flex-col">
 
-  <!-- TOP ALERTS -->
-  <div id="urgent-fee-banner" class="hidden bg-red-950/80 border-b border-red-800 text-red-200 px-4 py-2 text-xs text-center font-medium tracking-wide animate-gpu">
-    ⚠️ ALERT: Fee Defaulters identified with due dates under 3 days! Check Fee Department.
-  </div>
+    <!-- LOGIN / SIGNUP SCREEN OVERLAY -->
+    <div id="authOverlay" class="fixed inset-0 z-50 bg-[#050505] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(212,175,55,0.06)_0,transparent_70%)]"></div>
+        <div class="glass-panel w-full max-w-md p-8 rounded-2xl shadow-2xl relative z-10 border gold-border">
+            <div class="text-center mb-8">
+                <div class="inline-block p-3 rounded-full bg-[#121212] border gold-border mb-4 shadow-lg">
+                    <span class="text-2xl font-black gold-gradient-text">⚡</span>
+                </div>
+                <h1 class="text-2xl premium-heading-font gold-gradient-text tracking-wider">ALGORITHMIC</h1>
+                <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Enterprise Institutional Portal</p>
+            </div>
 
-  <!-- INITIAL LOGIN MODAL -->
-  <div id="login-modal" class="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-gpu">
-    <div class="matt-card p-10 rounded-xl w-full max-w-md gold-border border space-y-6">
-      <div class="text-center space-y-2">
-        <h1 class="text-5xl font-semibold cormorant gold-textured-text tracking-wide">Algorithmic</h1>
-        <p class="text-xs tracking-widest text-gray-400">INSTITUTIONAL OPERATIONS SYSTEM</p>
-      </div>
+            <!-- LOGIN FORM -->
+            <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="admin@institute.edu" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••••••" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div id="loginError" class="auth-error"></div>
+                <button type="submit" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3.5 rounded-xl text-sm fast-transition shadow-lg tracking-wider uppercase">
+                    Log In
+                </button>
+                <p class="text-center text-xs text-gray-500 pt-2">New institute? <a href="#" onclick="showSignup(event)" class="gold-gradient-text font-semibold hover:underline">Create an account</a></p>
+            </form>
 
-      <form onsubmit="handleLogin(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Email Address</label>
-          <input id="login-email" type="email" required placeholder="admin@institute.edu" class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600 text-xs" />
+            <!-- SIGNUP FORM -->
+            <form id="signupForm" onsubmit="handleSignup(event)" class="space-y-4 hidden">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Institute Name</label>
+                    <input type="text" id="signupInstitute" required placeholder="Algorithmic Academy of Excellence" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Your Name</label>
+                    <input type="text" id="signupName" required placeholder="Samarth Dave" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Email</label>
+                    <input type="email" id="signupEmail" required placeholder="admin@institute.edu" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Password (min 8 characters)</label>
+                    <input type="password" id="signupPassword" required minlength="8" placeholder="••••••••••••" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div id="signupError" class="auth-error"></div>
+                <button type="submit" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3.5 rounded-xl text-sm fast-transition shadow-lg tracking-wider uppercase">
+                    Create Account
+                </button>
+                <p class="text-center text-xs text-gray-500 pt-2">Already registered? <a href="#" onclick="showLogin(event)" class="gold-gradient-text font-semibold hover:underline">Log in</a></p>
+            </form>
+
+            <div class="mt-8 pt-6 border-t gold-border text-center text-xs text-gray-500 space-y-1">
+                <p class="font-semibold text-gray-400">CREATED BY SAMARTH DAVE</p>
+                <p>FOUNDER OF <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline font-semibold">MACHSEVENSTUDIOS</a></p>
+                <p class="text-[10px] text-yellow-600/80 tracking-widest uppercase pt-1">POWERED BY METASYS<sup>®</sup></p>
+            </div>
         </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Password</label>
-          <input id="login-pass" type="password" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600 text-xs" />
-        </div>
-        <button type="submit" class="w-full gold-bg font-semibold py-3 rounded-md text-xs tracking-wider uppercase transition active:scale-95 shadow-md">
-          Enter Platform
-        </button>
-      </form>
     </div>
-  </div>
 
-  <!-- MAIN TWO-PANEL LAYOUT -->
-  <div id="app-container" class="hidden min-h-screen flex flex-1">
-
-    <!-- LEFT PANEL: NAVIGATION SIDEBAR -->
-    <aside class="w-64 bg-black border-r border-gray-900 flex flex-col justify-between p-6 z-20 shrink-0">
-      <div class="space-y-6">
-        
-        <!-- Header & Dynamic Institute Display -->
-        <div class="space-y-3 border-b border-gray-900 pb-4">
-          <h1 class="text-3xl font-semibold cormorant gold-textured-text tracking-wider">Algorithmic</h1>
-          <div class="bg-zinc-950 border border-zinc-900 p-2.5 rounded-md">
-            <p class="text-[9px] uppercase tracking-widest text-amber-500 font-semibold">Institute</p>
-            <p id="display-institute-name" class="text-xs font-semibold text-white truncate"></p>
-          </div>
-        </div>
-
-        <!-- Order-Specific Module Navigation -->
-        <nav class="space-y-1">
-          <button onclick="switchTab('mod-home')" id="nav-mod-home" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-300 gold-bg transition">Homepage</button>
-          <button onclick="switchTab('mod-students')" id="nav-mod-students" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Student Department</button>
-          <button onclick="switchTab('mod-teachers')" id="nav-mod-teachers" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Teacher Department</button>
-          <button onclick="switchTab('mod-classrooms')" id="nav-mod-classrooms" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Classroom Database</button>
-          <button onclick="switchTab('mod-syllabus')" id="nav-mod-syllabus" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Syllabus Department</button>
-          <button onclick="switchTab('mod-timetable')" id="nav-mod-timetable" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Timetable</button>
-          <button onclick="switchTab('mod-attendance')" id="nav-mod-attendance" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Attendance Report</button>
-          
-          <div class="pt-2 pb-1 text-[9px] uppercase tracking-widest text-gray-600 px-3">Examination</div>
-          <button onclick="switchTab('mod-seating')" id="nav-mod-seating" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Exam Seating Layout</button>
-          <button onclick="switchTab('mod-invigilators')" id="nav-mod-invigilators" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Invigilator Exam Duty</button>
-          <button onclick="switchTab('mod-fees')" id="nav-mod-fees" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Fee Department</button>
-        </nav>
-      </div>
-
-      <!-- User Information & Branch Controls -->
-      <div class="space-y-4 border-t border-gray-900 pt-4">
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="text-[9px] uppercase text-gray-500 tracking-widest block">Branch Switcher</label>
-            <button onclick="toggleModal('branch-modal')" class="text-[10px] text-amber-500 hover:underline">+ New Branch</button>
-          </div>
-          <select id="branch-select" onchange="switchBranch()" class="w-full bg-zinc-950 border border-zinc-800 text-xs font-normal text-white rounded-md px-2.5 py-1.5 focus:outline-none">
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pt-1">
-          <div>
-            <p id="display-user-name" class="text-xs font-medium text-white"></p>
-            <p class="text-[9px] text-gray-500 uppercase">Active Session</p>
-          </div>
-          <button onclick="logout()" class="text-xs text-red-400 hover:underline">Exit</button>
-        </div>
-      </div>
-    </aside>
-
-    <!-- RIGHT PANEL: WORKSPACE SECTION CONTROLLER -->
-    <main class="flex-1 p-8 overflow-y-auto relative flex flex-col justify-between">
-      <div>
-
-        <!-- HOMEPAGE -->
-        <section id="mod-home" class="tab-content animate-gpu space-y-8">
-          <div class="pt-8 space-y-3 welcome-line">
-            <p class="text-[10px] uppercase tracking-[.38em] text-gray-600">ALGORITHMIC / INSTITUTIONAL OPERATIONS</p>
-            <h2 id="welcome-user" class="welcome-font welcome-gold text-6xl md:text-7xl leading-none">Welcome</h2>
-            <p class="text-sm text-gray-500">Your workspace is ready.</p>
-          </div>
-          <div class="matt-card p-8 rounded-lg max-w-2xl gold-border border">
-            <p class="text-xs tracking-widest text-amber-500/80 uppercase font-light">Powered by Metasys®</p>
-            <div class="pt-5 mt-5 border-t border-gray-900 text-xs text-gray-500 space-y-1 font-light">
-              <p class="text-amber-500 uppercase tracking-widest text-[10px]">Support & Operational Enquiries</p>
-              <p>📧 machseven.studio@gmail.com</p>
-              <p>📧 samdave2131@gmail.com</p>
+    <!-- MAIN APP CONTAINER -->
+    <div id="appContainer" class="min-h-screen flex flex-col hidden">
+        <header class="border-b gold-border bg-[#0a0a0a] px-8 py-4 flex justify-between items-center sticky top-0 z-40">
+            <div class="flex items-center space-x-4">
+                <div class="group flex items-center space-x-2">
+                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name premium-heading-font text-2xl gold-gradient-text leading-none">—</h1>
+                    <button onclick="openRenameInstituteModal()" title="Rename institute" class="text-gray-600 hover:text-yellow-500 text-sm fast-transition opacity-0 group-hover:opacity-100">✎</button>
+                </div>
             </div>
-          </div>
-        </section>
-
-        <!-- STUDENT DEPARTMENT -->
-        <section id="mod-students" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4">
-            <div><h2 class="text-3xl font-semibold cormorant text-amber-600">Student Department</h2><p class="text-xs text-gray-400 font-light">Students grouped by batch, alphabetically.</p></div>
-            <div class="flex gap-2"><button onclick="openAcademicImport('students')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('student-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Student</button></div>
-          </div>
-          <div class="flex gap-3 flex-col md:flex-row"><input type="text" id="search-students" oninput="renderStudents()" placeholder="Search student names..." class="flex-1 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" /><select id="student-batch-filter" onchange="renderStudents()" class="md:w-64 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600"></select></div>
-          <div id="student-batch-groups" class="space-y-5"></div>
-        </section>
-
-        <!-- TEACHER DEPARTMENT -->
-        <section id="mod-teachers" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Teacher Department</h2><p class="text-xs text-gray-400 font-light">Faculty records kept intentionally lean.</p></div><div class="flex gap-2"><button onclick="openAcademicImport('teachers')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('teacher-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Teacher</button></div></div>
-          <input type="text" id="search-teachers" oninput="filterTable('search-teachers','teacher-tbody')" placeholder="Search teacher names..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900"><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Subject</th><th class="px-4 py-3">Contact Number</th></tr></thead><tbody id="teacher-tbody" class="divide-y divide-gray-900"></tbody></table></div>
-        </section>
-
-        <!-- CLASSROOM DATABASE -->
-        <section id="mod-classrooms" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Classroom Database</h2>
-              <p class="text-xs text-gray-400 font-light">Infrastructure specifications and seating dimensions.</p>
+            <div class="flex items-center space-x-6 text-sm">
+                <div class="flex items-center space-x-2 bg-[#121212] px-3 py-1.5 rounded-lg border gold-border">
+                    <span class="text-xs text-gray-400">Active Branch:</span>
+                    <select id="branchSelector" class="bg-transparent text-sm font-semibold gold-gradient-text focus:outline-none cursor-pointer"></select>
+                    <button onclick="openRenameBranchModal()" title="Rename this branch" class="text-xs text-gray-500 hover:text-yellow-500 fast-transition">✎</button>
+                    <button onclick="openAddBranchModal()" class="ml-1 text-xs bg-[#1a1a1a] hover:bg-[#252525] gold-gradient-text border gold-border px-2 py-0.5 rounded fast-transition">+ Branch</button>
+                </div>
+                <div class="text-xs text-right border-l pl-6 gold-border">
+                    <div class="text-gray-400">Logged in as</div>
+                    <div id="headerFullName" class="font-bold gold-gradient-text"></div>
+                    <div id="headerPermBadge" class="mt-0.5"></div>
+                </div>
+                <button onclick="handleLogout()" class="text-xs bg-[#161616] hover:bg-[#222] text-red-400 border border-red-900/40 px-3 py-2 rounded-lg fast-transition">Logout</button>
             </div>
-            <button onclick="toggleModal('classroom-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Classroom</button>
-          </div>
+        </header>
 
-          <input type="text" id="search-classrooms" onkeyup="filterTable('search-classrooms', 'classroom-tbody')" placeholder="Search classrooms..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
+        <div class="flex flex-1 overflow-hidden">
+            <nav class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
+                <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
+                <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
+                <button data-mod="home" onclick="switchModule('home')" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
+                <button data-mod="students" onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
+                <button data-mod="teachers" onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
+                <button data-mod="classrooms" onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
+                <button data-mod="syllabus" onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
+                <button data-mod="attendance" onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
+                <button data-mod="timetables" onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
+                <button data-mod="invigilation" onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
+                <button data-mod="fees" onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
+                <button id="navManageUsers" data-mod="users" onclick="switchModule('users')" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
 
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Room Name</th>
-                  <th class="px-4 py-3">Capacity</th>
-                  <th class="px-4 py-3">Dimensions (R x C)</th>
-                  <th class="px-4 py-3">Document</th>
+                <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
+                    <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
+                    <p class="text-[10px] text-yellow-600 font-bold uppercase tracking-widest pt-1">Powered by Metasys<sup>®</sup></p>
+                </div>
+            </nav>
+
+            <main class="flex-1 p-10 overflow-y-auto bg-[#070707]" id="mainContent"></main>
+        </div>
+    </div>
+
+    <!-- Rename Institute Modal -->
+    <div id="renameInstituteModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Rename Institute</h3>
+                <button onclick="closeModal('renameInstituteModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="renameInstituteInput" placeholder="Institute Name" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <div id="renameInstituteError" class="auth-error"></div>
+                <button onclick="submitRenameInstitute()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Save Name</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Branch Modal -->
+    <div id="renameBranchModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Rename Branch</h3>
+                <button onclick="closeModal('renameBranchModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="renameBranchInput" placeholder="Branch Name" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <div id="renameBranchError" class="auth-error"></div>
+                <button onclick="submitRenameBranch()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Save Name</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Staff User Modal -->
+    <div id="userModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add User</h3>
+                <button onclick="closeModal('userModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="newUserName" placeholder="Full Name" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <input type="email" id="newUserEmail" placeholder="Email Address" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <input type="password" id="newUserPassword" placeholder="Password (min 8 characters)" minlength="8" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Designation <span class="text-red-400">*</span></label>
+                    <select id="newUserDesignation" onchange="applyDesignationPreset()" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                        <option value="admin">Admin</option>
+                        <option value="head">Head</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="accountant">Accountant</option>
+                        <option value="clerk">Clerk</option>
+                        <option value="custom">Custom (pick modules)</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500 mt-1">The designation decides which modules this user can open. Fine-tune below.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Module Access</label>
+                    <div id="newUserModules" class="grid grid-cols-2 gap-2"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Permission</label>
+                    <select id="newUserPermission" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                        <option value="edit">Edit Access</option>
+                        <option value="read_only">Read Only</option>
+                    </select>
+                </div>
+                <div id="userModalError" class="auth-error"></div>
+                <button onclick="submitNewUser()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Create User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Privileges Modal -->
+    <div id="privModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Module Privileges</h3>
+                <button onclick="closeModal('privModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <p id="privModalUser" class="text-xs text-gray-400 mb-4"></p>
+            <div id="privModalModules" class="grid grid-cols-2 gap-2 mb-5"></div>
+            <div id="privModalError" class="auth-error"></div>
+            <button onclick="submitPrivileges()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Save Privileges</button>
+        </div>
+    </div>
+
+    <!-- Bulk Import Modal -->
+    <div id="bulkImportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-lg shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="bulkImportTitle" class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Bulk Import via Document</h3>
+                <button onclick="closeModal('bulkImportModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <p class="text-xs text-gray-400 leading-relaxed">Upload a single <span class="text-yellow-500 font-semibold">.csv</span> file to create many records at once, instead of typing each one in individually. The first row must be a header row with these exact column names:</p>
+                <div id="bulkImportColumns" class="text-xs font-mono bg-[#0c0c0c] border gold-border rounded-xl p-3 text-yellow-500"></div>
+                <input type="file" id="bulkImportFile" accept=".csv" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-2.5 text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#221c0c] file:text-yellow-500 hover:file:bg-[#332a0f]">
+                <div id="bulkImportError" class="auth-error"></div>
+                <button onclick="submitBulkImport()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Upload &amp; Create Records</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Add / Edit Record Modal -->
+    <div id="recordModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="modalTitle" class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add Record</h3>
+                <button onclick="closeModal('recordModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <form id="recordForm" onsubmit="submitRecordForm(event)" class="space-y-4">
+                <div id="modalFields" class="space-y-4"></div>
+                <p id="recordModalHint" class="text-[11px] text-gray-500">Need to attach a document, or add many records at once? Use the <span class="text-yellow-500 font-semibold">+ Add Document</span> button next to this one instead.</p>
+                <div id="recordFormError" class="auth-error"></div>
+                <div class="flex justify-end space-x-3 pt-4 border-t gold-border">
+                    <button type="button" onclick="closeModal('recordModal')" class="px-5 py-2.5 text-xs font-bold uppercase bg-gray-900 hover:bg-gray-800 text-gray-300 rounded-xl fast-transition">Cancel</button>
+                    <button type="submit" id="recordModalSubmit" class="px-6 py-2.5 text-xs font-extrabold uppercase gold-bg hover:opacity-95 text-black rounded-xl fast-transition shadow-lg">Save Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Branch Modal -->
+    <div id="branchModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add Branch</h3>
+                <button onclick="closeModal('branchModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="newBranchName" placeholder="e.g. North Campus - Pune" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                <button onclick="createNewBranch()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Create Branch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance Report Modal -->
+    <div id="attReportModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Attendance Report</h3>
+                <button onclick="closeModal('attReportModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div id="attReportSummary"></div>
+            <div id="attReportBody" class="overflow-y-auto flex-1 mt-4"></div>
+            <div class="flex justify-end space-x-3 pt-4 mt-4 border-t gold-border">
+                <button onclick="exportAttReport('xlsx')" class="px-4 py-2 text-xs font-extrabold uppercase bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border rounded-xl fast-transition">Export .XLSX</button>
+                <button onclick="exportAttReport('pdf')" class="px-4 py-2 text-xs font-extrabold uppercase bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border rounded-xl fast-transition">Export PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timetable Slot Edit Modal -->
+    <div id="slotModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Edit Lecture Slot</h3>
+                <button onclick="closeModal('slotModal')" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Day</label>
+                        <select id="slotDay" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none">
+                            <option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Lecture Number</label>
+                        <select id="slotLecture" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Subject</label>
+                    <input type="text" id="slotSubject" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Teacher</label>
+                    <input type="text" id="slotTeacher" list="slotTeacherList" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    <datalist id="slotTeacherList"></datalist>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Room</label>
+                    <input type="text" id="slotRoom" list="slotRoomList" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    <datalist id="slotRoomList"></datalist>
+                </div>
+                <div id="slotModalError" class="auth-error"></div>
+                <div class="flex justify-between items-center pt-2">
+                    <button onclick="deleteSlotFromModal()" class="px-4 py-2.5 text-xs font-bold uppercase bg-[#1a0d0d] hover:bg-[#2a1212] text-red-400 border border-red-900/40 rounded-xl fast-transition">Remove Lecture</button>
+                    <button onclick="submitSlotEdit()" class="px-6 py-2.5 text-xs font-extrabold uppercase gold-bg hover:opacity-95 text-black rounded-xl fast-transition shadow-lg">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let branches = [];
+        let currentBranchId = null;
+        let currentModule = 'home';
+        let authToken = localStorage.getItem('algorithmic_token');
+        let isOwner = false;
+        let myPermission = 'owner';
+        let myDesignation = 'owner';
+        let myModules = [];
+        let myFullName = '';
+        let bulkImportModule = null;
+        let chartRegistry = {};
+
+        const ALL_MODULE_KEYS = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'invigilation', 'fees'];
+        const MODULE_LABELS = {
+            students: 'Students', teachers: 'Teachers', classrooms: 'Classrooms', syllabus: 'Syllabus',
+            attendance: 'Attendance', timetables: 'Timetable', invigilation: 'Invigilation', fees: 'Fees',
+        };
+        const DESIGNATION_PRESETS = {
+            admin:      ALL_MODULE_KEYS,
+            head:       ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'invigilation'],
+            teacher:    ['students', 'syllabus', 'attendance', 'timetables', 'invigilation'],
+            accountant: ['students', 'fees'],
+            clerk:      ['students', 'classrooms'],
+            custom:     [],
+        };
+        const DESIGNATION_LABELS = { owner: 'Boss', admin: 'Admin', head: 'Head', teacher: 'Teacher', accountant: 'Accountant', clerk: 'Clerk', custom: 'Custom' };
+
+        function esc(s) {
+            return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function canWrite() { return myPermission !== 'read_only'; }
+        function hasModule(key) { return isOwner || myModules.includes(key); }
+        function localISODate(d) {
+            d = d || new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        // ---- Auth ----
+
+        function showSignup(e) { e.preventDefault(); document.getElementById('loginForm').classList.add('hidden'); document.getElementById('signupForm').classList.remove('hidden'); }
+        function showLogin(e) { e.preventDefault(); document.getElementById('signupForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('loginError');
+            errorEl.textContent = '';
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value })
+                });
+                const data = await res.json();
+                if (!res.ok) { errorEl.textContent = data.detail || 'Login failed.'; return; }
+                completeAuth(data);
+            } catch (err) { errorEl.textContent = 'Network error. Please try again.'; }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('signupError');
+            errorEl.textContent = '';
+            try {
+                const res = await fetch('/api/auth/signup', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        institute_name: document.getElementById('signupInstitute').value,
+                        full_name: document.getElementById('signupName').value,
+                        email: document.getElementById('signupEmail').value,
+                        password: document.getElementById('signupPassword').value
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) { errorEl.textContent = data.detail || 'Signup failed.'; return; }
+                completeAuth(data);
+            } catch (err) { errorEl.textContent = 'Network error. Please try again.'; }
+        }
+
+        function applyIdentity(data) {
+            isOwner = !!data.is_owner;
+            myPermission = data.permission || 'owner';
+            myDesignation = data.designation || (isOwner ? 'owner' : 'custom');
+            myModules = data.modules || [];
+            myFullName = data.full_name || data.institute_name || '';
+            document.getElementById('headerInstituteName').textContent = data.institute_name;
+            document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
+            document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
+
+            // Hide sidebar modules this user's designation doesn't cover.
+            document.querySelectorAll('[data-mod]').forEach(btn => {
+                const key = btn.getAttribute('data-mod');
+                if (key === 'home') return;
+                if (key === 'users') return; // handled above
+                btn.classList.toggle('hidden', !hasModule(key));
+            });
+
+            const badge = document.getElementById('headerPermBadge');
+            if (isOwner) { badge.innerHTML = '<span class="perm-badge perm-edit">Boss · Full Access</span>'; }
+            else {
+                const permBadge = myPermission === 'read_only' ? '<span class="perm-badge perm-readonly">Read Only</span>' : '<span class="perm-badge perm-edit">Edit Access</span>';
+                badge.innerHTML = `<span class="perm-badge desig-badge">${esc(DESIGNATION_LABELS[myDesignation] || myDesignation)}</span> ${permBadge}`;
+            }
+        }
+
+        function completeAuth(data) {
+            authToken = data.token;
+            localStorage.setItem('algorithmic_token', authToken);
+            applyIdentity(data);
+            document.getElementById('authOverlay').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+            initApp();
+        }
+
+        async function handleLogout() {
+            try { await authFetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            localStorage.removeItem('algorithmic_token');
+            authToken = null;
+            currentBranchId = null;
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('authOverlay').classList.remove('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('signupForm').classList.add('hidden');
+        }
+
+        async function authFetch(url, options = {}) {
+            options.headers = options.headers || {};
+            options.headers['Authorization'] = `Bearer ${authToken}`;
+            const res = await fetch(url, options);
+            if (res.status === 401) {
+                localStorage.removeItem('algorithmic_token');
+                authToken = null;
+                document.getElementById('appContainer').classList.add('hidden');
+                document.getElementById('authOverlay').classList.remove('hidden');
+                document.getElementById('loginError').textContent = 'Session expired. Please log in again.';
+                throw new Error('Session expired');
+            }
+            return res;
+        }
+
+        (async function tryResumeSession() {
+            if (!authToken) return;
+            try {
+                const res = await authFetch('/api/auth/me');
+                if (res.ok) {
+                    const data = await res.json();
+                    applyIdentity(data);
+                    document.getElementById('authOverlay').classList.add('hidden');
+                    document.getElementById('appContainer').classList.remove('hidden');
+                    initApp();
+                }
+            } catch (e) { /* handled in authFetch */ }
+        })();
+
+        // ---- Branches ----
+
+        async function loadBranches() {
+            const res = await authFetch('/api/branches');
+            branches = await res.json();
+            const selector = document.getElementById('branchSelector');
+            selector.innerHTML = '';
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = b.name;
+                if (currentBranchId === b.id) opt.selected = true;
+                selector.appendChild(opt);
+            });
+            if (!currentBranchId && branches.length > 0) {
+                currentBranchId = branches[0].id;
+                selector.value = currentBranchId;
+            }
+        }
+
+        document.getElementById('branchSelector').addEventListener('change', (e) => {
+            currentBranchId = parseInt(e.target.value);
+            refreshCurrentModule();
+        });
+
+        function openAddBranchModal() { openModal('branchModal'); }
+        function openRenameBranchModal() {
+            if (!canWrite() || !currentBranchId) return;
+            const b = branches.find(x => x.id === currentBranchId);
+            document.getElementById('renameBranchInput').value = b ? b.name : '';
+            document.getElementById('renameBranchError').textContent = '';
+            openModal('renameBranchModal');
+        }
+
+        async function submitRenameBranch() {
+            const errorEl = document.getElementById('renameBranchError');
+            const name = document.getElementById('renameBranchInput').value.trim();
+            if (!name) { errorEl.textContent = 'Branch name cannot be empty.'; return; }
+            const res = await authFetch(`/api/branches/${currentBranchId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) { closeModal('renameBranchModal'); await loadBranches(); }
+            else { errorEl.textContent = data.detail || 'Failed to rename branch.'; }
+        }
+
+        async function createNewBranch() {
+            const name = document.getElementById('newBranchName').value.trim();
+            if (!name) return;
+            const res = await authFetch('/api/branches', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name })
+            });
+            if (res.ok) {
+                const newBranch = await res.json();
+                closeModal('branchModal');
+                document.getElementById('newBranchName').value = '';
+                await loadBranches();
+                currentBranchId = newBranch.id;
+                document.getElementById('branchSelector').value = currentBranchId;
+                refreshCurrentModule();
+            } else {
+                alert('Branch already exists or invalid name.');
+            }
+        }
+
+        function switchModule(moduleName) {
+            currentModule = moduleName;
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.querySelector(`[data-mod="${moduleName}"]`);
+            if (activeBtn) activeBtn.classList.add('active');
+            refreshCurrentModule();
+        }
+
+        async function initApp() {
+            await loadBranches();
+            refreshCurrentModule();
+        }
+
+        async function refreshCurrentModule() {
+            const container = document.getElementById('mainContent');
+            if (currentModule === 'home') renderHomeModule(container);
+            else if (currentModule === 'timetables') await renderTimetableModule(container);
+            else if (currentModule === 'users') await renderUsersModule(container);
+            else if (currentModule === 'students') await renderStudentsModule(container);
+            else if (currentModule === 'attendance') await renderAttendanceModule(container);
+            else await renderDataModule(container, currentModule);
+        }
+
+        // =====================================================================
+        // HOME DASHBOARD + ANALYTICS
+        // =====================================================================
+
+        let dashboardTimer = null;
+        let dashboardLectures = [];
+
+        function destroyCharts() {
+            Object.values(chartRegistry).forEach(c => { try { c.destroy(); } catch (e) {} });
+            chartRegistry = {};
+        }
+
+        function renderHomeModule(container) {
+            if (dashboardTimer) { clearInterval(dashboardTimer); dashboardTimer = null; }
+            destroyCharts();
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
+                        <div class="max-w-4xl relative z-10 space-y-4">
+                            <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
+                            <h2 class="welcome-animate premium-heading-font text-4xl gold-gradient-text leading-tight">WELCOME, ${esc(myFullName || 'THERE')}</h2>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Active Students</div><div class="text-3xl font-black gold-gradient-text" id="statStudents">—</div></div>
+                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Faculty Members</div><div class="text-3xl font-black gold-gradient-text" id="statTeachers">—</div></div>
+                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Attendance Today</div><div class="text-3xl font-black gold-gradient-text" id="statAttendance">—</div></div>
+                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Fees Pending (INR)</div><div class="text-3xl font-black text-red-400" id="statFeesPending">—</div></div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="glass-panel border gold-border p-6 rounded-2xl">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Ongoing Lectures Right Now</h3>
+                                <span class="text-[10px] text-gray-500 uppercase tracking-widest" id="ongoingClock"></span>
+                            </div>
+                            <div id="ongoingLectures" class="space-y-3"><p class="text-xs text-gray-500">Loading...</p></div>
+                        </div>
+                        <div class="glass-panel border gold-border p-6 rounded-2xl">
+                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Top Pending Fees</h3>
+                            <div id="pendingFeesList" class="divide-y divide-gray-900"><p class="text-xs text-gray-500">Loading...</p></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="glass-panel border gold-border p-6 rounded-2xl">
+                            <h3 class="text-xs font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Attendance This Week · Per Batch (%)</h3>
+                            <div class="h-56"><canvas id="chartAttendanceBatch"></canvas></div>
+                        </div>
+                        <div class="glass-panel border gold-border p-6 rounded-2xl">
+                            <h3 class="text-xs font-extrabold gold-gradient-text uppercase tracking-wider mb-4">7-Day Attendance Trend (%)</h3>
+                            <div class="h-56"><canvas id="chartAttendanceTrend"></canvas></div>
+                        </div>
+                        <div class="glass-panel border gold-border p-6 rounded-2xl">
+                            <h3 class="text-xs font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Fees · Collected vs Pending</h3>
+                            <div class="h-56 flex items-center justify-center"><canvas id="chartFees"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            loadDashboard();
+        }
+
+        function mondayOfThisWeek() {
+            const d = new Date();
+            const day = (d.getDay() + 6) % 7; // Monday = 0
+            d.setDate(d.getDate() - day);
+            return d;
+        }
+
+        async function loadDashboard() {
+            if (!currentBranchId) return;
+            let data;
+            try {
+                const res = await authFetch(`/api/analytics/${currentBranchId}?week_start=${localISODate(mondayOfThisWeek())}&today=${localISODate()}`);
+                if (!res.ok) return;
+                data = await res.json();
+            } catch (e) { return; }
+
+            const el = id => document.getElementById(id);
+            if (!el('statStudents')) return; // user navigated away
+            el('statStudents').textContent = data.counts.students;
+            el('statTeachers').textContent = data.counts.teachers;
+            el('statAttendance').textContent = data.attendance_today.percentage === null ? 'Not marked' : `${data.attendance_today.percentage}%`;
+            el('statFeesPending').textContent = `₹${data.fees.pending_total.toLocaleString('en-IN')}`;
+
+            // Pending fees list
+            const pfl = el('pendingFeesList');
+            pfl.innerHTML = data.fees_pending_list.length === 0
+                ? '<p class="text-xs text-gray-500 py-2">No pending fees. Everything is collected. 🎉</p>'
+                : data.fees_pending_list.map(f => `
+                    <div class="flex items-center justify-between py-2.5">
+                        <div>
+                            <div class="text-sm font-semibold text-gray-200">${esc(f.student_name)}</div>
+                            <div class="text-[10px] text-gray-500 uppercase tracking-wider">Due ${esc(f.due_date || '—')}</div>
+                        </div>
+                        <div class="text-sm font-extrabold text-red-400">₹${(f.amount_inr || 0).toLocaleString('en-IN')}</div>
+                    </div>`).join('');
+
+            // Ongoing lectures (recomputed every 30s against the viewer's clock)
+            dashboardLectures = data.todays_lectures || [];
+            renderOngoingLectures();
+            dashboardTimer = setInterval(renderOngoingLectures, 30000);
+
+            // ---- Charts (minimalist, gold-on-dark) ----
+            destroyCharts();
+            const gold = '#D4AF37', goldSoft = 'rgba(212,175,55,0.25)', gridCol = 'rgba(255,255,255,0.05)', tickCol = '#6b7280';
+            Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+            Chart.defaults.font.size = 10;
+
+            const batchLabels = data.attendance_week_per_batch.map(b => b.batch);
+            chartRegistry.batch = new Chart(el('chartAttendanceBatch'), {
+                type: 'bar',
+                data: { labels: batchLabels.length ? batchLabels : ['No data'],
+                        datasets: [{ data: batchLabels.length ? data.attendance_week_per_batch.map(b => b.percentage) : [0],
+                                     backgroundColor: goldSoft, borderColor: gold, borderWidth: 1.5, borderRadius: 6, maxBarThickness: 42 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                           scales: { y: { min: 0, max: 100, grid: { color: gridCol }, ticks: { color: tickCol, callback: v => v + '%' } },
+                                     x: { grid: { display: false }, ticks: { color: tickCol } } } }
+            });
+
+            chartRegistry.trend = new Chart(el('chartAttendanceTrend'), {
+                type: 'line',
+                data: { labels: data.attendance_trend.map(t => t.date.slice(5)),
+                        datasets: [{ data: data.attendance_trend.map(t => t.percentage), borderColor: gold,
+                                     backgroundColor: 'rgba(212,175,55,0.08)', fill: true, tension: 0.35, spanGaps: true,
+                                     pointBackgroundColor: gold, pointRadius: 3 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                           scales: { y: { min: 0, max: 100, grid: { color: gridCol }, ticks: { color: tickCol, callback: v => v + '%' } },
+                                     x: { grid: { display: false }, ticks: { color: tickCol } } } }
+            });
+
+            chartRegistry.fees = new Chart(el('chartFees'), {
+                type: 'doughnut',
+                data: { labels: ['Collected', 'Pending'],
+                        datasets: [{ data: [data.fees.paid_total, data.fees.pending_total],
+                                     backgroundColor: ['rgba(212,175,55,0.75)', 'rgba(248,113,113,0.55)'],
+                                     borderColor: '#0a0a0a', borderWidth: 3, cutout: '68%' }] },
+                options: { responsive: true, maintainAspectRatio: false,
+                           plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', boxWidth: 10, padding: 14 } },
+                                      tooltip: { callbacks: { label: c => ` ₹${(c.parsed || 0).toLocaleString('en-IN')}` } } } }
+            });
+        }
+
+        function parseTimeRange(str) {
+            // "09:00 AM - 10:00 AM" -> [540, 600] minutes; returns null if unparseable
+            const matches = [...String(str || '').matchAll(/(\d{1,2}):(\d{2})\s*(AM|PM)?/gi)];
+            if (matches.length < 2) return null;
+            const toMin = m => {
+                let h = parseInt(m[1]), min = parseInt(m[2]);
+                const ap = (m[3] || '').toUpperCase();
+                if (ap === 'PM' && h !== 12) h += 12;
+                if (ap === 'AM' && h === 12) h = 0;
+                return h * 60 + min;
+            };
+            return [toMin(matches[0]), toMin(matches[1])];
+        }
+
+        function renderOngoingLectures() {
+            const box = document.getElementById('ongoingLectures');
+            const clock = document.getElementById('ongoingClock');
+            if (!box) { if (dashboardTimer) { clearInterval(dashboardTimer); dashboardTimer = null; } return; }
+            const now = new Date();
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            if (clock) clock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (dashboardLectures.length === 0) {
+                box.innerHTML = '<p class="text-xs text-gray-500">No lectures scheduled today. Generate a timetable to see live lectures here.</p>';
+                return;
+            }
+            const byBatch = {};
+            dashboardLectures.forEach(s => { (byBatch[s.batch_name] = byBatch[s.batch_name] || []).push(s); });
+
+            box.innerHTML = Object.keys(byBatch).sort().map(batch => {
+                const slots = byBatch[batch];
+                let ongoing = null, next = null;
+                slots.forEach(s => {
+                    const range = parseTimeRange(s.time_slot);
+                    if (!range) return;
+                    if (nowMin >= range[0] && nowMin < range[1]) ongoing = s;
+                    else if (nowMin < range[0] && (!next || range[0] < parseTimeRange(next.time_slot)[0])) next = s;
+                });
+                if (ongoing) {
+                    return `<div class="flex items-center justify-between p-3 rounded-xl bg-[#101408] border border-green-900/40">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">${esc(batch)}</div>
+                            <div class="text-sm font-bold text-gray-100">${esc(ongoing.subject)} <span class="text-gray-500 font-normal">· ${esc(ongoing.teacher)}</span></div>
+                            <div class="text-[10px] text-gray-500">Lecture ${ongoing.lecture_number ?? '—'} · ${esc(ongoing.time_slot)} · ${esc(ongoing.room)}</div>
+                        </div>
+                        <span class="flex items-center space-x-1.5 text-[10px] font-extrabold text-green-400 uppercase tracking-wider"><span class="live-dot"></span><span>Live</span></span>
+                    </div>`;
+                }
+                return `<div class="flex items-center justify-between p-3 rounded-xl bg-[#0f0f0f] border gold-border">
+                    <div>
+                        <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-0.5">${esc(batch)}</div>
+                        <div class="text-xs text-gray-500">${next ? `Next: <span class="text-gray-300 font-semibold">${esc(next.subject)}</span> at ${esc(next.time_slot)} (Lecture ${next.lecture_number ?? '—'})` : 'No more lectures today'}</div>
+                    </div>
+                    <span class="text-[10px] text-gray-600 uppercase tracking-wider font-bold">${next ? 'Upcoming' : 'Done'}</span>
+                </div>`;
+            }).join('');
+        }
+
+        // =====================================================================
+        // GENERIC DATA MODULES (teachers / classrooms / syllabus / invigilation / fees)
+        // =====================================================================
+
+        const MODULE_TITLES = {
+            teachers: 'Faculty Department',
+            classrooms: 'Classroom Inventory',
+            syllabus: 'Syllabus Tracker',
+            invigilation: 'Invigilator Duty Roster',
+            fees: 'Fee Management (INR ₹)',
+        };
+
+        const MODULE_COLUMNS = {
+            teachers: [ { key: 'name', label: 'Name' }, { key: 'subject', label: 'Subject' }, { key: 'contact_number', label: 'Contact Number' } ],
+            classrooms: [ { key: 'room_no', label: 'Room No' }, { key: 'capacity', label: 'Capacity' }, { key: 'document', label: 'Document' } ],
+            syllabus: [ { key: 'subject', label: 'Subject' }, { key: 'topic', label: 'Topic' }, { key: 'teacher_name', label: "Teacher's Name" }, { key: 'num_lectures', label: 'No. of Lectures' }, { key: 'lecture_date', label: 'Date' } ],
+            attendance: [ { key: 'student_name', label: 'Student' }, { key: 'date', label: 'Date' }, { key: 'status', label: 'Status' } ],
+            invigilation: [ { key: 'teacher_name', label: 'Faculty' }, { key: 'exam_date', label: 'Exam Date' }, { key: 'room', label: 'Exam Hall' }, { key: 'document', label: 'Document' } ],
+            fees: [ { key: 'student_name', label: 'Student' }, { key: 'amount_inr', label: 'Amount (₹)' }, { key: 'status', label: 'Status' }, { key: 'due_date', label: 'Due Date' }, { key: 'document', label: 'Document' } ],
+        };
+
+        const FIELDS_CONFIG = {
+            students: [
+                { id: 'name', label: 'Name', type: 'text', placeholder: 'Aarav Sharma' },
+                { id: 'batch', label: 'Batch', type: 'text', placeholder: 'Batch A' },
+                { id: 'roll_number', label: 'Roll Number', type: 'text', placeholder: '24' },
+                { id: 'parent_contact', label: "Parent's Contact Number", type: 'text', placeholder: '+91 98765 43210' }
+            ],
+            teachers: [
+                { id: 'name', label: 'Name', type: 'text', placeholder: 'Dr. Ramesh Kumar' },
+                { id: 'subject', label: 'Subject', type: 'text', placeholder: 'Artificial Intelligence' },
+                { id: 'contact_number', label: 'Contact Number', type: 'text', placeholder: '+91 98765 43210' }
+            ],
+            classrooms: [
+                { id: 'room_no', label: 'Room Number', type: 'text', placeholder: 'Lecture Hall 402' },
+                { id: 'capacity', label: 'Seating Capacity', type: 'number', placeholder: '120' }
+            ],
+            syllabus: [
+                { id: 'subject', label: 'Subject', type: 'text', placeholder: 'Data Structures & Algorithms' },
+                { id: 'topic', label: 'Topic', type: 'text', placeholder: 'Binary Search Trees' },
+                { id: 'teacher_name', label: "Teacher's Name", type: 'text', placeholder: 'Dr. Ramesh Kumar' },
+                { id: 'num_lectures', label: 'Number of Lectures', type: 'number', placeholder: '4' },
+                { id: 'lecture_date', label: 'Date', type: 'date', placeholder: '' }
+            ],
+            attendance: [
+                { id: 'student_name', label: 'Student Name', type: 'text', placeholder: 'Priya Patel' },
+                { id: 'date', label: 'Date', type: 'date', placeholder: '' },
+                { id: 'status', label: 'Attendance Status', type: 'select', options: ['Present', 'Absent'] }
+            ],
+            invigilation: [
+                { id: 'teacher_name', label: 'Faculty Name', type: 'text', placeholder: 'Prof. Vikram Joshi' },
+                { id: 'exam_date', label: 'Exam Date', type: 'date', placeholder: '' },
+                { id: 'room', label: 'Exam Hall', type: 'text', placeholder: 'Examination Block B' }
+            ],
+            fees: [
+                { id: 'student_name', label: 'Student Name', type: 'text', placeholder: 'Rohan Sharma' },
+                { id: 'amount_inr', label: 'Fee Amount (INR ₹)', type: 'number', placeholder: '75000' },
+                { id: 'status', label: 'Payment Status', type: 'select', options: ['Paid', 'Pending', 'Partial'] },
+                { id: 'due_date', label: 'Due Date', type: 'date', placeholder: '' }
+            ],
+        };
+
+        let moduleRecordsCache = {};
+
+        function exportButtons(moduleName) {
+            return `
+                <button onclick="exportModule('${moduleName}', 'xlsx')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export .XLSX</button>
+                <button onclick="exportModule('${moduleName}', 'pdf')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export PDF</button>`;
+        }
+
+        async function renderDataModule(container, moduleName) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${MODULE_TITLES[moduleName] || moduleName}</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Branch-scoped enterprise records</p>
+                        </div>
+                        <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+                            ${exportButtons(moduleName)}
+                            ${canWrite() ? `
+                            <button onclick="openRecordModal('${moduleName}')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add New Record</button>
+                            <button onclick="openBulkImportModal('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border" id="moduleTableHead"></thead>
+                            <tbody id="moduleTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            await loadModuleRecords(moduleName);
+        }
+
+        async function loadModuleRecords(moduleName) {
+            if (!currentBranchId) return;
+            if (moduleName === 'students') { await loadStudentRecords(); return; }
+            if (moduleName === 'attendance') { await loadAttendanceBatches(); return; }
+            const res = await authFetch(`/api/records/${moduleName}/${currentBranchId}`);
+            const records = await res.json();
+            moduleRecordsCache[moduleName] = records;
+            renderModuleTable(moduleName, records);
+        }
+
+        function renderModuleTable(moduleName, records) {
+            const thead = document.getElementById('moduleTableHead');
+            const tbody = document.getElementById('moduleTableBody');
+            if (!thead || !tbody) return;
+            const columns = MODULE_COLUMNS[moduleName] || [];
+            const w = canWrite();
+
+            thead.innerHTML = `<tr>${columns.map(c => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${c.label}</th>`).join('')}${w ? '<th class="p-4"></th>' : ''}</tr>`;
+            if (records.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${columns.length + 1}" class="p-8 text-center text-gray-500">No records yet.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = records.map(r => `
+                <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                    ${columns.map(c => {
+                        let val = r[c.key];
+                        if (moduleName === 'fees' && c.key === 'amount_inr') { val = `₹${parseFloat(val || 0).toLocaleString('en-IN')}`; }
+                        else if (c.key === 'document' && val) { val = `<a href="/uploads/${esc(val)}" target="_blank" class="text-yellow-500 underline text-xs font-semibold">View File</a>`; }
+                        else if (c.key === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
+                        else { val = esc(val ?? ''); }
+                        return `<td class="p-4 font-medium">${val}</td>`;
+                    }).join('')}
+                    ${w ? `<td class="p-4 text-right whitespace-nowrap">
+                        <button onclick="openEditRecord('${moduleName}', ${r.id})" title="Edit record" class="row-edit-btn fast-transition text-base leading-none mr-2">✎</button>
+                        <button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button>
+                    </td>` : ''}
                 </tr>
-              </thead>
-              <tbody id="classroom-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
+            `).join('');
+        }
 
-        <!-- SYLLABUS DEPARTMENT -->
-        <section id="mod-syllabus" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Syllabus Department</h2><p class="text-xs text-gray-400 font-light">Only the five operational fields are retained.</p></div><div class="flex gap-2"><button onclick="openAcademicImport('syllabus')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('syllabus-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Syllabus Entry</button></div></div>
-          <input type="text" id="search-syllabus" oninput="filterTable('search-syllabus','syllabus-tbody')" placeholder="Search subject, topic or teacher..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900"><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase"><tr><th class="px-4 py-3">Subject</th><th class="px-4 py-3">Topic</th><th class="px-4 py-3">Teacher's Name</th><th class="px-4 py-3">Number of Lectures</th><th class="px-4 py-3">Date</th></tr></thead><tbody id="syllabus-tbody" class="divide-y divide-gray-900"></tbody></table></div>
-        </section>
+        // ---- Export (PDF + XLSX) ----
 
-        <!-- TIMETABLE -->
-        <section id="mod-timetable" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Timetable</h2>
-              <p class="text-xs text-gray-400 font-light">Teacher availability & subject batch timetable solver.</p>
-            </div>
-            <button onclick="exportPDF('Academic Timetable', ['Time Slot', 'Batch', 'Subject', 'Teacher'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-          </div>
-          <div class="matt-card p-6 rounded-md text-xs text-gray-400 border border-gray-900 font-light">
-            Tailored timetable solver evaluates teacher availability and batch schedules to eliminate overlaps.
-          </div>
-        </section>
+        function collectExportData(moduleName) {
+            const records = moduleRecordsCache[moduleName] || [];
+            let columns;
+            if (moduleName === 'students') {
+                columns = [ { key: 'name', label: 'Name' }, { key: 'batch', label: 'Batch' }, { key: 'roll_number', label: 'Roll Number' }, { key: 'parent_contact', label: "Parent's Contact" } ];
+            } else {
+                columns = MODULE_COLUMNS[moduleName].filter(c => c.key !== 'document');
+            }
+            const headers = columns.map(c => c.label);
+            const rows = records.map(r => columns.map(c => r[c.key] ?? ''));
+            return { headers, rows };
+        }
 
-        <!-- ATTENDANCE -->
-        <section id="mod-attendance" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Attendance</h2><p class="text-xs text-gray-400 font-light">Select one batch at a time and mark each student present or absent.</p></div><input id="attendance-date" type="date" onchange="renderAttendance()" class="bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white" /></div>
-          <div class="flex gap-3 flex-col md:flex-row"><select id="attendance-batch" onchange="renderAttendance()" class="md:w-64 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white"></select><input id="attendance-search" oninput="renderAttendance()" type="text" placeholder="Search student names..." class="flex-1 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white" /></div>
-          <div id="attendance-list" class="matt-card rounded-md overflow-hidden border border-gray-900"></div>
-        </section>
+        function exportModule(moduleName, format) {
+            const { headers, rows } = collectExportData(moduleName);
+            const title = (MODULE_TITLES[moduleName] || moduleName).replace(/\s*\(.*\)/, '');
+            if (rows.length === 0) { alert('Nothing to export yet.'); return; }
+            if (format === 'xlsx') exportXLSX(`${moduleName}_export`, moduleName, headers, rows);
+            else exportPDF(`${moduleName}_export`, title, headers, rows);
+        }
 
-        <!-- EXAM SEATING LAYOUT -->
-        <section id="mod-seating" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Exam Seating Layout</h2>
-              <p class="text-xs text-gray-400 font-light">Adjacent-conflict free examination matrices.</p>
-            </div>
-            <button onclick="exportPDF('Seating Matrix', ['Desk ID', 'Student', 'Roll Number', 'Room'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-          </div>
-          <div class="matt-card p-6 rounded-md text-xs text-gray-400 border border-gray-900 font-light">
-            Seating layout configured automatically from Student & Classroom databases. Ready for export.
-          </div>
-        </section>
+        function exportXLSX(filename, sheetName, headers, rows) {
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, (sheetName || 'Sheet1').slice(0, 31));
+            XLSX.writeFile(wb, `${filename}_${localISODate()}.xlsx`);
+        }
 
-        <!-- INVIGILATOR EXAM DUTY -->
-        <section id="mod-invigilators" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Invigilator Exam Duty</h2>
-              <p class="text-xs text-gray-400 font-light">Automatic clerk-to-classroom room supervision allocations.</p>
-            </div>
-            <div class="space-x-2">
-              <button onclick="autoAllocateInvig()" class="bg-zinc-800 text-white text-xs font-medium px-3 py-2 rounded-md">Auto-Allocate Rooms</button>
-              <button onclick="toggleModal('invigilator-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Invigilator</button>
-              <button onclick="exportPDF('Invigilator Duty Roster', ['Clerk Name', 'Contact', 'Assigned Room'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-            </div>
-          </div>
+        function exportPDF(filename, title, headers, rows) {
+            const doc = new jspdf.jsPDF({ orientation: headers.length > 6 ? 'landscape' : 'portrait' });
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(15);
+            doc.text(String(title).toUpperCase(), 14, 16);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(`${document.getElementById('headerInstituteName').textContent} — exported ${new Date().toLocaleString()}`, 14, 22);
+            doc.autoTable({
+                head: [headers],
+                body: rows.map(r => r.map(v => String(v ?? ''))),
+                startY: 27,
+                styles: { fontSize: 8, cellPadding: 2.5 },
+                headStyles: { fillColor: [170, 119, 28], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 245, 235] },
+            });
+            doc.save(`${filename}_${localISODate()}.pdf`);
+        }
 
-          <input type="text" id="search-invigilators" onkeyup="filterTable('search-invigilators', 'invigilator-tbody')" placeholder="Search invigilators..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
+        // =====================================================================
+        // STUDENT DEPARTMENT (batchwise segregation + search)
+        // =====================================================================
 
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Clerk Name</th>
-                  <th class="px-4 py-3">Contact</th>
-                  <th class="px-4 py-3">Assigned Room</th>
-                  <th class="px-4 py-3">Document</th>
+        let allStudentRecords = [];
+
+        async function renderStudentsModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Student Department</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Segregated Batchwise • A-Z</p>
+                        </div>
+                        <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+                            ${exportButtons('students')}
+                            ${canWrite() ? `
+                            <button onclick="openRecordModal('students')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add New Record</button>
+                            <button onclick="openBulkImportModal('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>` : ''}
+                        </div>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl">
+                        <input type="text" id="studentSearchInput" placeholder="Search student by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none mb-4">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-300">
+                                <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
+                                    <tr>
+                                        <th class="p-4 font-bold tracking-wider">Name</th>
+                                        <th class="p-4 font-bold tracking-wider">Batch</th>
+                                        <th class="p-4 font-bold tracking-wider">Roll Number</th>
+                                        <th class="p-4 font-bold tracking-wider">Parent's Contact Number</th>
+                                        ${canWrite() ? '<th class="p-4"></th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody id="studentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('studentSearchInput').addEventListener('input', renderStudentTable);
+            await loadStudentRecords();
+        }
+
+        async function loadStudentRecords() {
+            if (!currentBranchId) return;
+            const res = await authFetch(`/api/records/students/${currentBranchId}`);
+            allStudentRecords = await res.json();
+            moduleRecordsCache['students'] = allStudentRecords;
+            renderStudentTable();
+        }
+
+        function renderStudentTable() {
+            const tbody = document.getElementById('studentTableBody');
+            if (!tbody) return;
+            const w = canWrite();
+            const query = (document.getElementById('studentSearchInput')?.value || '').trim().toLowerCase();
+
+            let students = allStudentRecords.slice();
+            if (query) students = students.filter(s => (s.name || '').toLowerCase().includes(query));
+
+            students.sort((a, b) => {
+                const batchA = (a.batch || '').trim(), batchB = (b.batch || '').trim();
+                if (batchA !== batchB) return batchA.localeCompare(batchB);
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            if (students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">No students found.</td></tr>`;
+                return;
+            }
+
+            let rows = '';
+            let lastBatch = null;
+            students.forEach(s => {
+                const batch = (s.batch || '').trim() || 'Unassigned';
+                if (batch !== lastBatch) {
+                    rows += `<tr class="batch-group-row"><td colspan="${w ? 5 : 4}" class="p-2.5 text-xs font-extrabold uppercase tracking-widest gold-gradient-text">${esc(batch)}</td></tr>`;
+                    lastBatch = batch;
+                }
+                rows += `
+                    <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                        <td class="p-4 font-medium">${esc(s.name)}</td>
+                        <td class="p-4">${esc(s.batch)}</td>
+                        <td class="p-4">${esc(s.roll_number)}</td>
+                        <td class="p-4">${esc(s.parent_contact)}</td>
+                        ${w ? `<td class="p-4 text-right whitespace-nowrap">
+                            <button onclick="openEditRecord('students', ${s.id})" title="Edit record" class="row-edit-btn fast-transition text-base leading-none mr-2">✎</button>
+                            <button onclick="deleteRecord('students', ${s.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button>
+                        </td>` : ''}
+                    </tr>`;
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // =====================================================================
+        // ATTENDANCE (batchwise marking + per-student history report)
+        // =====================================================================
+
+        let attendanceAllStudents = [];
+        let attendanceMarks = {};
+        let attendanceDate = localISODate();
+
+        async function renderAttendanceModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Attendance</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Batchwise marking · per-student history reports</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl space-y-5">
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Date</label>
+                                <input type="date" id="attendanceDateInput" value="${attendanceDate}" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Batch</label>
+                                <select id="attendanceBatchSelect" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none min-w-[200px]"></select>
+                            </div>
+                            <div class="flex-1 min-w-[220px]">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Search Student</label>
+                                <input type="text" id="attendanceSearchInput" placeholder="Search by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                            </div>
+                        </div>
+                        <div id="attendanceStudentList" class="divide-y divide-gray-900"></div>
+                    </div>
+                </div>
+            `;
+            await loadAttendanceBatches();
+            document.getElementById('attendanceBatchSelect').addEventListener('change', renderAttendanceStudentList);
+            document.getElementById('attendanceSearchInput').addEventListener('input', renderAttendanceStudentList);
+            document.getElementById('attendanceDateInput').addEventListener('change', async (e) => {
+                attendanceDate = e.target.value || localISODate();
+                await loadAttendanceMarks();
+                renderAttendanceStudentList();
+            });
+        }
+
+        async function loadAttendanceMarks() {
+            const aRes = await authFetch(`/api/attendance/${currentBranchId}/${attendanceDate}`);
+            attendanceMarks = await aRes.json();
+        }
+
+        async function loadAttendanceBatches() {
+            if (!currentBranchId) return;
+            const sRes = await authFetch(`/api/records/students/${currentBranchId}`);
+            attendanceAllStudents = await sRes.json();
+            await loadAttendanceMarks();
+
+            const batches = [...new Set(attendanceAllStudents.map(s => (s.batch || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            const select = document.getElementById('attendanceBatchSelect');
+            if (!select) return;
+            const prev = select.value;
+            select.innerHTML = batches.length === 0
+                ? '<option value="">No batches found</option>'
+                : batches.map(b => `<option value="${esc(b)}" ${b === prev ? 'selected' : ''}>${esc(b)}</option>`).join('');
+            renderAttendanceStudentList();
+        }
+
+        function renderAttendanceStudentList() {
+            const listEl = document.getElementById('attendanceStudentList');
+            if (!listEl) return;
+            const w = canWrite();
+            const selectedBatch = document.getElementById('attendanceBatchSelect').value;
+            const query = document.getElementById('attendanceSearchInput').value.trim().toLowerCase();
+
+            let students = attendanceAllStudents.filter(s => (s.batch || '').trim() === selectedBatch);
+            if (query) students = students.filter(s => (s.name || '').toLowerCase().includes(query));
+            students.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            if (students.length === 0) {
+                listEl.innerHTML = `<p class="text-center text-gray-500 text-sm py-8">No students found${selectedBatch ? ` in ${esc(selectedBatch)}` : ''}.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = students.map(s => {
+                const mark = attendanceMarks[s.name];
+                const nameArg = JSON.stringify(s.name || '').replace(/"/g, '&quot;');
+                return `
+                <div class="flex items-center justify-between py-3 flex-wrap gap-2">
+                    <span class="text-sm font-medium text-gray-200">${esc(s.name)}</span>
+                    <div class="flex items-center space-x-2">
+                        <button ${w ? '' : 'disabled'} onclick='markAttendance(${nameArg}, "Present")' class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Present' ? 'bg-green-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-green-400'}">Present</button>
+                        <button ${w ? '' : 'disabled'} onclick='markAttendance(${nameArg}, "Absent")' class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Absent' ? 'bg-red-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-red-400'}">Absent</button>
+                        <button onclick='openAttendanceReport(${nameArg})' title="View past attendance history" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition bg-[#141414] gold-gradient-text border gold-border hover:opacity-80">View Report</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function markAttendance(studentName, status) {
+            const res = await authFetch('/api/attendance/mark', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: currentBranchId, student_name: studentName, date: attendanceDate, status })
+            });
+            if (res.ok) {
+                attendanceMarks[studentName] = status;
+                renderAttendanceStudentList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Failed to mark attendance.');
+            }
+        }
+
+        // ---- Per-student attendance report ----
+
+        let currentAttReport = null;
+
+        async function openAttendanceReport(studentName) {
+            const res = await authFetch(`/api/attendance/report/${currentBranchId}?student=${encodeURIComponent(studentName)}`);
+            if (!res.ok) { alert('Failed to load report.'); return; }
+            currentAttReport = await res.json();
+            const r = currentAttReport;
+
+            document.getElementById('attReportSummary').innerHTML = `
+                <div class="space-y-3">
+                    <div class="text-sm font-bold text-gray-100">${esc(r.student_name)}</div>
+                    <div class="grid grid-cols-4 gap-3 text-center">
+                        <div class="bg-[#0f0f0f] border gold-border rounded-xl p-3"><div class="text-lg font-black gold-gradient-text">${r.total}</div><div class="text-[9px] uppercase tracking-widest text-gray-500">Days Marked</div></div>
+                        <div class="bg-[#0f0f0f] border gold-border rounded-xl p-3"><div class="text-lg font-black text-green-400">${r.present}</div><div class="text-[9px] uppercase tracking-widest text-gray-500">Present</div></div>
+                        <div class="bg-[#0f0f0f] border gold-border rounded-xl p-3"><div class="text-lg font-black text-red-400">${r.absent}</div><div class="text-[9px] uppercase tracking-widest text-gray-500">Absent</div></div>
+                        <div class="bg-[#0f0f0f] border gold-border rounded-xl p-3"><div class="text-lg font-black gold-gradient-text">${r.percentage === null ? '—' : r.percentage + '%'}</div><div class="text-[9px] uppercase tracking-widest text-gray-500">Attendance</div></div>
+                    </div>
+                </div>`;
+
+            document.getElementById('attReportBody').innerHTML = r.history.length === 0
+                ? '<p class="text-xs text-gray-500 py-6 text-center">No attendance has been marked for this student yet.</p>'
+                : `<table class="w-full text-left text-sm text-gray-300">
+                    <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border sticky top-0"><tr><th class="p-3">Date</th><th class="p-3">Status</th></tr></thead>
+                    <tbody>${r.history.map(h => `
+                        <tr class="border-b border-gray-900">
+                            <td class="p-3 font-medium">${esc(h.date)}</td>
+                            <td class="p-3"><span class="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${h.status === 'Present' ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}">${esc(h.status)}</span></td>
+                        </tr>`).join('')}
+                    </tbody></table>`;
+            openModal('attReportModal');
+        }
+
+        function exportAttReport(format) {
+            if (!currentAttReport) return;
+            const r = currentAttReport;
+            const headers = ['Date', 'Status'];
+            const rows = r.history.map(h => [h.date, h.status]);
+            rows.push([], ['Days Marked', r.total], ['Present', r.present], ['Absent', r.absent], ['Attendance %', r.percentage === null ? '-' : r.percentage]);
+            const fname = `attendance_${r.student_name.replace(/\s+/g, '_')}`;
+            if (format === 'xlsx') exportXLSX(fname, 'Attendance', headers, rows);
+            else exportPDF(fname, `Attendance Report — ${r.student_name}`, headers, rows);
+        }
+
+        // =====================================================================
+        // RECORD MODAL (add + edit for every module)
+        // =====================================================================
+
+        function buildFieldInput(f, value) {
+            const val = value ?? '';
+            if (f.type === 'select') {
+                return `<select id="field_${f.id}" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    ${f.options.map(o => `<option value="${esc(o)}" ${String(val) === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+                </select>`;
+            }
+            return `<input type="${f.type}" id="field_${f.id}" required placeholder="${esc(f.placeholder || '')}" value="${esc(val)}" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">`;
+        }
+
+        function openRecordModal(moduleName, record = null) {
+            openModal('recordModal');
+            window.activeModalModule = moduleName;
+            window.editingRecordId = record ? record.id : null;
+            document.getElementById('modalTitle').textContent = record ? `Edit ${moduleName} Record` : `Add New ${moduleName} Record`;
+            document.getElementById('recordModalSubmit').textContent = record ? 'Save Changes' : 'Save Record';
+            document.getElementById('recordModalHint').style.display = record ? 'none' : '';
+            document.getElementById('recordFormError').textContent = '';
+            const fieldsConfig = FIELDS_CONFIG[moduleName] || [];
+            document.getElementById('modalFields').innerHTML = fieldsConfig.map(f => `
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">${f.label}</label>
+                    ${buildFieldInput(f, record ? record[f.id] : '')}
+                </div>
+            `).join('');
+        }
+
+        function openEditRecord(moduleName, recordId) {
+            const records = moduleRecordsCache[moduleName] || [];
+            const record = records.find(r => r.id === recordId);
+            if (!record) return;
+            openRecordModal(moduleName, record);
+        }
+
+        async function submitRecordForm(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('recordFormError');
+            errorEl.textContent = '';
+            const moduleName = window.activeModalModule;
+            const data = {};
+            document.getElementById('modalFields').querySelectorAll('input, select').forEach(input => {
+                const key = input.id.replace('field_', '');
+                data[key] = input.type === 'number' ? parseFloat(input.value) : input.value;
+            });
+
+            const formData = new FormData();
+            formData.append('data_json', JSON.stringify(data));
+
+            let res;
+            if (window.editingRecordId) {
+                res = await authFetch(`/api/records/${moduleName}/${window.editingRecordId}`, { method: 'PUT', body: formData });
+            } else {
+                formData.append('branch_id', currentBranchId);
+                res = await authFetch(`/api/records/${moduleName}`, { method: 'POST', body: formData });
+            }
+
+            if (res.ok) {
+                closeModal('recordModal');
+                await loadModuleRecords(moduleName);
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                errorEl.textContent = errData.detail || 'Failed to save record.';
+            }
+        }
+
+        async function deleteRecord(moduleName, recordId) {
+            if (!confirm('Remove this record permanently? This cannot be undone.')) return;
+            const res = await authFetch(`/api/records/${moduleName}/${recordId}`, { method: 'DELETE' });
+            if (res.ok) {
+                await loadModuleRecords(moduleName);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Failed to delete record.');
+            }
+        }
+
+        // ---- Bulk import ("+ Add Document") ----
+
+        const BULK_IMPORT_COLUMNS = {
+            students: ['name', 'batch', 'roll_number', 'parent_contact'],
+            teachers: ['name', 'subject', 'contact_number'],
+            classrooms: ['room_no', 'capacity'],
+            syllabus: ['subject', 'topic', 'teacher_name', 'num_lectures', 'lecture_date'],
+            attendance: ['student_name', 'date', 'status'],
+            invigilation: ['teacher_name', 'exam_date', 'room'],
+            fees: ['student_name', 'amount_inr', 'status', 'due_date'],
+        };
+
+        function openBulkImportModal(moduleName) {
+            bulkImportModule = moduleName;
+            document.getElementById('bulkImportTitle').textContent = `Bulk Import ${moduleName}`;
+            document.getElementById('bulkImportColumns').textContent = BULK_IMPORT_COLUMNS[moduleName].join(', ');
+            document.getElementById('bulkImportFile').value = '';
+            document.getElementById('bulkImportError').textContent = '';
+            openModal('bulkImportModal');
+        }
+
+        async function submitBulkImport() {
+            const errorEl = document.getElementById('bulkImportError');
+            errorEl.textContent = '';
+            const fileInput = document.getElementById('bulkImportFile');
+            if (!fileInput.files[0]) { errorEl.textContent = 'Please choose a CSV file first.'; return; }
+
+            const formData = new FormData();
+            formData.append('branch_id', currentBranchId);
+            formData.append('file', fileInput.files[0]);
+
+            const res = await authFetch(`/api/records/${bulkImportModule}/bulk`, { method: 'POST', body: formData });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                closeModal('bulkImportModal');
+                await loadModuleRecords(bulkImportModule);
+                alert(`Imported ${data.inserted} record(s) successfully.`);
+            } else {
+                errorEl.textContent = data.detail || 'Import failed.';
+            }
+        }
+
+        // ---- Institute rename ----
+
+        function openRenameInstituteModal() {
+            if (!canWrite()) return;
+            document.getElementById('renameInstituteInput').value = document.getElementById('headerInstituteName').textContent.trim();
+            document.getElementById('renameInstituteError').textContent = '';
+            openModal('renameInstituteModal');
+        }
+
+        async function submitRenameInstitute() {
+            const errorEl = document.getElementById('renameInstituteError');
+            const name = document.getElementById('renameInstituteInput').value.trim();
+            if (!name) { errorEl.textContent = 'Institute name cannot be empty.'; return; }
+            const res = await authFetch('/api/institute/name', {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ institute_name: name })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                document.getElementById('headerInstituteName').textContent = data.institute_name;
+                closeModal('renameInstituteModal');
+            } else {
+                errorEl.textContent = data.detail || 'Failed to rename institute.';
+            }
+        }
+
+        // =====================================================================
+        // MANAGE USERS (designations + per-module privileges)
+        // =====================================================================
+
+        let cachedUsers = [];
+
+        async function renderUsersModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Manage Users</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Designations · module privileges · access control</p>
+                        </div>
+                        <button onclick="openUserModal()" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add User</button>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
+                                <tr><th class="p-4">Full Name</th><th class="p-4">Email</th><th class="p-4">Designation</th><th class="p-4">Module Privileges</th><th class="p-4">Permission</th><th class="p-4"></th></tr>
+                            </thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            await loadUsers();
+        }
+
+        async function loadUsers() {
+            const res = await authFetch('/api/users');
+            cachedUsers = await res.json();
+            const tbody = document.getElementById('usersTableBody');
+            if (!tbody) return;
+            if (cachedUsers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = cachedUsers.map(u => `
+                <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                    <td class="p-4 font-medium text-white">${esc(u.full_name)}</td>
+                    <td class="p-4 text-gray-400">${esc(u.email)}</td>
+                    <td class="p-4">
+                        <select onchange="changeUserDesignation(${u.id}, this.value)" class="bg-[#0c0c0c] border gold-border rounded-lg px-2 py-1 text-xs text-gray-200 focus:outline-none">
+                            ${Object.keys(DESIGNATION_PRESETS).map(d => `<option value="${d}" ${u.designation === d ? 'selected' : ''}>${DESIGNATION_LABELS[d]}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="p-4">
+                        <div class="flex flex-wrap items-center gap-1 max-w-xs">
+                            ${(u.modules || []).length === 0 ? '<span class="text-gray-600 text-xs">None</span>' : u.modules.map(m => `<span class="module-chip">${MODULE_LABELS[m] || m}</span>`).join('')}
+                            <button onclick="openPrivModal(${u.id})" title="Add or revoke module privileges" class="text-[10px] font-bold text-yellow-600 hover:text-yellow-400 uppercase tracking-wider ml-1 fast-transition">Edit</button>
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <select onchange="changeUserPermission(${u.id}, this.value)" class="bg-[#0c0c0c] border gold-border rounded-lg px-2 py-1 text-xs text-gray-200 focus:outline-none">
+                            <option value="edit" ${u.permission === 'edit' ? 'selected' : ''}>Edit Access</option>
+                            <option value="read_only" ${u.permission === 'read_only' ? 'selected' : ''}>Read Only</option>
+                        </select>
+                    </td>
+                    <td class="p-4 text-right"><button onclick="removeUser(${u.id})" title="Revoke access" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>
                 </tr>
-              </thead>
-              <tbody id="invigilator-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
+            `).join('');
+        }
 
-        <!-- FEE DEPARTMENT -->
-        <section id="mod-fees" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Fee Department</h2>
-              <p class="text-xs text-gray-400 font-light">Pending dues tracking, attached records, and automated reminders.</p>
-            </div>
-            <div class="space-x-2">
-              <button onclick="toggleModal('fee-modal')" class="bg-red-900/80 hover:bg-red-800 text-white text-xs font-medium px-4 py-2 rounded-md">+ Record Fee</button>
-              <button onclick="exportPDF('Fee Defaulters List', ['Student', 'Roll Number', 'Amount Due', 'Due Date'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-            </div>
-          </div>
+        function moduleCheckboxes(containerId, checkedModules) {
+            document.getElementById(containerId).innerHTML = ALL_MODULE_KEYS.map(m => `
+                <label class="flex items-center space-x-2 bg-[#0c0c0c] border gold-border rounded-lg px-3 py-2 cursor-pointer hover:border-yellow-700 fast-transition">
+                    <input type="checkbox" value="${m}" ${checkedModules.includes(m) ? 'checked' : ''} class="accent-yellow-600">
+                    <span class="text-xs text-gray-300 font-semibold">${MODULE_LABELS[m]}</span>
+                </label>
+            `).join('');
+        }
 
-          <input type="text" id="search-fees" onkeyup="filterTable('search-fees', 'fee-tbody')" placeholder="Search fee defaulters..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
+        function readModuleCheckboxes(containerId) {
+            return [...document.getElementById(containerId).querySelectorAll('input:checked')].map(i => i.value);
+        }
 
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Student</th>
-                  <th class="px-4 py-3">Roll No</th>
-                  <th class="px-4 py-3">Amount Due</th>
-                  <th class="px-4 py-3">Due Date</th>
-                  <th class="px-4 py-3">Status / Reminders</th>
-                  <th class="px-4 py-3">Document</th>
-                </tr>
-              </thead>
-              <tbody id="fee-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
+        function openUserModal() {
+            document.getElementById('newUserName').value = '';
+            document.getElementById('newUserEmail').value = '';
+            document.getElementById('newUserPassword').value = '';
+            document.getElementById('newUserDesignation').value = 'teacher';
+            document.getElementById('newUserPermission').value = 'edit';
+            document.getElementById('userModalError').textContent = '';
+            applyDesignationPreset();
+            openModal('userModal');
+        }
 
-      </div>
+        function applyDesignationPreset() {
+            const d = document.getElementById('newUserDesignation').value;
+            moduleCheckboxes('newUserModules', DESIGNATION_PRESETS[d] || []);
+        }
 
-      <!-- BOTTOM RIGHT BRANDING -->
-      <div class="pt-8 flex justify-end">
-        <div class="text-right text-[11px] font-light leading-tight">
-          <p class="text-gray-400">created by <em class="silver-link italic">Samarth Dave</em></p>
-          <p class="text-gray-500">founder of <a href="https://machsevenstudios-website.onrender.com/" target="_blank" rel="noopener noreferrer" class="silver-link font-normal hover:underline">MachSevenStudios</a></p>
-        </div>
-      </div>
-    </main>
-  </div>
+        async function submitNewUser() {
+            const errorEl = document.getElementById('userModalError');
+            errorEl.textContent = '';
+            const full_name = document.getElementById('newUserName').value.trim();
+            const email = document.getElementById('newUserEmail').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const designation = document.getElementById('newUserDesignation').value;
+            const permission = document.getElementById('newUserPermission').value;
+            const modules = readModuleCheckboxes('newUserModules');
+            if (!full_name || !email || !password) { errorEl.textContent = 'Please fill in every field.'; return; }
+            if (!designation) { errorEl.textContent = 'Please choose a designation for this user.'; return; }
 
-  <!-- MODALS -->
+            const res = await authFetch('/api/users', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name, email, password, permission, designation, modules })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) { closeModal('userModal'); await loadUsers(); }
+            else { errorEl.textContent = data.detail || 'Failed to create user.'; }
+        }
 
-  <!-- Create Branch Modal -->
-  <div id="branch-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-sm border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Add New Branch</h3>
-      <form onsubmit="submitBranch(event)" class="space-y-3">
-        <input id="b-name" type="text" placeholder="Branch Name (e.g. North Campus)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('branch-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Create</button>
-        </div>
-      </form>
-    </div>
-  </div>
+        async function patchUser(userId, payload) {
+            const res = await authFetch(`/api/users/${userId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Failed to update user.');
+            }
+            await loadUsers();
+        }
 
-  <!-- Student Modal -->
-  <div id="student-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Enroll Student</h3><form onsubmit="submitStudent(event)" class="space-y-3"><input id="s-name" type="text" placeholder="Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-batch" type="text" placeholder="Batch" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-roll" type="text" placeholder="Roll Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-pcontact" type="tel" placeholder="Parent's Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('student-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Student</button></div></form></div></div>
+        function changeUserPermission(userId, permission) { patchUser(userId, { permission }); }
+        function changeUserDesignation(userId, designation) { patchUser(userId, { designation }); }
 
-  <!-- Teacher Modal -->
-  <div id="teacher-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Add Teacher</h3><form onsubmit="submitTeacher(event)" class="space-y-3"><input id="t-name" type="text" placeholder="Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="t-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="t-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('teacher-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Teacher</button></div></form></div></div>
+        let privEditingUserId = null;
+        function openPrivModal(userId) {
+            const u = cachedUsers.find(x => x.id === userId);
+            if (!u) return;
+            privEditingUserId = userId;
+            document.getElementById('privModalUser').innerHTML = `Choose exactly which modules <span class="text-yellow-500 font-bold">${esc(u.full_name)}</span> (${DESIGNATION_LABELS[u.designation] || u.designation}) can open. Unchecked modules disappear from their sidebar and are blocked by the server.`;
+            moduleCheckboxes('privModalModules', u.modules || []);
+            document.getElementById('privModalError').textContent = '';
+            openModal('privModal');
+        }
 
-  <!-- Syllabus Modal -->
-  <div id="syllabus-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Add Syllabus Entry</h3><form onsubmit="submitSyllabus(event)" class="space-y-3"><input id="sys-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-topic" type="text" placeholder="Topic" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-teacher" type="text" placeholder="Teacher's Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-lectures" type="number" min="1" placeholder="Number of Lectures" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-date" type="date" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('syllabus-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Syllabus</button></div></form></div></div>
+        async function submitPrivileges() {
+            if (!privEditingUserId) return;
+            await patchUser(privEditingUserId, { modules: readModuleCheckboxes('privModalModules') });
+            closeModal('privModal');
+        }
 
-  <!-- Academic PDF Import Modal -->
-  <div id="academic-import-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-lg border gold-border space-y-4"><h3 id="academic-import-title" class="text-lg font-semibold cormorant text-amber-600">Import PDF</h3><p id="academic-import-fields" class="text-xs text-gray-400"></p><input id="academic-import-file" type="file" accept=".pdf" class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-xs text-gray-400" /><p id="academic-import-error" class="text-xs text-red-400"></p><div class="flex justify-end gap-2"><button type="button" onclick="toggleModal('academic-import-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="button" onclick="submitAcademicImport()" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Import</button></div></div></div>
+        async function removeUser(userId) {
+            if (!confirm('Revoke this user\'s access permanently?')) return;
+            const res = await authFetch(`/api/users/${userId}`, { method: 'DELETE' });
+            if (res.ok) await loadUsers();
+            else alert('Failed to remove user.');
+        }
 
-  <!-- Classroom Modal -->
-  <div id="classroom-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Register Classroom</h3>
-      <form onsubmit="submitClassroom(event)" class="space-y-3">
-        <input id="c-name" type="text" placeholder="Room Name / Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="c-capacity" type="number" placeholder="Total Capacity" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="c-rows" type="number" placeholder="Rows" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="c-cols" type="number" placeholder="Columns" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Blueprint/Doc (Optional)</label>
-          <input id="c-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('classroom-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Room</button>
-        </div>
-      </form>
-    </div>
-  </div>
+        // =====================================================================
+        // TIMETABLE (lecture numbers · regenerate · edit · export)
+        // =====================================================================
 
-  <!-- Syllabus Modal -->
-  <div id="syllabus-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Add Syllabus Entry</h3>
-      <form onsubmit="submitSyllabus(event)" class="space-y-3">
-        <input id="sys-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="sys-teacher" type="text" placeholder="Faculty Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="sys-date" type="date" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="sys-time" type="text" placeholder="Lecture Timings (e.g. 10:00-11:30 AM)" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <textarea id="sys-topics" placeholder="Topics Covered (Manual entry)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs h-20"></textarea>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Material/Doc (Optional)</label>
-          <input id="sys-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('syllabus-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Syllabus</button>
-        </div>
-      </form>
-    </div>
-  </div>
+        let ttTeachers = [];
+        let ttClassrooms = [];
+        let ttSavedBatches = [];
+        let ttAllSlots = [];
+        let ttSelectedBatch = null;
+        let ttTimingsDraft = [
+            { time: '09:00 AM - 10:00 AM' },
+            { time: '10:00 AM - 11:00 AM' },
+            { time: '11:15 AM - 12:15 PM' },
+            { time: '01:15 PM - 02:15 PM' },
+        ];
+        const TT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-  <!-- Attendance Modal -->
-  <div id="attendance-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Record Absence</h3>
-      <form onsubmit="submitAttendance(event)" class="space-y-3">
-        <input id="att-name" type="text" placeholder="Absentee Full Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="att-date" type="date" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="att-lecture" type="text" placeholder="Lecture / Subject" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <textarea id="att-reason" placeholder="Reason for Absence" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs h-20"></textarea>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Excuse Note/Doc (Optional)</label>
-          <input id="att-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('attendance-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Log Absence</button>
-        </div>
-      </form>
-    </div>
-  </div>
+        async function renderTimetableModule(container) {
+            const [tRes, cRes, bRes, sRes] = await Promise.all([
+                authFetch(`/api/records/teachers/${currentBranchId}`),
+                authFetch(`/api/records/classrooms/${currentBranchId}`),
+                authFetch(`/api/timetable/batches/${currentBranchId}`),
+                authFetch(`/api/timetable/slots/${currentBranchId}`),
+            ]);
+            ttTeachers = await tRes.json();
+            ttClassrooms = await cRes.json();
+            ttSavedBatches = await bRes.json();
+            ttAllSlots = await sRes.json();
+            if (!ttSelectedBatch || !ttSavedBatches.some(b => b.batch_name === ttSelectedBatch)) {
+                ttSelectedBatch = ttSavedBatches.length ? ttSavedBatches[0].batch_name : null;
+            }
 
-  <!-- Invigilator Modal -->
-  <div id="invigilator-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Register Invigilator Clerk</h3>
-      <form onsubmit="submitInvigilator(event)" class="space-y-3">
-        <input id="i-name" type="text" placeholder="Clerk Full Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="i-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Document (Optional)</label>
-          <input id="i-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('invigilator-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Invigilator</button>
-        </div>
-      </form>
-    </div>
-  </div>
+            const w = canWrite();
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Timetable Generation & Batch Scheduler</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Conflict-checked · lecture numbered · regenerate any batch</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button onclick="exportTimetable('xlsx')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Export .XLSX</button>
+                            <button onclick="exportTimetable('pdf')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Export PDF</button>
+                        </div>
+                    </div>
 
-  <!-- Fee Modal -->
-  <div id="fee-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Record Pending Fee</h3>
-      <form onsubmit="submitFee(event)" class="space-y-3">
-        <select id="fee-student-select" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs">
-        </select>
-        <input id="f-amount" type="number" step="0.01" placeholder="Amount Due ($)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="f-date" type="date" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Notice/Doc (Optional)</label>
-          <input id="f-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('fee-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="bg-red-900/80 text-xs font-medium px-4 py-1.5 rounded-md text-white">Save Record</button>
-        </div>
-      </form>
-    </div>
-  </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        <!-- CONFIG PANEL -->
+                        <div class="glass-panel border gold-border p-6 rounded-2xl space-y-5 ${w ? '' : 'opacity-60 pointer-events-none'}">
+                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Configure Batch & Prerequisites</h3>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Batch Name</label>
+                                <input type="text" id="ttBatchName" placeholder="e.g. B.Tech CSE Batch A" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400">Lecture Number &amp; Timings</label>
+                                    <button onclick="addTimingRow()" class="text-[10px] font-extrabold uppercase tracking-wider gold-gradient-text border gold-border rounded-lg px-2 py-1 hover:bg-[#1a1a1a] fast-transition">+ Add Lecture</button>
+                                </div>
+                                <div id="ttTimingRows" class="space-y-2"></div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Assigned Teachers &amp; Constraints</label>
+                                <div id="teacherConfigList" class="space-y-3 max-h-72 overflow-y-auto pr-2">
+                                    ${ttTeachers.length === 0 ? '<p class="text-xs text-gray-500">No teachers found. Please add teachers first.</p>' :
+                                      ttTeachers.map((t, idx) => `
+                                        <div class="p-3 bg-[#0f0f0f] border gold-border rounded-xl space-y-2" data-teacher="${esc(t.name)}" data-subject="${esc(t.subject)}" data-idx="${idx}">
+                                            <label class="flex justify-between items-center text-xs font-bold text-gray-200 cursor-pointer">
+                                                <span>${esc(t.name)} <span class="text-gray-500 font-normal">(${esc(t.subject)})</span></span>
+                                                <input type="checkbox" id="inc_${idx}" checked class="accent-yellow-600">
+                                            </label>
+                                            <div class="grid grid-cols-1 gap-2">
+                                                <div><label class="text-[10px] text-gray-400 uppercase">Lectures/Week</label><input type="number" id="lec_${idx}" value="3" min="1" max="20" class="w-full bg-[#070707] border gold-border rounded p-1.5 text-xs text-white"></div>
+                                                <div>
+                                                    <label class="text-[10px] text-gray-400 uppercase">Unavailable Days <span class="normal-case text-gray-600">(tap to toggle)</span></label>
+                                                    <div class="flex flex-wrap gap-1.5 mt-1">
+                                                        ${TT_DAYS.map(d => `<span class="day-chip" data-day="${d}" onclick="this.classList.toggle('on')">${d.slice(0, 3)}</span>`).join('')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                      `).join('')}
+                                </div>
+                            </div>
+                            <button onclick="generateTimetableSchedule()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate Weekly Timetable</button>
+                            <div id="ttWarnings"></div>
+                        </div>
 
-  <script>
-    let token=localStorage.getItem('algo_token'), user=localStorage.getItem('algo_user'), institute=localStorage.getItem('algo_inst');
-    let selectedBranchId=null, studentsCache=[], attendanceCache=[], academicImportModule=null;
-    const $=id=>document.getElementById(id);
-    function authHeaders(json=false){ const h={Authorization:`Bearer ${token}`}; if(json) h['Content-Type']='application/json'; return h; }
-    async function authFetch(url,opts={}){ opts.headers={...authHeaders(),...(opts.headers||{})}; return fetch(url,opts); }
-    async function handleLogin(e){ e.preventDefault(); const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('login-email').value,password:$('login-pass').value})}); const data=await res.json(); if(!res.ok){alert(data.detail||'Login failed');return;} token=data.token; user=data.full_name; institute=data.institute_name; localStorage.setItem('algo_token',token);localStorage.setItem('algo_user',user);localStorage.setItem('algo_inst',institute);initApp(); }
-    function logout(){ authFetch('/api/auth/logout',{method:'POST'}).catch(()=>{}); localStorage.clear(); token=user=institute=null; $('login-modal').classList.remove('hidden');$('app-container').classList.add('hidden'); }
-    async function initApp(){ if(!token)return; $('login-modal').classList.add('hidden');$('app-container').classList.remove('hidden'); $('display-institute-name').innerText=institute||''; $('display-user-name').innerText=user||''; $('welcome-user').textContent=`Welcome, ${user||'there'}`; await loadBranches(); }
-    async function loadBranches(){ const res=await authFetch('/api/branches'); if(!res.ok)return; const branches=await res.json(); $('branch-select').innerHTML=branches.map(b=>`<option value="${b.id}">${b.name}</option>`).join(''); if(branches.length){selectedBranchId=branches[0].id; await loadWorkspaceData();} }
-    async function switchBranch(){selectedBranchId=Number($('branch-select').value);await loadWorkspaceData();}
-    function switchTab(tabId){document.querySelectorAll('.tab-content').forEach(e=>e.classList.add('hidden'));document.querySelectorAll('.nav-btn').forEach(e=>{e.classList.remove('gold-bg');e.classList.add('text-gray-400')});$(tabId).classList.remove('hidden');const n=$(`nav-${tabId}`);if(n){n.classList.add('gold-bg');n.classList.remove('text-gray-400')} if(tabId==='mod-attendance')renderAttendance();}
-    function toggleModal(id){$(id).classList.toggle('hidden');}
-    function filterTable(inputId,tbodyId){const q=$(inputId).value.toLowerCase();document.querySelectorAll(`#${tbodyId} tr`).forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none');}
-    function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-    async function loadWorkspaceData(){ if(!selectedBranchId)return; const [sr,tr,sy,cr]=await Promise.all([authFetch(`/api/students?branch_id=${selectedBranchId}`),authFetch(`/api/teachers?branch_id=${selectedBranchId}`),authFetch(`/api/syllabus?branch_id=${selectedBranchId}`),authFetch(`/api/classrooms?branch_id=${selectedBranchId}`)]); studentsCache=sr.ok?await sr.json():[]; const teachers=tr.ok?await tr.json():[]; const syllabus=sy.ok?await sy.json():[]; const classrooms=cr.ok?await cr.json():[]; renderStudents(); $('teacher-tbody').innerHTML=teachers.map(t=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(t.full_name)}</td><td class="px-4 py-3 text-amber-500">${esc(t.subject)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(t.contact_number)}</td></tr>`).join(''); $('syllabus-tbody').innerHTML=syllabus.map(x=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(x.subject)}</td><td class="px-4 py-3">${esc(x.topic)}</td><td class="px-4 py-3">${esc(x.teacher_name)}</td><td class="px-4 py-3 text-amber-500">${esc(x.number_of_lectures)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(x.lecture_date)}</td></tr>`).join(''); $('classroom-tbody').innerHTML=classrooms.map(x=>`<tr><td class="px-4 py-3 text-white">${esc(x.room_name)}</td><td class="px-4 py-3">${esc(x.capacity)}</td><td class="px-4 py-3 text-amber-500">${esc(x.building||'—')}</td><td class="px-4 py-3 text-gray-600">—</td></tr>`).join(''); await loadAttendanceBatches(); }
-    function renderStudents(){const q=($('search-students').value||'').toLowerCase();const filter=$('student-batch-filter').value||'__all__';const filtered=studentsCache.filter(s=>(filter==='__all__'||s.batch===filter)&&s.name.toLowerCase().includes(q));const groups={};filtered.forEach(s=>(groups[s.batch||'Unassigned']??=[]).push(s));const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));$('student-batch-groups').innerHTML=names.length?names.map(batch=>`<div class="matt-card rounded-md overflow-hidden border border-gray-900"><div class="px-4 py-3 border-b border-gray-900 text-amber-500 text-xs uppercase tracking-widest">${esc(batch)}</div><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-gray-500 uppercase text-[10px]"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Batch</th><th class="px-4 py-3">Roll Number</th><th class="px-4 py-3">Parent's Contact Number</th></tr></thead><tbody class="divide-y divide-gray-900">${groups[batch].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'})).map(s=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(s.name)}</td><td class="px-4 py-3">${esc(s.batch)}</td><td class="px-4 py-3 text-amber-500">${esc(s.roll_number)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(s.parent_contact)}</td></tr>`).join('')}</tbody></table></div>`).join(''):'<div class="p-8 text-center text-gray-600 text-sm">No students match this search.</div>'; }
-    async function loadAttendanceBatches(){const res=await authFetch(`/api/student-batches?branch_id=${selectedBranchId}`);const batches=res.ok?await res.json():[];const current=$('attendance-batch').value; $('attendance-batch').innerHTML=batches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join(''); if(current&&batches.includes(current))$('attendance-batch').value=current; const sf=$('student-batch-filter');const sv=sf.value;sf.innerHTML='<option value="__all__">All Batches</option>'+batches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');if(batches.includes(sv))sf.value=sv; if(!$('attendance-date').value)$('attendance-date').value=new Date().toISOString().slice(0,10); await renderAttendance(); }
-    async function renderAttendance(){if(!selectedBranchId||!$('attendance-batch').value)return;const date=$('attendance-date').value||new Date().toISOString().slice(0,10),batch=$('attendance-batch').value,q=$('attendance-search').value||'';const res=await authFetch(`/api/attendance/students?branch_id=${selectedBranchId}&batch=${encodeURIComponent(batch)}&date=${encodeURIComponent(date)}&q=${encodeURIComponent(q)}`);attendanceCache=res.ok?await res.json():[];$('attendance-list').innerHTML=attendanceCache.length?`<div class="divide-y divide-gray-900">${attendanceCache.map(s=>`<div class="flex items-center justify-between px-5 py-4"><div><div class="text-sm font-medium text-white">${esc(s.name)}</div><div class="text-[10px] text-gray-600 uppercase tracking-widest">Roll ${esc(s.roll_number||'—')} · ${esc(s.batch)}</div></div><div class="flex items-center gap-2"><button onclick="markAttendance(${s.id},'Present')" class="attendance-action text-xs px-3 py-2 rounded border ${s.attendance_status==='Present'?'border-emerald-700 text-emerald-400 bg-emerald-950/20':'border-gray-800 text-gray-500'}">Present</button><button onclick="markAttendance(${s.id},'Absent')" class="attendance-action text-xs px-3 py-2 rounded border ${s.attendance_status==='Absent'?'border-red-800 text-red-400 bg-red-950/20':'border-gray-800 text-gray-500'}">Absent</button></div></div>`).join('')}</div>`:'<div class="p-8 text-center text-gray-600 text-sm">No students found in this batch.</div>'; }
-    async function markAttendance(student_id,status){const res=await authFetch('/api/attendance/mark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:Number(selectedBranchId),student_id,batch:$('attendance-batch').value,date:$('attendance-date').value,status})});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Could not save attendance');return;}await renderAttendance();}
-    async function submitStudent(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),name:$('s-name').value.trim(),batch:$('s-batch').value.trim(),roll_number:$('s-roll').value.trim(),parent_contact:$('s-pcontact').value.trim()};const res=await authFetch('/api/students',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save student');return;}toggleModal('student-modal');e.target.reset();await loadWorkspaceData();}
-    async function submitTeacher(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),name:$('t-name').value.trim(),subject:$('t-subject').value.trim(),contact_number:$('t-contact').value.trim()};const res=await authFetch('/api/teachers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save teacher');return;}toggleModal('teacher-modal');e.target.reset();await loadWorkspaceData();}
-    async function submitSyllabus(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),subject:$('sys-subject').value.trim(),topic:$('sys-topic').value.trim(),teacher_name:$('sys-teacher').value.trim(),number_of_lectures:Number($('sys-lectures').value),date:$('sys-date').value};const res=await authFetch('/api/syllabus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save syllabus');return;}toggleModal('syllabus-modal');e.target.reset();await loadWorkspaceData();}
-    function openAcademicImport(module){academicImportModule=module;$('academic-import-title').textContent=`Import ${module==='students'?'Students':module==='teachers'?'Teachers':'Syllabus'} PDF`;$('academic-import-fields').textContent={students:'Required fields: Name, Batch, Roll Number, Parent\'s Contact Number.',teachers:'Required fields: Name, Subject, Contact Number.',syllabus:'Required fields: Subject, Topic, Teacher\'s Name, Number of Lectures, Date.'}[module];$('academic-import-error').textContent='';$('academic-import-file').value='';toggleModal('academic-import-modal');}
-    async function submitAcademicImport(){const file=$('academic-import-file').files[0];if(!file){$('academic-import-error').textContent='Choose a PDF first.';return;}const fd=new FormData();fd.append('module',academicImportModule);fd.append('branch_id',selectedBranchId);fd.append('file',file);const res=await authFetch('/api/academic/import-pdf',{method:'POST',body:fd});const d=await res.json().catch(()=>({}));if(!res.ok){$('academic-import-error').textContent=d.detail||'Import failed.';return;}toggleModal('academic-import-modal');alert(`Imported ${d.inserted} record(s).`);await loadWorkspaceData();}
-    async function submitBranch(e){e.preventDefault();const res=await authFetch('/api/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('b-name').value.trim()})});if(res.ok){toggleModal('branch-modal');$('b-name').value='';await loadBranches();}else alert((await res.json()).detail||'Could not create branch');}
-    async function submitClassroom(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),room_name:$('c-name').value,capacity:Number($('c-capacity').value),rows:Number($('c-rows').value),columns:Number($('c-cols').value),document_url:null};const res=await authFetch('/api/classrooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('classroom-modal');e.target.reset();await loadWorkspaceData();}else alert('Failed to save classroom');}
-    async function submitInvigilator(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),full_name:$('i-name').value,contact_number:$('i-contact').value};const res=await authFetch('/api/invigilators',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('invigilator-modal');e.target.reset();await loadWorkspaceData();}else alert((await res.json()).detail||'Failed to save invigilator');}
-    async function submitFee(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),student_id:Number($('fee-student-select').value),amount_due:Number($('f-amount').value),due_date:$('f-date').value};const res=await authFetch('/api/fees',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('fee-modal');e.target.reset();await loadWorkspaceData();}else alert((await res.json()).detail||'Failed to save fee');}
-    function exportPDF(title,headers){const rows=[];document.querySelectorAll('section:not(.hidden) tbody tr').forEach(tr=>rows.push([...tr.children].map(td=>td.innerText.trim())));const w=window.open('','_blank');if(!w)return;w.document.write(`<html><head><title>${esc(title)}</title><style>body{font-family:Arial;padding:32px}h1{font-size:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px}</style></head><body><h1>${esc(title)}</h1><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table><script>window.print();</script></body></html>`);w.document.close();}
-    if(token)initApp();
-  </script>
+                        <!-- SCHEDULE PANEL -->
+                        <div class="xl:col-span-2 space-y-4">
+                            <div class="glass-panel border gold-border p-6 rounded-2xl">
+                                <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+                                    <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Saved Timetables</h3>
+                                </div>
+                                <div id="ttBatchChips" class="flex flex-wrap gap-2 mb-4"></div>
+                                <div id="ttBatchActions" class="flex flex-wrap gap-2 mb-5"></div>
+                                <div id="ttGrid" class="overflow-x-auto"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            renderTimingRows();
+            renderTtBatchChips();
+            renderTtGrid();
+        }
+
+        function renderTimingRows() {
+            const box = document.getElementById('ttTimingRows');
+            if (!box) return;
+            box.innerHTML = ttTimingsDraft.map((t, i) => `
+                <div class="flex items-center space-x-2">
+                    <span class="shrink-0 text-[10px] font-extrabold uppercase tracking-wider gold-gradient-text bg-[#141414] border gold-border rounded-lg px-2.5 py-2">Lecture ${i + 1}</span>
+                    <input type="text" value="${esc(t.time)}" onchange="ttTimingsDraft[${i}].time = this.value" placeholder="09:00 AM - 10:00 AM" class="flex-1 bg-[#0c0c0c] border gold-border rounded-lg p-2 text-xs text-gray-200 gold-border-glow focus:outline-none">
+                    <button onclick="removeTimingRow(${i})" title="Remove this lecture slot" class="row-delete-btn text-sm fast-transition">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function addTimingRow() { ttTimingsDraft.push({ time: '' }); renderTimingRows(); }
+        function removeTimingRow(i) { ttTimingsDraft.splice(i, 1); renderTimingRows(); }
+
+        function collectTeachersConfig() {
+            const configs = [];
+            document.querySelectorAll('#teacherConfigList > div[data-idx]').forEach(el => {
+                const idx = el.getAttribute('data-idx');
+                if (!document.getElementById(`inc_${idx}`)?.checked) return;
+                const unavailable_days = [...el.querySelectorAll('.day-chip.on')].map(c => c.getAttribute('data-day'));
+                configs.push({
+                    name: el.getAttribute('data-teacher'),
+                    subject: el.getAttribute('data-subject'),
+                    lectures_per_week: document.getElementById(`lec_${idx}`).value || 1,
+                    unavailable_days,
+                });
+            });
+            return configs;
+        }
+
+        function showTtResult(result) {
+            const box = document.getElementById('ttWarnings');
+            if (!box) return;
+            if (result.warnings && result.warnings.length) {
+                box.innerHTML = `<div class="mt-2 p-3 rounded-xl bg-[#191106] border border-yellow-900/50 space-y-1">
+                    <div class="text-[10px] font-extrabold uppercase tracking-widest text-yellow-500">Heads up</div>
+                    ${result.warnings.map(warning => `<p class="text-xs text-yellow-200/80">${esc(warning)}</p>`).join('')}
+                </div>`;
+            } else {
+                box.innerHTML = `<div class="mt-2 p-3 rounded-xl bg-[#0d1409] border border-green-900/50 text-xs text-green-400 font-semibold">Timetable generated successfully — every prerequisite satisfied.</div>`;
+            }
+        }
+
+        async function generateTimetableSchedule() {
+            const batchName = (document.getElementById('ttBatchName').value || '').trim();
+            if (!batchName) { alert('Enter a batch name first.'); return; }
+            const timings = ttTimingsDraft
+                .map((t, i) => ({ lecture_number: i + 1, time: (t.time || '').trim() }))
+                .filter(t => t.time);
+            if (timings.length === 0) { alert('Add at least one lecture timing.'); return; }
+            const teachers_config = collectTeachersConfig();
+            if (teachers_config.length === 0) { alert('Tick at least one teacher to include.'); return; }
+
+            const res = await authFetch('/api/timetable/generate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: currentBranchId, batch_name: batchName, teachers_config, timings })
+            });
+            const result = await res.json().catch(() => ({}));
+            if (res.ok) {
+                ttSelectedBatch = batchName;
+                await refreshTtData();
+                showTtResult(result);
+            } else {
+                alert(result.detail || 'Failed to generate timetable.');
+            }
+        }
+
+        async function refreshTtData() {
+            const [bRes, sRes] = await Promise.all([
+                authFetch(`/api/timetable/batches/${currentBranchId}`),
+                authFetch(`/api/timetable/slots/${currentBranchId}`),
+            ]);
+            ttSavedBatches = await bRes.json();
+            ttAllSlots = await sRes.json();
+            if (!ttSelectedBatch || !ttSavedBatches.some(b => b.batch_name === ttSelectedBatch)) {
+                ttSelectedBatch = ttSavedBatches.length ? ttSavedBatches[0].batch_name : null;
+            }
+            renderTtBatchChips();
+            renderTtGrid();
+        }
+
+        function renderTtBatchChips() {
+            const chips = document.getElementById('ttBatchChips');
+            const actions = document.getElementById('ttBatchActions');
+            if (!chips) return;
+            if (ttSavedBatches.length === 0) {
+                chips.innerHTML = '<p class="text-xs text-gray-500">No timetable generated yet. Configure a batch on the left and click generate.</p>';
+                actions.innerHTML = '';
+                return;
+            }
+            chips.innerHTML = ttSavedBatches.map(b => {
+                const arg = JSON.stringify(b.batch_name).replace(/"/g, '&quot;');
+                return `<span class="batch-chip ${b.batch_name === ttSelectedBatch ? 'active' : ''}" onclick='selectTtBatch(${arg})'>${esc(b.batch_name)} <span class="opacity-60">(${b.slot_count})</span></span>`;
+            }).join('');
+
+            const w = canWrite();
+            const hasConfig = ttSavedBatches.find(b => b.batch_name === ttSelectedBatch)?.config;
+            actions.innerHTML = ttSelectedBatch && w ? `
+                <button onclick="regenerateSelectedBatch()" ${hasConfig ? '' : 'disabled title="No saved prerequisites for this batch - generate it once first"'} class="px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider gold-bg text-black hover:opacity-95 fast-transition ${hasConfig ? '' : 'opacity-40 cursor-not-allowed'}">↻ Regenerate This Timetable</button>
+                <button onclick="loadConfigIntoForm()" ${hasConfig ? '' : 'disabled'} class="px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider bg-[#141414] gold-gradient-text border gold-border hover:bg-[#1d1d1d] fast-transition ${hasConfig ? '' : 'opacity-40 cursor-not-allowed'}">✎ Edit Setup &amp; Re-Run</button>
+                <button onclick="deleteSelectedBatch()" class="px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider bg-[#1a0d0d] text-red-400 border border-red-900/40 hover:bg-[#2a1212] fast-transition">🗑 Delete Timetable</button>
+            ` : '';
+        }
+
+        function selectTtBatch(name) {
+            ttSelectedBatch = name;
+            renderTtBatchChips();
+            renderTtGrid();
+        }
+
+        function renderTtGrid() {
+            const grid = document.getElementById('ttGrid');
+            if (!grid) return;
+            const slots = ttAllSlots.filter(s => s.batch_name === ttSelectedBatch);
+            if (!ttSelectedBatch || slots.length === 0) {
+                grid.innerHTML = ttSelectedBatch
+                    ? '<p class="text-xs text-gray-500 py-6 text-center">This timetable is empty. Regenerate it or edit its setup.</p>'
+                    : '';
+                return;
+            }
+
+            // Build lecture rows: union of (lecture_number, time_slot), ordered.
+            const lectureMap = new Map();
+            slots.forEach(s => {
+                const key = s.lecture_number ?? s.time_slot;
+                if (!lectureMap.has(key)) lectureMap.set(key, { lecture_number: s.lecture_number, time_slot: s.time_slot });
+            });
+            const lectures = [...lectureMap.values()].sort((a, b) => (a.lecture_number ?? 99) - (b.lecture_number ?? 99));
+            const w = canWrite();
+
+            grid.innerHTML = `
+                <table class="w-full text-left text-xs text-gray-300 border-collapse">
+                    <thead class="bg-[#121212] uppercase gold-gradient-text border-b gold-border">
+                        <tr>
+                            <th class="p-3 whitespace-nowrap">Lecture No.</th>
+                            <th class="p-3 whitespace-nowrap">Timing</th>
+                            ${TT_DAYS.map(d => `<th class="p-3">${d}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${lectures.map(l => `
+                            <tr class="border-b border-gray-900 align-top">
+                                <td class="p-3 font-black gold-gradient-text whitespace-nowrap">Lecture ${l.lecture_number ?? '—'}</td>
+                                <td class="p-3 text-gray-400 whitespace-nowrap">${esc(l.time_slot)}</td>
+                                ${TT_DAYS.map(day => {
+                                    const s = slots.find(x => x.day === day && (x.lecture_number ?? x.time_slot) === (l.lecture_number ?? l.time_slot));
+                                    if (!s) return '<td class="p-2"><div class="tt-cell rounded-lg border border-dashed border-gray-800"></div></td>';
+                                    return `<td class="p-2">
+                                        <div class="tt-cell rounded-lg bg-[#12100a] border gold-border p-2.5 relative">
+                                            <div class="font-bold text-gray-100 leading-tight">${esc(s.subject)}</div>
+                                            <div class="text-[10px] text-gray-400 mt-0.5">${esc(s.teacher)}</div>
+                                            <div class="text-[10px] text-gray-500">${esc(s.room)}</div>
+                                            ${w ? `<button onclick="openSlotModal(${s.id})" title="Edit this lecture" class="tt-edit absolute top-1.5 right-1.5 text-[11px] text-gray-500 hover:text-yellow-500 fast-transition">✎</button>` : ''}
+                                        </div>
+                                    </td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        async function regenerateSelectedBatch() {
+            if (!ttSelectedBatch) return;
+            if (!confirm(`Erase and regenerate the timetable for "${ttSelectedBatch}"?\nThe saved prerequisites (unavailable days, lectures per week, timings) will be honored exactly.`)) return;
+            const res = await authFetch('/api/timetable/regenerate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: currentBranchId, batch_name: ttSelectedBatch })
+            });
+            const result = await res.json().catch(() => ({}));
+            if (res.ok) { await refreshTtData(); showTtResult(result); }
+            else alert(result.detail || 'Failed to regenerate timetable.');
+        }
+
+        function loadConfigIntoForm() {
+            const b = ttSavedBatches.find(x => x.batch_name === ttSelectedBatch);
+            if (!b || !b.config) return;
+            document.getElementById('ttBatchName').value = b.batch_name;
+            ttTimingsDraft = (b.config.timings || []).map(t => ({ time: t.time || t.time_slot || String(t) }));
+            if (ttTimingsDraft.length === 0) ttTimingsDraft = [{ time: '' }];
+            renderTimingRows();
+
+            const cfgByName = {};
+            (b.config.teachers_config || []).forEach(c => { cfgByName[c.name] = c; });
+            document.querySelectorAll('#teacherConfigList > div[data-idx]').forEach(el => {
+                const idx = el.getAttribute('data-idx');
+                const name = el.getAttribute('data-teacher');
+                const cfg = cfgByName[name];
+                document.getElementById(`inc_${idx}`).checked = !!cfg;
+                if (cfg) {
+                    document.getElementById(`lec_${idx}`).value = cfg.lectures_per_week;
+                    el.querySelectorAll('.day-chip').forEach(chip => {
+                        chip.classList.toggle('on', (cfg.unavailable_days || []).includes(chip.getAttribute('data-day')));
+                    });
+                } else {
+                    el.querySelectorAll('.day-chip').forEach(chip => chip.classList.remove('on'));
+                }
+            });
+            document.getElementById('ttBatchName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        async function deleteSelectedBatch() {
+            if (!ttSelectedBatch) return;
+            if (!confirm(`Delete the entire timetable (and saved setup) for "${ttSelectedBatch}"?`)) return;
+            const res = await authFetch(`/api/timetable/batch/${currentBranchId}?batch_name=${encodeURIComponent(ttSelectedBatch)}`, { method: 'DELETE' });
+            if (res.ok) { ttSelectedBatch = null; await refreshTtData(); }
+            else alert('Failed to delete timetable.');
+        }
+
+        // ---- Slot editing ----
+
+        let editingSlotId = null;
+
+        function openSlotModal(slotId) {
+            const s = ttAllSlots.find(x => x.id === slotId);
+            if (!s) return;
+            editingSlotId = slotId;
+            document.getElementById('slotDay').value = s.day;
+            document.getElementById('slotSubject').value = s.subject || '';
+            document.getElementById('slotTeacher').value = s.teacher || '';
+            document.getElementById('slotRoom').value = s.room || '';
+            document.getElementById('slotModalError').textContent = '';
+
+            // Lecture options come from this batch's saved timings (or observed slots)
+            const b = ttSavedBatches.find(x => x.batch_name === s.batch_name);
+            let options = [];
+            if (b && b.config && b.config.timings) {
+                options = b.config.timings.map(t => ({ n: t.lecture_number, time: t.time }));
+            } else {
+                const seen = new Map();
+                ttAllSlots.filter(x => x.batch_name === s.batch_name).forEach(x => seen.set(x.lecture_number, x.time_slot));
+                options = [...seen.entries()].map(([n, time]) => ({ n, time })).sort((a, b2) => (a.n ?? 99) - (b2.n ?? 99));
+            }
+            document.getElementById('slotLecture').innerHTML = options.map(o =>
+                `<option value="${o.n}|${esc(o.time)}" ${o.n === s.lecture_number ? 'selected' : ''}>Lecture ${o.n} — ${esc(o.time)}</option>`).join('');
+
+            document.getElementById('slotTeacherList').innerHTML = ttTeachers.map(t => `<option value="${esc(t.name)}">`).join('');
+            document.getElementById('slotRoomList').innerHTML = ttClassrooms.map(c => `<option value="${esc(c.room_no)}">`).join('');
+            openModal('slotModal');
+        }
+
+        async function submitSlotEdit() {
+            if (!editingSlotId) return;
+            const errorEl = document.getElementById('slotModalError');
+            errorEl.textContent = '';
+            const [lectureNum, ...timeParts] = document.getElementById('slotLecture').value.split('|');
+            const res = await authFetch(`/api/timetable/slots/${editingSlotId}`, {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    day: document.getElementById('slotDay').value,
+                    lecture_number: parseInt(lectureNum),
+                    time_slot: timeParts.join('|'),
+                    subject: document.getElementById('slotSubject').value,
+                    teacher: document.getElementById('slotTeacher').value,
+                    room: document.getElementById('slotRoom').value,
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) { closeModal('slotModal'); await refreshTtData(); }
+            else { errorEl.textContent = data.detail || 'Failed to update slot.'; }
+        }
+
+        async function deleteSlotFromModal() {
+            if (!editingSlotId) return;
+            if (!confirm('Remove this lecture from the timetable?')) return;
+            const res = await authFetch(`/api/timetable/slots/${editingSlotId}`, { method: 'DELETE' });
+            if (res.ok) { closeModal('slotModal'); await refreshTtData(); }
+            else alert('Failed to remove lecture.');
+        }
+
+        // ---- Timetable export ----
+
+        function exportTimetable(format) {
+            const slots = ttAllSlots.filter(s => s.batch_name === ttSelectedBatch);
+            if (!ttSelectedBatch || slots.length === 0) { alert('Select a batch with a generated timetable first.'); return; }
+            const lectureMap = new Map();
+            slots.forEach(s => {
+                const key = s.lecture_number ?? s.time_slot;
+                if (!lectureMap.has(key)) lectureMap.set(key, { lecture_number: s.lecture_number, time_slot: s.time_slot });
+            });
+            const lectures = [...lectureMap.values()].sort((a, b) => (a.lecture_number ?? 99) - (b.lecture_number ?? 99));
+            const headers = ['Lecture No.', 'Timing', ...TT_DAYS];
+            const rows = lectures.map(l => [
+                `Lecture ${l.lecture_number ?? '-'}`,
+                l.time_slot,
+                ...TT_DAYS.map(day => {
+                    const s = slots.find(x => x.day === day && (x.lecture_number ?? x.time_slot) === (l.lecture_number ?? l.time_slot));
+                    return s ? `${s.subject}\n${s.teacher}\n${s.room}` : '';
+                })
+            ]);
+            const fname = `timetable_${ttSelectedBatch.replace(/\s+/g, '_')}`;
+            if (format === 'xlsx') exportXLSX(fname, 'Timetable', headers, rows);
+            else exportPDF(fname, `Weekly Timetable — ${ttSelectedBatch}`, headers, rows);
+        }
+    </script>
 </body>
 </html>
