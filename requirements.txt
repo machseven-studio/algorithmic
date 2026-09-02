@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-pydantic
-email-validator
-psycopg[binary]
-openpyxl
-reportlab
