@@ -3,8 +3,13 @@
 <script>
 let token=localStorage.getItem('algorithmic_token')||'';
 let me=null;
-async function api(path,opts={}){const headers={...(opts.headers||{})};if(token)headers.Authorization='Bearer '+token;const r=await fetch(path,{...opts,headers});if(r.status===401){localStorage.removeItem('algorithmic_token');token='';location.reload();}return r.json()}
-async function boot(){const d=await api('/api/me');if(d&&d.detail){document.getElementById('app').innerHTML='<div class="min-h-screen grid place-items-center p-5"><div class="card p-8 max-w-md text-center"><div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">ALGORITHMIC</div><div class="text-sm text-zinc-400 mt-4">Authentication is temporarily disabled.</div></div></div>';return}me=d;/* existing application boot continues here */}
-if(token)boot();else{document.getElementById('app').innerHTML='<div class="min-h-screen grid place-items-center p-5"><div class="card p-8 max-w-md text-center"><div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">ALGORITHMIC</div><div class="text-sm text-zinc-400 mt-4">Authentication is temporarily disabled.</div></div></div>';}
+async function boot(){
+  const x=await fetch('/api/me',{headers:{Authorization:'Bearer '+token}});
+  if(!x.ok){localStorage.removeItem('algorithmic_token');token='';return;}
+  me=await x.json();
+  // Authentication is disabled for now. The existing authenticated application is intentionally not exposed until login is restored.
+  document.getElementById('app').innerHTML='<div class="min-h-screen grid place-items-center p-5"><div class="card p-8 max-w-md text-center"><div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">ALGORITHMIC</div><div class="text-sm text-zinc-400 mt-4">Authentication is temporarily disabled.</div></div></div>';
+}
+if(token)boot();else document.getElementById('app').innerHTML='<div class="min-h-screen grid place-items-center p-5"><div class="card p-8 max-w-md text-center"><div class="text-4xl font-extrabold tracking-tight text-[#c3a25b]">ALGORITHMIC</div><div class="text-sm text-zinc-400 mt-4">Authentication is temporarily disabled.</div></div></div>';
 </script>
 </body></html>
