@@ -25,6 +25,10 @@ if not DATABASE_URL:
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+INITIAL_SETUP_CODE = os.getenv("INITIAL_SETUP_CODE", "")
+if not INITIAL_SETUP_CODE:
+    raise RuntimeError("INITIAL_SETUP_CODE is required. Configure it in Render/local environment.")
+
 VALID_MODULES = ["students", "teachers", "classrooms", "syllabus", "timetable", "attendance", "invigilation", "fees", "seating"]
 
 
@@ -114,7 +118,12 @@ def branch_ok(branch_id, institute_id):
         raise HTTPException(404, "Branch not found")
 
 
-class Signup(BaseModel):
+class SetupCode(BaseModel):
+    code: str
+
+
+class InitialSetup(BaseModel):
+    code: str
     institute_name: str
     full_name: str
     email: EmailStr
@@ -178,29 +187,55 @@ class TimetableEdit(BaseModel):
     room: str | None = None
 
 
-@app.post("/api/auth/signup")
-def signup(x: Signup):
+@app.post("/api/auth/verify-setup-code")
+def verify_setup_code(x: SetupCode):
+    code = x.code.strip()
+    if not secrets.compare_digest(code, INITIAL_SETUP_CODE):
+        raise HTTPException(403, "Invalid initial setup code")
+    return {"ok": True}
+
+
+@app.post("/api/auth/setup")
+def initial_setup(x: InitialSetup):
+    if not secrets.compare_digest(x.code.strip(), INITIAL_SETUP_CODE):
+        raise HTTPException(403, "Invalid initial setup code")
+
     if len(x.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
+
+    institute_name = x.institute_name.strip()
+    full_name = x.full_name.strip()
+    email = str(x.email).strip().lower()
+
+    if not institute_name:
+        raise HTTPException(400, "Institute name is required")
+    if not full_name:
+        raise HTTPException(400, "Full name is required")
+
     salt = secrets.token_hex(16)
     try:
         with db() as c:
-            r = c.execute("INSERT INTO institutes(institute_name,full_name,email,password_hash,password_salt) VALUES(%s,%s,%s,%s,%s) RETURNING id", (x.institute_name, x.full_name, x.email.lower(), hash_pw(x.password, salt), salt)).fetchone()
+            r = c.execute(
+                "INSERT INTO institutes(institute_name,full_name,email,password_hash,password_salt) VALUES(%s,%s,%s,%s,%s) RETURNING id",
+                (institute_name, full_name, email, hash_pw(x.password, salt), salt)
+            ).fetchone()
             iid = r["id"]
             c.execute("INSERT INTO branches(institute_id,name) VALUES(%s,'Main Campus')", (iid,))
             c.commit()
     except Exception:
         raise HTTPException(400, "An account with this email already exists")
-    return {"token": session_token(iid), "institute_name": x.institute_name, "full_name": x.full_name, "is_owner": True, "designation": "boss"}
+
+    return {"token": session_token(iid), "institute_name": institute_name, "full_name": full_name, "is_owner": True, "designation": "boss"}
 
 
 @app.post("/api/auth/login")
 def login(x: Login):
     bad = HTTPException(401, "Invalid email or password")
-    u = q("SELECT * FROM institutes WHERE email=%s", (x.email.lower(),), one=True)
+    email = str(x.email).strip().lower()
+    u = q("SELECT * FROM institutes WHERE email=%s", (email,), one=True)
     if u and secrets.compare_digest(hash_pw(x.password, u["password_salt"]), u["password_hash"]):
         return {"token": session_token(u["id"]), "institute_name": u["institute_name"], "full_name": u["full_name"] or "", "is_owner": True, "designation": "boss"}
-    s = q("SELECT * FROM staff_users WHERE email=%s", (x.email.lower(),), one=True)
+    s = q("SELECT * FROM staff_users WHERE email=%s", (email,), one=True)
     if s and secrets.compare_digest(hash_pw(x.password, s["password_salt"]), s["password_hash"]):
         i = q("SELECT institute_name FROM institutes WHERE id=%s", (s["institute_id"],), one=True)
         return {"token": session_token(s["institute_id"], s["id"]), "institute_name": i["institute_name"], "full_name": s["full_name"], "is_owner": False, "designation": s["designation"], "permissions": s["permissions"] or {}}
