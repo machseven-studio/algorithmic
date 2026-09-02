@@ -1,517 +1,254 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Algorithmic - Institutional Operations Platform</title>
-  
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALGORITHMIC — Institutional Operations</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #050505;
-      color: #d1d5db;
-    }
-    .cormorant { font-family: 'Cormorant Garamond', serif; }
-    .welcome-font { font-family: 'DM Serif Display', 'Cormorant Garamond', serif; letter-spacing: .02em; }
-    .welcome-gold { background: linear-gradient(115deg,#8a641c 0%,#d4af37 24%,#f1df91 46%,#a8781d 67%,#d9b84f 84%,#7d5918 100%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow: 0 0 22px rgba(191,149,63,.12); }
-    .welcome-line { animation: welcomeRise .9s cubic-bezier(.16,1,.3,1) both; }
-    @keyframes welcomeRise { from{opacity:0;transform:translateY(18px) scale(.985);filter:blur(5px)} to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)} }
-    .batch-chip { cursor:pointer; transition:all .2s ease; }
-    .batch-chip.active { border-color:rgba(191,149,63,.8); background:#151109; color:#d4af37; }
-    .attendance-action { min-width:78px; }
-
-
-    /* Metallic Gold Textured Gradient */
-    .gold-textured-text {
-      background: linear-gradient(135deg, #bf953f 0%, #fcf6ba 25%, #b38728 50%, #fbf5b7 75%, #aa771c 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    
-    .gold-border { border-color: rgba(191, 149, 63, 0.35); }
-    .gold-bg { 
-      background: linear-gradient(135deg, #bf953f 0%, #d4af37 50%, #aa771c 100%);
-      color: #000;
-    }
-    .gold-bg:hover { filter: brightness(1.15); }
-
-    /* Shiny Silver Link Accent */
-    .silver-link {
-      background: linear-gradient(135deg, #e0e0e0 0%, #ffffff 50%, #999999 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      transition: all 0.3s ease;
-    }
-    .silver-link:hover { opacity: 0.8; }
-
-    /* Literal Matt-Black Surfaces */
-    .matt-black-bg {
-      background-color: #080808;
-      box-shadow: inset 0 0 100px rgba(0,0,0,0.95);
-    }
-    .matt-card {
-      background: #0d0d0d;
-      border: 1px solid #1a1a1a;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
-    }
-
-    .animate-gpu {
-      will-change: transform, opacity;
-      animation: mountIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-
-    @keyframes mountIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    :root { --gold:#d4af37; --gold-soft:#f1df91; --ink:#070707; --panel:#101010; --line:rgba(212,175,55,.2); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:#f3f4f6; background:#050505; font-family:'Plus Jakarta Sans',system-ui,sans-serif; }
+    body:before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.35; background-image:radial-gradient(rgba(212,175,55,.09) 1px,transparent 1px); background-size:36px 36px; mask-image:linear-gradient(to bottom,black,transparent 85%); }
+    h1,h2,h3,p { margin:0; }
+    button,input,select,textarea { font:inherit; }
+    button { cursor:pointer; }
+    .display-font,.brand-name,.welcome-heading { font-family:Arial Black,'Plus Jakarta Sans',sans-serif; font-weight:900; text-transform:uppercase; letter-spacing:-.04em; }
+    .gold-text { background:linear-gradient(120deg,#8b681d,#f5e6a2 35%,#c69d30 60%,#fff1a7); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .panel { background:linear-gradient(145deg,rgba(25,21,12,.8),rgba(11,11,11,.96)); border:1px solid var(--line); border-radius:18px; box-shadow:0 18px 45px rgba(0,0,0,.32); }
+    .soft-panel { background:#0d0d0d; border:1px solid #1c1c1c; border-radius:14px; }
+    .field { width:100%; background:#080808; border:1px solid #2b2b2b; color:#f3f4f6; border-radius:10px; padding:.68rem .8rem; outline:none; font-size:.82rem; }
+    .field:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(212,175,55,.1); }
+    .label { display:block; color:#9ca3af; font-size:.68rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; margin-bottom:.35rem; }
+    .primary { background:linear-gradient(135deg,#f0d77b,#a87517); color:#0a0a0a; font-weight:800; border-radius:10px; padding:.7rem 1rem; transition:filter .15s,transform .15s; }
+    .primary:hover { filter:brightness(1.13); } .primary:active { transform:scale(.98); }
+    .secondary { background:#171717; border:1px solid #323232; color:#d1d5db; border-radius:10px; padding:.65rem .9rem; font-weight:700; font-size:.74rem; }
+    .secondary:hover { border-color:#8f762e; color:#fff; }
+    .danger { color:#fca5a5; border-color:rgba(248,113,113,.3); }
+    .sidebar-link { width:100%; color:#9ca3af; background:transparent; border:0; border-left:3px solid transparent; border-radius:0 9px 9px 0; text-align:left; padding:.7rem .85rem; font-size:.76rem; font-weight:700; transition:all .15s; }
+    .sidebar-link:hover,.sidebar-link.active { color:#f5e6a2; border-left-color:var(--gold); background:rgba(212,175,55,.1); }
+    .stat-value { color:#f4e5a1; font-size:1.8rem; font-weight:800; line-height:1; }
+    .table-wrap { overflow:auto; border:1px solid #1e1e1e; border-radius:14px; }
+    table { width:100%; min-width:660px; border-collapse:collapse; }
+    th { color:#c8a943; background:#080808; font-size:.63rem; font-weight:800; text-transform:uppercase; letter-spacing:.1em; text-align:left; padding:.85rem 1rem; white-space:nowrap; }
+    td { border-top:1px solid #1c1c1c; color:#cbd5e1; padding:.86rem 1rem; font-size:.75rem; vertical-align:middle; }
+    tr:hover td { background:rgba(212,175,55,.035); }
+    .badge { display:inline-flex; align-items:center; border:1px solid #3b3b3b; border-radius:999px; padding:.2rem .5rem; color:#d1d5db; font-size:.62rem; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+    .badge-gold { color:#f1df91; border-color:rgba(212,175,55,.45); background:rgba(212,175,55,.08); }
+    .badge-green { color:#86efac; border-color:rgba(74,222,128,.35); background:rgba(22,101,52,.16); }
+    .badge-red { color:#fca5a5; border-color:rgba(248,113,113,.35); background:rgba(127,29,29,.16); }
+    .bar-track { height:7px; background:#222; border-radius:99px; overflow:hidden; }
+    .bar-fill { height:100%; background:linear-gradient(90deg,#98731f,#efd77b); border-radius:inherit; }
+    .modal-backdrop { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:1rem; background:rgba(0,0,0,.86); }
+    .modal-card { width:min(100%,620px); max-height:92vh; overflow:auto; padding:1.35rem; }
+    .hidden { display:none !important; }
+    .app-visible { display:flex !important; }
+    .toast { position:fixed; right:1.25rem; bottom:1.25rem; z-index:80; background:#171717; border:1px solid var(--gold); color:#f5e6a2; border-radius:10px; padding:.8rem 1rem; font-size:.75rem; box-shadow:0 10px 30px #000; }
+    .timing-row,.teacher-row { display:grid; gap:.5rem; align-items:end; grid-template-columns:72px 1fr 1fr 34px; }
+    .teacher-row { grid-template-columns:1.1fr 1.1fr 100px 170px 34px; }
+    @media(max-width:900px) { .teacher-row { grid-template-columns:1fr 1fr; } .teacher-row .remove-row { grid-column:auto; } .timing-row { grid-template-columns:65px 1fr 1fr 34px; } }
+    @media(max-width:760px) { #app.app-visible { display:block !important; } aside { width:100% !important; min-height:auto !important; position:relative !important; } main { padding:1rem !important; } .sidebar-nav { display:grid; grid-template-columns:repeat(2,1fr); gap:.2rem; } .sidebar-link { border-left:0; border-bottom:2px solid transparent; border-radius:7px; } .sidebar-link.active { border-left:0; border-bottom-color:var(--gold); } .brand-name { font-size:1.35rem; } }
   </style>
 </head>
-<body class="min-h-screen flex flex-col antialiased matt-black-bg selection:bg-amber-500 selection:text-black">
-
-  <!-- TOP ALERTS -->
-  <div id="urgent-fee-banner" class="hidden bg-red-950/80 border-b border-red-800 text-red-200 px-4 py-2 text-xs text-center font-medium tracking-wide animate-gpu">
-    ⚠️ ALERT: Fee Defaulters identified with due dates under 3 days! Check Fee Department.
-  </div>
-
-  <!-- INITIAL LOGIN MODAL -->
-  <div id="login-modal" class="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 animate-gpu">
-    <div class="matt-card p-10 rounded-xl w-full max-w-md gold-border border space-y-6">
-      <div class="text-center space-y-2">
-        <h1 class="text-5xl font-semibold cormorant gold-textured-text tracking-wide">Algorithmic</h1>
-        <p class="text-xs tracking-widest text-gray-400">INSTITUTIONAL OPERATIONS SYSTEM</p>
+<body>
+  <!-- Authentication -->
+  <div id="authOverlay" class="modal-backdrop">
+    <div class="panel modal-card" style="max-width:440px">
+      <div class="text-center space-y-2 mb-8">
+        <div class="text-2xl gold-text">✦</div>
+        <h1 class="brand-name gold-text text-3xl">ALGORITHMIC</h1>
+        <p class="text-[10px] tracking-[.25em] text-gray-500 uppercase">Institutional Operations Platform</p>
       </div>
-
-      <form onsubmit="handleLogin(event)" class="space-y-4">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Email Address</label>
-          <input id="login-email" type="email" required placeholder="admin@institute.edu" class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600 text-xs" />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Password</label>
-          <input id="login-pass" type="password" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600 text-xs" />
-        </div>
-        <button type="submit" class="w-full gold-bg font-semibold py-3 rounded-md text-xs tracking-wider uppercase transition active:scale-95 shadow-md">
-          Enter Platform
-        </button>
+      <form id="loginForm" class="space-y-4">
+        <div><label class="label">Email address</label><input id="loginEmail" class="field" type="email" required placeholder="boss@institute.edu"></div>
+        <div><label class="label">Password</label><input id="loginPassword" class="field" type="password" required placeholder="••••••••"></div>
+        <p id="loginError" class="text-xs text-red-400 min-h-4"></p>
+        <button class="primary w-full uppercase tracking-widest text-xs" type="submit">Enter platform</button>
+        <p class="text-center text-xs text-gray-500">New institute? <button type="button" id="showSignup" class="text-amber-400 hover:underline">Create an account</button></p>
+      </form>
+      <form id="signupForm" class="space-y-4 hidden">
+        <div><label class="label">Institute name</label><input id="signupInstitute" class="field" required placeholder="Your Institute"></div>
+        <div><label class="label">Boss name</label><input id="signupName" class="field" required placeholder="Full name"></div>
+        <div><label class="label">Boss email</label><input id="signupEmail" class="field" type="email" required placeholder="boss@institute.edu"></div>
+        <div><label class="label">Password <span class="normal-case tracking-normal font-normal">(minimum 8 characters)</span></label><input id="signupPassword" class="field" type="password" minlength="8" required></div>
+        <p id="signupError" class="text-xs text-red-400 min-h-4"></p>
+        <button class="primary w-full uppercase tracking-widest text-xs" type="submit">Create institute</button>
+        <p class="text-center text-xs text-gray-500">Already registered? <button type="button" id="showLogin" class="text-amber-400 hover:underline">Log in</button></p>
       </form>
     </div>
   </div>
 
-  <!-- MAIN TWO-PANEL LAYOUT -->
-  <div id="app-container" class="hidden min-h-screen flex flex-1">
-
-    <!-- LEFT PANEL: NAVIGATION SIDEBAR -->
-    <aside class="w-64 bg-black border-r border-gray-900 flex flex-col justify-between p-6 z-20 shrink-0">
-      <div class="space-y-6">
-        
-        <!-- Header & Dynamic Institute Display -->
-        <div class="space-y-3 border-b border-gray-900 pb-4">
-          <h1 class="text-3xl font-semibold cormorant gold-textured-text tracking-wider">Algorithmic</h1>
-          <div class="bg-zinc-950 border border-zinc-900 p-2.5 rounded-md">
-            <p class="text-[9px] uppercase tracking-widest text-amber-500 font-semibold">Institute</p>
-            <p id="display-institute-name" class="text-xs font-semibold text-white truncate"></p>
-          </div>
-        </div>
-
-        <!-- Order-Specific Module Navigation -->
-        <nav class="space-y-1">
-          <button onclick="switchTab('mod-home')" id="nav-mod-home" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-300 gold-bg transition">Homepage</button>
-          <button onclick="switchTab('mod-students')" id="nav-mod-students" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Student Department</button>
-          <button onclick="switchTab('mod-teachers')" id="nav-mod-teachers" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Teacher Department</button>
-          <button onclick="switchTab('mod-classrooms')" id="nav-mod-classrooms" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Classroom Database</button>
-          <button onclick="switchTab('mod-syllabus')" id="nav-mod-syllabus" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Syllabus Department</button>
-          <button onclick="switchTab('mod-timetable')" id="nav-mod-timetable" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Timetable</button>
-          <button onclick="switchTab('mod-attendance')" id="nav-mod-attendance" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Attendance Report</button>
-          
-          <div class="pt-2 pb-1 text-[9px] uppercase tracking-widest text-gray-600 px-3">Examination</div>
-          <button onclick="switchTab('mod-seating')" id="nav-mod-seating" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Exam Seating Layout</button>
-          <button onclick="switchTab('mod-invigilators')" id="nav-mod-invigilators" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Invigilator Exam Duty</button>
-          <button onclick="switchTab('mod-fees')" id="nav-mod-fees" class="nav-btn w-full text-left px-3 py-2.5 rounded-md text-xs font-normal text-gray-400 hover:text-white transition">Fee Department</button>
-        </nav>
+  <div id="app" class="hidden min-h-screen">
+    <aside class="w-64 shrink-0 min-h-screen bg-[#080808] border-r border-[#1d1d1d] p-5 flex flex-col gap-7 sticky top-0 h-screen overflow-y-auto">
+      <div class="space-y-3">
+        <h1 id="sideInstitute" class="brand-name gold-text text-2xl truncate" title="Rename institute">ALGORITHMIC</h1>
+        <div class="soft-panel p-3"><p class="label text-[9px] text-amber-500">Active branch</p><div class="flex gap-2"><select id="branchSelector" class="field !py-1.5 !text-xs"></select><button id="addBranch" class="secondary !p-1.5" title="Add branch">+</button><button id="renameBranch" class="secondary !p-1.5" title="Rename branch">✎</button></div></div>
       </div>
-
-      <!-- User Information & Branch Controls -->
-      <div class="space-y-4 border-t border-gray-900 pt-4">
-        <div>
-          <div class="flex items-center justify-between mb-1">
-            <label class="text-[9px] uppercase text-gray-500 tracking-widest block">Branch Switcher</label>
-            <button onclick="toggleModal('branch-modal')" class="text-[10px] text-amber-500 hover:underline">+ New Branch</button>
-          </div>
-          <select id="branch-select" onchange="switchBranch()" class="w-full bg-zinc-950 border border-zinc-800 text-xs font-normal text-white rounded-md px-2.5 py-1.5 focus:outline-none">
-          </select>
-        </div>
-
-        <div class="flex items-center justify-between pt-1">
-          <div>
-            <p id="display-user-name" class="text-xs font-medium text-white"></p>
-            <p class="text-[9px] text-gray-500 uppercase">Active Session</p>
-          </div>
-          <button onclick="logout()" class="text-xs text-red-400 hover:underline">Exit</button>
-        </div>
+      <nav id="sidebarNav" class="sidebar-nav space-y-1 flex-1">
+        <button class="sidebar-link active" data-module="dashboard">▦ &nbsp; Dashboard</button>
+        <button class="sidebar-link" data-module="students">♙ &nbsp; Students</button>
+        <button class="sidebar-link" data-module="teachers">♟ &nbsp; Teachers</button>
+        <button class="sidebar-link" data-module="classrooms">▤ &nbsp; Classrooms</button>
+        <button class="sidebar-link" data-module="syllabus">▧ &nbsp; Syllabus</button>
+        <button class="sidebar-link" data-module="timetable">◫ &nbsp; Timetable</button>
+        <button class="sidebar-link" data-module="attendance">◌ &nbsp; Attendance</button>
+        <button class="sidebar-link" data-module="seating">▦ &nbsp; Exam seating</button>
+        <button class="sidebar-link" data-module="invigilation">◎ &nbsp; Invigilation</button>
+        <button class="sidebar-link" data-module="fees">₹ &nbsp; Fees</button>
+        <div id="usersNavWrap" class="pt-4 border-t border-[#222] mt-4"><button class="sidebar-link" data-module="users">⚙ &nbsp; Manage users</button></div>
+      </nav>
+      <div class="border-t border-[#222] pt-4 space-y-3">
+        <div><p id="sideUser" class="text-xs text-white font-bold truncate"></p><p id="sideDesignation" class="text-[10px] uppercase tracking-widest text-gray-600"></p></div>
+        <button id="logoutButton" class="text-xs text-red-400 hover:underline">Sign out</button>
       </div>
     </aside>
 
-    <!-- RIGHT PANEL: WORKSPACE SECTION CONTROLLER -->
-    <main class="flex-1 p-8 overflow-y-auto relative flex flex-col justify-between">
-      <div>
-
-        <!-- HOMEPAGE -->
-        <section id="mod-home" class="tab-content animate-gpu space-y-8">
-          <div class="pt-8 space-y-3 welcome-line">
-            <p class="text-[10px] uppercase tracking-[.38em] text-gray-600">ALGORITHMIC / INSTITUTIONAL OPERATIONS</p>
-            <h2 id="welcome-user" class="welcome-font welcome-gold text-6xl md:text-7xl leading-none">Welcome</h2>
-            <p class="text-sm text-gray-500">Your workspace is ready.</p>
-          </div>
-          <div class="matt-card p-8 rounded-lg max-w-2xl gold-border border">
-            <p class="text-xs tracking-widest text-amber-500/80 uppercase font-light">Powered by Metasys®</p>
-            <div class="pt-5 mt-5 border-t border-gray-900 text-xs text-gray-500 space-y-1 font-light">
-              <p class="text-amber-500 uppercase tracking-widest text-[10px]">Support & Operational Enquiries</p>
-              <p>📧 machseven.studio@gmail.com</p>
-              <p>📧 samdave2131@gmail.com</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- STUDENT DEPARTMENT -->
-        <section id="mod-students" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4">
-            <div><h2 class="text-3xl font-semibold cormorant text-amber-600">Student Department</h2><p class="text-xs text-gray-400 font-light">Students grouped by batch, alphabetically.</p></div>
-            <div class="flex gap-2"><button onclick="openAcademicImport('students')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('student-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Student</button></div>
-          </div>
-          <div class="flex gap-3 flex-col md:flex-row"><input type="text" id="search-students" oninput="renderStudents()" placeholder="Search student names..." class="flex-1 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" /><select id="student-batch-filter" onchange="renderStudents()" class="md:w-64 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600"></select></div>
-          <div id="student-batch-groups" class="space-y-5"></div>
-        </section>
-
-        <!-- TEACHER DEPARTMENT -->
-        <section id="mod-teachers" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Teacher Department</h2><p class="text-xs text-gray-400 font-light">Faculty records kept intentionally lean.</p></div><div class="flex gap-2"><button onclick="openAcademicImport('teachers')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('teacher-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Teacher</button></div></div>
-          <input type="text" id="search-teachers" oninput="filterTable('search-teachers','teacher-tbody')" placeholder="Search teacher names..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900"><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Subject</th><th class="px-4 py-3">Contact Number</th></tr></thead><tbody id="teacher-tbody" class="divide-y divide-gray-900"></tbody></table></div>
-        </section>
-
-        <!-- CLASSROOM DATABASE -->
-        <section id="mod-classrooms" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Classroom Database</h2>
-              <p class="text-xs text-gray-400 font-light">Infrastructure specifications and seating dimensions.</p>
-            </div>
-            <button onclick="toggleModal('classroom-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Classroom</button>
-          </div>
-
-          <input type="text" id="search-classrooms" onkeyup="filterTable('search-classrooms', 'classroom-tbody')" placeholder="Search classrooms..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Room Name</th>
-                  <th class="px-4 py-3">Capacity</th>
-                  <th class="px-4 py-3">Dimensions (R x C)</th>
-                  <th class="px-4 py-3">Document</th>
-                </tr>
-              </thead>
-              <tbody id="classroom-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- SYLLABUS DEPARTMENT -->
-        <section id="mod-syllabus" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between gap-4"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Syllabus Department</h2><p class="text-xs text-gray-400 font-light">Only the five operational fields are retained.</p></div><div class="flex gap-2"><button onclick="openAcademicImport('syllabus')" class="bg-zinc-900 border border-zinc-800 text-xs px-4 py-2 rounded-md text-gray-300">Import PDF</button><button onclick="toggleModal('syllabus-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Syllabus Entry</button></div></div>
-          <input type="text" id="search-syllabus" oninput="filterTable('search-syllabus','syllabus-tbody')" placeholder="Search subject, topic or teacher..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900"><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase"><tr><th class="px-4 py-3">Subject</th><th class="px-4 py-3">Topic</th><th class="px-4 py-3">Teacher's Name</th><th class="px-4 py-3">Number of Lectures</th><th class="px-4 py-3">Date</th></tr></thead><tbody id="syllabus-tbody" class="divide-y divide-gray-900"></tbody></table></div>
-        </section>
-
-        <!-- TIMETABLE -->
-        <section id="mod-timetable" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Timetable</h2>
-              <p class="text-xs text-gray-400 font-light">Teacher availability & subject batch timetable solver.</p>
-            </div>
-            <button onclick="exportPDF('Academic Timetable', ['Time Slot', 'Batch', 'Subject', 'Teacher'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-          </div>
-          <div class="matt-card p-6 rounded-md text-xs text-gray-400 border border-gray-900 font-light">
-            Tailored timetable solver evaluates teacher availability and batch schedules to eliminate overlaps.
-          </div>
-        </section>
-
-        <!-- ATTENDANCE -->
-        <section id="mod-attendance" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between"><div><h2 class="text-3xl font-semibold cormorant text-amber-600">Attendance</h2><p class="text-xs text-gray-400 font-light">Select one batch at a time and mark each student present or absent.</p></div><input id="attendance-date" type="date" onchange="renderAttendance()" class="bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white" /></div>
-          <div class="flex gap-3 flex-col md:flex-row"><select id="attendance-batch" onchange="renderAttendance()" class="md:w-64 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white"></select><input id="attendance-search" oninput="renderAttendance()" type="text" placeholder="Search student names..." class="flex-1 bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white" /></div>
-          <div id="attendance-list" class="matt-card rounded-md overflow-hidden border border-gray-900"></div>
-        </section>
-
-        <!-- EXAM SEATING LAYOUT -->
-        <section id="mod-seating" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Exam Seating Layout</h2>
-              <p class="text-xs text-gray-400 font-light">Adjacent-conflict free examination matrices.</p>
-            </div>
-            <button onclick="exportPDF('Seating Matrix', ['Desk ID', 'Student', 'Roll Number', 'Room'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-          </div>
-          <div class="matt-card p-6 rounded-md text-xs text-gray-400 border border-gray-900 font-light">
-            Seating layout configured automatically from Student & Classroom databases. Ready for export.
-          </div>
-        </section>
-
-        <!-- INVIGILATOR EXAM DUTY -->
-        <section id="mod-invigilators" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Invigilator Exam Duty</h2>
-              <p class="text-xs text-gray-400 font-light">Automatic clerk-to-classroom room supervision allocations.</p>
-            </div>
-            <div class="space-x-2">
-              <button onclick="autoAllocateInvig()" class="bg-zinc-800 text-white text-xs font-medium px-3 py-2 rounded-md">Auto-Allocate Rooms</button>
-              <button onclick="toggleModal('invigilator-modal')" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">+ Add Invigilator</button>
-              <button onclick="exportPDF('Invigilator Duty Roster', ['Clerk Name', 'Contact', 'Assigned Room'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-            </div>
-          </div>
-
-          <input type="text" id="search-invigilators" onkeyup="filterTable('search-invigilators', 'invigilator-tbody')" placeholder="Search invigilators..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Clerk Name</th>
-                  <th class="px-4 py-3">Contact</th>
-                  <th class="px-4 py-3">Assigned Room</th>
-                  <th class="px-4 py-3">Document</th>
-                </tr>
-              </thead>
-              <tbody id="invigilator-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- FEE DEPARTMENT -->
-        <section id="mod-fees" class="tab-content hidden animate-gpu space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <h2 class="text-3xl font-semibold cormorant text-white">Fee Department</h2>
-              <p class="text-xs text-gray-400 font-light">Pending dues tracking, attached records, and automated reminders.</p>
-            </div>
-            <div class="space-x-2">
-              <button onclick="toggleModal('fee-modal')" class="bg-red-900/80 hover:bg-red-800 text-white text-xs font-medium px-4 py-2 rounded-md">+ Record Fee</button>
-              <button onclick="exportPDF('Fee Defaulters List', ['Student', 'Roll Number', 'Amount Due', 'Due Date'])" class="gold-bg text-xs font-medium px-4 py-2 rounded-md">Export PDF</button>
-            </div>
-          </div>
-
-          <input type="text" id="search-fees" onkeyup="filterTable('search-fees', 'fee-tbody')" placeholder="Search fee defaulters..." class="w-full bg-zinc-950 border border-zinc-800 text-xs rounded-md px-3 py-2 text-white focus:outline-none focus:border-amber-600" />
-
-          <div class="matt-card rounded-md overflow-hidden border border-gray-900">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-black text-amber-500 text-[10px] tracking-wider uppercase">
-                <tr>
-                  <th class="px-4 py-3">Student</th>
-                  <th class="px-4 py-3">Roll No</th>
-                  <th class="px-4 py-3">Amount Due</th>
-                  <th class="px-4 py-3">Due Date</th>
-                  <th class="px-4 py-3">Status / Reminders</th>
-                  <th class="px-4 py-3">Document</th>
-                </tr>
-              </thead>
-              <tbody id="fee-tbody" class="divide-y divide-gray-900">
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-      </div>
-
-      <!-- BOTTOM RIGHT BRANDING -->
-      <div class="pt-8 flex justify-end">
-        <div class="text-right text-[11px] font-light leading-tight">
-          <p class="text-gray-400">created by <em class="silver-link italic">Samarth Dave</em></p>
-          <p class="text-gray-500">founder of <a href="https://machsevenstudios-website.onrender.com/" target="_blank" rel="noopener noreferrer" class="silver-link font-normal hover:underline">MachSevenStudios</a></p>
-        </div>
+    <main class="flex-1 min-w-0 p-5 md:p-9">
+      <div class="max-w-[1500px] mx-auto">
+        <header class="flex flex-wrap gap-4 justify-between items-end mb-8">
+          <div><p class="text-[10px] uppercase tracking-[.3em] text-gray-600">ALGORITHMIC / COMMAND CENTER</p><h2 id="pageTitle" class="display-font gold-text text-3xl mt-2">DASHBOARD</h2></div>
+          <div class="flex items-center gap-2"><span id="permissionBadge" class="badge badge-gold"></span><button id="renameInstitute" class="secondary">Edit institute name</button></div>
+        </header>
+        <section id="content"></section>
       </div>
     </main>
   </div>
 
-  <!-- MODALS -->
+  <!-- Reusable record editor -->
+  <div id="recordModal" class="modal-backdrop hidden"><div class="panel modal-card"><div class="flex justify-between items-start gap-4 mb-5"><div><p class="label text-amber-500">Record editor</p><h3 id="recordModalTitle" class="display-font text-xl"></h3></div><button class="secondary close-modal">Close</button></div><form id="recordForm" class="space-y-4"><div id="recordFields" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div><div class="flex justify-end gap-2 pt-2"><button type="button" class="secondary close-modal">Cancel</button><button class="primary text-xs uppercase tracking-widest" type="submit">Save changes</button></div></form></div></div>
 
-  <!-- Create Branch Modal -->
-  <div id="branch-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-sm border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Add New Branch</h3>
-      <form onsubmit="submitBranch(event)" class="space-y-3">
-        <input id="b-name" type="text" placeholder="Branch Name (e.g. North Campus)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('branch-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Create</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <!-- Timetable generation editor -->
+  <div id="timetableModal" class="modal-backdrop hidden"><div class="panel modal-card" style="max-width:900px"><div class="flex justify-between items-start gap-4 mb-4"><div><p class="label text-amber-500">Constraint-safe generator</p><h3 class="display-font text-xl">GENERATE / REGENERATE TIMETABLE</h3><p class="text-xs text-gray-500 mt-1">A regeneration atomically replaces only this batch. Impossible schedules are rejected without changing the current one.</p></div><button class="secondary close-modal">Close</button></div><form id="timetableForm" class="space-y-5"><div class="grid md:grid-cols-2 gap-3"><div><label class="label">Existing timetable</label><select id="ttExistingBatch" class="field"><option value="">New batch timetable…</option></select></div><div><label class="label">Batch</label><input id="ttBatch" class="field" required placeholder="e.g. BCA Year 2"></div></div><div><label class="label">Available days <span class="normal-case tracking-normal font-normal">(uncheck institute holidays)</span></label><div id="dayChecks" class="flex flex-wrap gap-2"></div></div><div><div class="flex items-center justify-between mb-2"><label class="label !mb-0">Lecture timings and lecture number</label><button id="addTiming" type="button" class="secondary">+ Add timing</button></div><div id="timingRows" class="space-y-2"></div></div><div><div class="flex items-center justify-between mb-2"><label class="label !mb-0">Subjects, teachers and lectures per week</label><button id="addTeacher" type="button" class="secondary">+ Add subject</button></div><div id="teacherRows" class="space-y-2"></div><p class="text-[10px] text-gray-600 mt-2">Set unavailable days per teacher. The solver honours every weekly lecture count and will never silently schedule fewer.</p></div><p id="timetableError" class="text-xs text-red-400 min-h-4"></p><div class="flex justify-end gap-2"><button type="button" class="secondary close-modal">Cancel</button><button id="generateButton" class="primary text-xs uppercase tracking-widest" type="submit">Generate timetable</button></div></form></div></div>
 
-  <!-- Student Modal -->
-  <div id="student-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Enroll Student</h3><form onsubmit="submitStudent(event)" class="space-y-3"><input id="s-name" type="text" placeholder="Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-batch" type="text" placeholder="Batch" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-roll" type="text" placeholder="Roll Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="s-pcontact" type="tel" placeholder="Parent's Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('student-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Student</button></div></form></div></div>
+  <!-- Timetable slot editor -->
+  <div id="slotModal" class="modal-backdrop hidden"><div class="panel modal-card" style="max-width:500px"><div class="flex justify-between mb-5"><h3 class="display-font text-xl">EDIT LECTURE</h3><button class="secondary close-modal">Close</button></div><form id="slotForm" class="space-y-3"><input id="slotId" type="hidden"><div><label class="label">Day</label><select id="slotDay" class="field"></select></div><div class="grid grid-cols-2 gap-3"><div><label class="label">Lecture number</label><input id="slotNumber" class="field" type="number" min="1" required></div><div><label class="label">Room</label><input id="slotRoom" class="field"></div><div><label class="label">Start time</label><input id="slotStart" class="field" type="time" required></div><div><label class="label">End time</label><input id="slotEnd" class="field" type="time" required></div></div><div><label class="label">Subject</label><input id="slotSubject" class="field" required></div><div><label class="label">Teacher</label><input id="slotTeacher" class="field" required></div><p id="slotError" class="text-xs text-red-400 min-h-4"></p><div class="flex justify-end gap-2"><button type="button" class="secondary close-modal">Cancel</button><button class="primary text-xs uppercase tracking-widest">Save lecture</button></div></form></div></div>
 
-  <!-- Teacher Modal -->
-  <div id="teacher-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Add Teacher</h3><form onsubmit="submitTeacher(event)" class="space-y-3"><input id="t-name" type="text" placeholder="Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="t-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="t-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('teacher-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Teacher</button></div></form></div></div>
+  <!-- Attendance history -->
+  <div id="historyModal" class="modal-backdrop hidden"><div class="panel modal-card" style="max-width:700px"><div class="flex justify-between items-start mb-5"><div><p class="label text-amber-500">Student report</p><h3 id="historyTitle" class="display-font text-xl">ATTENDANCE HISTORY</h3></div><button class="secondary close-modal">Close</button></div><div id="historyBody"></div></div></div>
 
-  <!-- Syllabus Modal -->
-  <div id="syllabus-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4"><h3 class="text-lg font-semibold cormorant text-amber-600">Add Syllabus Entry</h3><form onsubmit="submitSyllabus(event)" class="space-y-3"><input id="sys-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-topic" type="text" placeholder="Topic" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-teacher" type="text" placeholder="Teacher's Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-lectures" type="number" min="1" placeholder="Number of Lectures" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><input id="sys-date" type="date" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" /><div class="flex justify-end gap-2 pt-2"><button type="button" onclick="toggleModal('syllabus-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Syllabus</button></div></form></div></div>
+  <!-- User editor -->
+  <div id="userModal" class="modal-backdrop hidden"><div class="panel modal-card" style="max-width:760px"><div class="flex justify-between items-start mb-5"><div><p class="label text-amber-500">Boss-only access control</p><h3 id="userModalTitle" class="display-font text-xl">ADD USER</h3></div><button class="secondary close-modal">Close</button></div><form id="userForm" class="space-y-4"><input id="userId" type="hidden"><div class="grid md:grid-cols-2 gap-3"><div><label class="label">Full name</label><input id="userName" class="field" required></div><div><label class="label">Email</label><input id="userEmail" class="field" type="email" required></div><div><label class="label">Designation <span class="text-red-400">*</span></label><select id="userDesignation" class="field" required><option value="">Choose a designation</option></select></div><div><label class="label">Password <span id="passwordHint" class="normal-case tracking-normal font-normal">(minimum 8 characters)</span></label><input id="userPassword" class="field" type="password" minlength="8"></div></div><div><div class="flex items-center justify-between mb-2"><div><label class="label !mb-0">Module privileges</label><p class="text-[10px] text-gray-600">Grant read and/or edit access. Untick both to revoke access.</p></div><button id="applyPreset" type="button" class="secondary">Apply designation preset</button></div><div id="permissionsGrid" class="grid sm:grid-cols-2 gap-2"></div></div><p id="userError" class="text-xs text-red-400 min-h-4"></p><div class="flex justify-end gap-2"><button type="button" class="secondary close-modal">Cancel</button><button class="primary text-xs uppercase tracking-widest">Save user</button></div></form></div></div>
+  <div id="toast" class="toast hidden"></div>
 
-  <!-- Academic PDF Import Modal -->
-  <div id="academic-import-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50"><div class="matt-card p-6 rounded-lg w-full max-w-lg border gold-border space-y-4"><h3 id="academic-import-title" class="text-lg font-semibold cormorant text-amber-600">Import PDF</h3><p id="academic-import-fields" class="text-xs text-gray-400"></p><input id="academic-import-file" type="file" accept=".pdf" class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-xs text-gray-400" /><p id="academic-import-error" class="text-xs text-red-400"></p><div class="flex justify-end gap-2"><button type="button" onclick="toggleModal('academic-import-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button><button type="button" onclick="submitAcademicImport()" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Import</button></div></div></div>
+<script>
+  const MODULES = ['dashboard','students','teachers','classrooms','syllabus','timetable','attendance','seating','invigilation','fees'];
+  const RECORD_MODULES = ['students','teachers','classrooms','syllabus','invigilation','fees'];
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const MODULE_LABELS = {dashboard:'Dashboard',students:'Students',teachers:'Teachers',classrooms:'Classrooms',syllabus:'Syllabus',timetable:'Timetable',attendance:'Attendance',seating:'Exam Seating',invigilation:'Invigilation',fees:'Fees'};
+  const META = {
+    students:{title:'STUDENTS', fields:[['name','Name','text',true],['email','Email','email',false],['batch','Batch','text',true],['status','Status','text',false],['roll_number','Roll number','text',false],['parent_contact','Parent contact','text',false]]},
+    teachers:{title:'TEACHERS', fields:[['name','Name','text',true],['subject','Subject','text',false],['department','Department','text',false],['contact_number','Contact number','text',false]]},
+    classrooms:{title:'CLASSROOMS', fields:[['room_no','Room number','text',true],['capacity','Capacity','number',false],['building','Building / dimensions','text',false]]},
+    syllabus:{title:'SYLLABUS', fields:[['subject','Subject','text',true],['semester','Semester','text',false],['units','Units','number',false],['topic','Topic','text',false],['teacher_name','Teacher','text',false],['num_lectures','Number of lectures','number',false],['lecture_date','Date','date',false],['timing','Lecture timing','text',false]]},
+    invigilation:{title:'INVIGILATION', fields:[['teacher_name','Invigilator / teacher','text',true],['contact_number','Contact number','text',false],['exam_date','Exam date','date',false],['room','Assigned room','text',false]]},
+    fees:{title:'FEES', fields:[['student_name','Student name','text',true],['student_id','Student ID','number',false],['amount_inr','Amount (INR)','number',true],['status','Status','text',true],['due_date','Due date','date',false]]}
+  };
+  let token = localStorage.getItem('algorithmic_token');
+  let identity = {full_name:'',institute_name:'',is_owner:false,designation:'',permission:'read_only',permissions:{}};
+  let branches = [], currentBranchId = null, currentModule = 'dashboard', permissionPresets = {}, timetableBusy = false;
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pretty = value => String(value ?? '—').replaceAll('_',' ');
+  const canRead = module => identity.is_owner || !!(identity.permissions?.[module]?.read || identity.permissions?.[module]?.write);
+  const canWrite = module => identity.is_owner || !!identity.permissions?.[module]?.write;
+  const jsonHeaders = {'Content-Type':'application/json'};
 
-  <!-- Classroom Modal -->
-  <div id="classroom-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Register Classroom</h3>
-      <form onsubmit="submitClassroom(event)" class="space-y-3">
-        <input id="c-name" type="text" placeholder="Room Name / Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="c-capacity" type="number" placeholder="Total Capacity" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="c-rows" type="number" placeholder="Rows" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="c-cols" type="number" placeholder="Columns" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Blueprint/Doc (Optional)</label>
-          <input id="c-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('classroom-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Room</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  async function api(url, options={}) {
+    options.headers = {...(options.headers || {}), Authorization:`Bearer ${token}`};
+    const response = await fetch(url, options);
+    if (response.status === 401) { signOut(false); throw new Error('Session expired'); }
+    return response;
+  }
+  function notify(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(() => $('toast').classList.add('hidden'), 3000); }
+  function openModal(id) { $(id).classList.remove('hidden'); }
+  function closeModal(id) { $(id).classList.add('hidden'); }
+  document.querySelectorAll('.close-modal').forEach(button => button.addEventListener('click', () => button.closest('.modal-backdrop').classList.add('hidden')));
 
-  <!-- Syllabus Modal -->
-  <div id="syllabus-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Add Syllabus Entry</h3>
-      <form onsubmit="submitSyllabus(event)" class="space-y-3">
-        <input id="sys-subject" type="text" placeholder="Subject" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="sys-teacher" type="text" placeholder="Faculty Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="sys-date" type="date" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="sys-time" type="text" placeholder="Lecture Timings (e.g. 10:00-11:30 AM)" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <textarea id="sys-topics" placeholder="Topics Covered (Manual entry)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs h-20"></textarea>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Material/Doc (Optional)</label>
-          <input id="sys-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('syllabus-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Syllabus</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  function applyIdentity(data) {
+    identity = {...identity, ...data};
+    $('sideInstitute').textContent = identity.institute_name || 'ALGORITHMIC';
+    $('sideUser').textContent = identity.full_name || 'User';
+    $('sideDesignation').textContent = identity.is_owner ? 'BOSS · FULL ACCESS' : `${identity.designation || 'staff'} · ${identity.permission}`;
+    $('permissionBadge').textContent = identity.is_owner ? 'BOSS / FULL ACCESS' : `${identity.designation || 'STAFF'} / ${identity.permission}`;
+    $('usersNavWrap').classList.toggle('hidden', !identity.is_owner);
+    document.querySelectorAll('[data-module]').forEach(button => { if (button.dataset.module !== 'users') button.classList.toggle('hidden', !canRead(button.dataset.module)); });
+  }
+  function showAuth(showSignup=false) { $('authOverlay').classList.remove('hidden'); $('app').classList.add('hidden'); $('loginForm').classList.toggle('hidden', showSignup); $('signupForm').classList.toggle('hidden', !showSignup); }
+  function showApp() { $('authOverlay').classList.add('hidden'); $('app').classList.remove('hidden'); $('app').classList.add('app-visible'); }
+  function hideApp() { $('app').classList.add('hidden'); $('app').classList.remove('app-visible'); }
+  function signOut(callApi=true) { if (callApi && token) api('/api/auth/logout',{method:'POST'}).catch(()=>{}); localStorage.removeItem('algorithmic_token'); token=null; hideApp(); showAuth(false); }
 
-  <!-- Attendance Modal -->
-  <div id="attendance-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Record Absence</h3>
-      <form onsubmit="submitAttendance(event)" class="space-y-3">
-        <input id="att-name" type="text" placeholder="Absentee Full Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div class="grid grid-cols-2 gap-3">
-          <input id="att-date" type="date" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-          <input id="att-lecture" type="text" placeholder="Lecture / Subject" required class="bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        </div>
-        <textarea id="att-reason" placeholder="Reason for Absence" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs h-20"></textarea>
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Excuse Note/Doc (Optional)</label>
-          <input id="att-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('attendance-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Log Absence</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  $('showSignup').onclick = () => showAuth(true); $('showLogin').onclick = () => showAuth(false); $('logoutButton').onclick = () => signOut(true);
+  $('loginForm').onsubmit = async event => { event.preventDefault(); $('loginError').textContent=''; try { const res=await fetch('/api/auth/login',{method:'POST',headers:jsonHeaders,body:JSON.stringify({email:$('loginEmail').value,password:$('loginPassword').value})}); const data=await res.json(); if(!res.ok) throw new Error(data.detail||'Login failed'); token=data.token; localStorage.setItem('algorithmic_token',token); applyIdentity(data); showApp(); await initApp(); } catch(error) { $('loginError').textContent=error.message; } };
+  $('signupForm').onsubmit = async event => { event.preventDefault(); $('signupError').textContent=''; try { const res=await fetch('/api/auth/signup',{method:'POST',headers:jsonHeaders,body:JSON.stringify({institute_name:$('signupInstitute').value,full_name:$('signupName').value,email:$('signupEmail').value,password:$('signupPassword').value})}); const data=await res.json(); if(!res.ok) throw new Error(data.detail||'Could not create account'); token=data.token; localStorage.setItem('algorithmic_token',token); applyIdentity(data); showApp(); await initApp(); } catch(error) { $('signupError').textContent=error.message; } };
 
-  <!-- Invigilator Modal -->
-  <div id="invigilator-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Register Invigilator Clerk</h3>
-      <form onsubmit="submitInvigilator(event)" class="space-y-3">
-        <input id="i-name" type="text" placeholder="Clerk Full Name" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="i-contact" type="tel" placeholder="Contact Number" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Document (Optional)</label>
-          <input id="i-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('invigilator-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="gold-bg text-xs font-medium px-4 py-1.5 rounded-md">Save Invigilator</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  async function loadBranches() { const res=await api('/api/branches'); if(!res.ok) throw new Error('Could not load branches'); branches=await res.json(); const selector=$('branchSelector'); selector.innerHTML=branches.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join(''); if(!currentBranchId || !branches.some(b=>b.id===currentBranchId)) currentBranchId=branches[0]?.id || null; selector.value=currentBranchId || ''; }
+  $('branchSelector').onchange = () => { currentBranchId=Number($('branchSelector').value); renderCurrent(); };
+  $('addBranch').onclick = async () => { const name=prompt('New branch name','North Campus'); if(!name) return; const res=await api('/api/branches',{method:'POST',headers:jsonHeaders,body:JSON.stringify({name})}); if(!res.ok)return notify((await res.json()).detail||'Could not create branch'); const created=await res.json(); await loadBranches(); currentBranchId=created.id; $('branchSelector').value=currentBranchId; notify('Branch created'); renderCurrent(); };
+  $('renameBranch').onclick = async () => { const branch=branches.find(b=>b.id===currentBranchId); const name=prompt('New branch name',branch?.name||''); if(!name || name===branch?.name) return; const res=await api(`/api/branches/${currentBranchId}`,{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({name})}); if(!res.ok) return notify((await res.json()).detail||'Could not rename branch'); await loadBranches(); notify('Branch updated'); };
+  $('renameInstitute').onclick = async () => { const name=prompt('Institute name',identity.institute_name); if(!name || name===identity.institute_name) return; const res=await api('/api/institute/name',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({institute_name:name})}); if(!res.ok) return notify((await res.json()).detail||'Could not update institute'); identity.institute_name=name; applyIdentity(identity); notify('Institute name updated'); };
+  $('sideInstitute').onclick = () => $('renameInstitute').click();
+  document.querySelectorAll('[data-module]').forEach(button => button.addEventListener('click', () => { currentModule=button.dataset.module; renderCurrent(); }));
 
-  <!-- Fee Modal -->
-  <div id="fee-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
-    <div class="matt-card p-6 rounded-lg w-full max-w-md border gold-border space-y-4">
-      <h3 class="text-lg font-semibold cormorant text-white">Record Pending Fee</h3>
-      <form onsubmit="submitFee(event)" class="space-y-3">
-        <select id="fee-student-select" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs">
-        </select>
-        <input id="f-amount" type="number" step="0.01" placeholder="Amount Due ($)" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <input id="f-date" type="date" required class="w-full bg-black border border-gray-800 rounded-md px-3 py-2 text-white text-xs" />
-        <div>
-          <label class="block text-[10px] text-gray-400 mb-1">Attach Notice/Doc (Optional)</label>
-          <input id="f-doc" type="file" class="text-xs text-gray-400" />
-        </div>
-        <div class="flex justify-end space-x-2 pt-2">
-          <button type="button" onclick="toggleModal('fee-modal')" class="text-xs text-gray-400 px-3 py-1.5">Cancel</button>
-          <button type="submit" class="bg-red-900/80 text-xs font-medium px-4 py-1.5 rounded-md text-white">Save Record</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  async function initApp() { await loadBranches(); if (!currentBranchId) return; applyIdentity(identity); renderCurrent(); }
+  async function renderCurrent() {
+    if (currentModule !== 'users' && currentModule !== 'dashboard' && !canRead(currentModule)) { currentModule='dashboard'; }
+    document.querySelectorAll('[data-module]').forEach(button=>button.classList.toggle('active',button.dataset.module===currentModule));
+    $('pageTitle').textContent = MODULE_LABELS[currentModule].toUpperCase();
+    if (currentModule==='dashboard') return renderDashboard();
+    if (currentModule==='attendance') return renderAttendance();
+    if (currentModule==='timetable') return renderTimetable();
+    if (currentModule==='users') return renderUsers();
+    if (currentModule==='seating') return renderSeating();
+    return renderRecords(currentModule);
+  }
 
-  <script>
-    let token=localStorage.getItem('algo_token'), user=localStorage.getItem('algo_user'), institute=localStorage.getItem('algo_inst');
-    let selectedBranchId=null, studentsCache=[], attendanceCache=[], academicImportModule=null;
-    const $=id=>document.getElementById(id);
-    function authHeaders(json=false){ const h={Authorization:`Bearer ${token}`}; if(json) h['Content-Type']='application/json'; return h; }
-    async function authFetch(url,opts={}){ opts.headers={...authHeaders(),...(opts.headers||{})}; return fetch(url,opts); }
-    async function handleLogin(e){ e.preventDefault(); const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('login-email').value,password:$('login-pass').value})}); const data=await res.json(); if(!res.ok){alert(data.detail||'Login failed');return;} token=data.token; user=data.full_name; institute=data.institute_name; localStorage.setItem('algo_token',token);localStorage.setItem('algo_user',user);localStorage.setItem('algo_inst',institute);initApp(); }
-    function logout(){ authFetch('/api/auth/logout',{method:'POST'}).catch(()=>{}); localStorage.clear(); token=user=institute=null; $('login-modal').classList.remove('hidden');$('app-container').classList.add('hidden'); }
-    async function initApp(){ if(!token)return; $('login-modal').classList.add('hidden');$('app-container').classList.remove('hidden'); $('display-institute-name').innerText=institute||''; $('display-user-name').innerText=user||''; $('welcome-user').textContent=`Welcome, ${user||'there'}`; await loadBranches(); }
-    async function loadBranches(){ const res=await authFetch('/api/branches'); if(!res.ok)return; const branches=await res.json(); $('branch-select').innerHTML=branches.map(b=>`<option value="${b.id}">${b.name}</option>`).join(''); if(branches.length){selectedBranchId=branches[0].id; await loadWorkspaceData();} }
-    async function switchBranch(){selectedBranchId=Number($('branch-select').value);await loadWorkspaceData();}
-    function switchTab(tabId){document.querySelectorAll('.tab-content').forEach(e=>e.classList.add('hidden'));document.querySelectorAll('.nav-btn').forEach(e=>{e.classList.remove('gold-bg');e.classList.add('text-gray-400')});$(tabId).classList.remove('hidden');const n=$(`nav-${tabId}`);if(n){n.classList.add('gold-bg');n.classList.remove('text-gray-400')} if(tabId==='mod-attendance')renderAttendance();}
-    function toggleModal(id){$(id).classList.toggle('hidden');}
-    function filterTable(inputId,tbodyId){const q=$(inputId).value.toLowerCase();document.querySelectorAll(`#${tbodyId} tr`).forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none');}
-    function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-    async function loadWorkspaceData(){ if(!selectedBranchId)return; const [sr,tr,sy,cr]=await Promise.all([authFetch(`/api/students?branch_id=${selectedBranchId}`),authFetch(`/api/teachers?branch_id=${selectedBranchId}`),authFetch(`/api/syllabus?branch_id=${selectedBranchId}`),authFetch(`/api/classrooms?branch_id=${selectedBranchId}`)]); studentsCache=sr.ok?await sr.json():[]; const teachers=tr.ok?await tr.json():[]; const syllabus=sy.ok?await sy.json():[]; const classrooms=cr.ok?await cr.json():[]; renderStudents(); $('teacher-tbody').innerHTML=teachers.map(t=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(t.full_name)}</td><td class="px-4 py-3 text-amber-500">${esc(t.subject)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(t.contact_number)}</td></tr>`).join(''); $('syllabus-tbody').innerHTML=syllabus.map(x=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(x.subject)}</td><td class="px-4 py-3">${esc(x.topic)}</td><td class="px-4 py-3">${esc(x.teacher_name)}</td><td class="px-4 py-3 text-amber-500">${esc(x.number_of_lectures)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(x.lecture_date)}</td></tr>`).join(''); $('classroom-tbody').innerHTML=classrooms.map(x=>`<tr><td class="px-4 py-3 text-white">${esc(x.room_name)}</td><td class="px-4 py-3">${esc(x.capacity)}</td><td class="px-4 py-3 text-amber-500">${esc(x.building||'—')}</td><td class="px-4 py-3 text-gray-600">—</td></tr>`).join(''); await loadAttendanceBatches(); }
-    function renderStudents(){const q=($('search-students').value||'').toLowerCase();const filter=$('student-batch-filter').value||'__all__';const filtered=studentsCache.filter(s=>(filter==='__all__'||s.batch===filter)&&s.name.toLowerCase().includes(q));const groups={};filtered.forEach(s=>(groups[s.batch||'Unassigned']??=[]).push(s));const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));$('student-batch-groups').innerHTML=names.length?names.map(batch=>`<div class="matt-card rounded-md overflow-hidden border border-gray-900"><div class="px-4 py-3 border-b border-gray-900 text-amber-500 text-xs uppercase tracking-widest">${esc(batch)}</div><table class="w-full text-left text-xs text-gray-300"><thead class="bg-black text-gray-500 uppercase text-[10px]"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Batch</th><th class="px-4 py-3">Roll Number</th><th class="px-4 py-3">Parent's Contact Number</th></tr></thead><tbody class="divide-y divide-gray-900">${groups[batch].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'})).map(s=>`<tr><td class="px-4 py-3 font-medium text-white">${esc(s.name)}</td><td class="px-4 py-3">${esc(s.batch)}</td><td class="px-4 py-3 text-amber-500">${esc(s.roll_number)}</td><td class="px-4 py-3 font-mono text-[11px]">${esc(s.parent_contact)}</td></tr>`).join('')}</tbody></table></div>`).join(''):'<div class="p-8 text-center text-gray-600 text-sm">No students match this search.</div>'; }
-    async function loadAttendanceBatches(){const res=await authFetch(`/api/student-batches?branch_id=${selectedBranchId}`);const batches=res.ok?await res.json():[];const current=$('attendance-batch').value; $('attendance-batch').innerHTML=batches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join(''); if(current&&batches.includes(current))$('attendance-batch').value=current; const sf=$('student-batch-filter');const sv=sf.value;sf.innerHTML='<option value="__all__">All Batches</option>'+batches.map(b=>`<option value="${esc(b)}">${esc(b)}</option>`).join('');if(batches.includes(sv))sf.value=sv; if(!$('attendance-date').value)$('attendance-date').value=new Date().toISOString().slice(0,10); await renderAttendance(); }
-    async function renderAttendance(){if(!selectedBranchId||!$('attendance-batch').value)return;const date=$('attendance-date').value||new Date().toISOString().slice(0,10),batch=$('attendance-batch').value,q=$('attendance-search').value||'';const res=await authFetch(`/api/attendance/students?branch_id=${selectedBranchId}&batch=${encodeURIComponent(batch)}&date=${encodeURIComponent(date)}&q=${encodeURIComponent(q)}`);attendanceCache=res.ok?await res.json():[];$('attendance-list').innerHTML=attendanceCache.length?`<div class="divide-y divide-gray-900">${attendanceCache.map(s=>`<div class="flex items-center justify-between px-5 py-4"><div><div class="text-sm font-medium text-white">${esc(s.name)}</div><div class="text-[10px] text-gray-600 uppercase tracking-widest">Roll ${esc(s.roll_number||'—')} · ${esc(s.batch)}</div></div><div class="flex items-center gap-2"><button onclick="markAttendance(${s.id},'Present')" class="attendance-action text-xs px-3 py-2 rounded border ${s.attendance_status==='Present'?'border-emerald-700 text-emerald-400 bg-emerald-950/20':'border-gray-800 text-gray-500'}">Present</button><button onclick="markAttendance(${s.id},'Absent')" class="attendance-action text-xs px-3 py-2 rounded border ${s.attendance_status==='Absent'?'border-red-800 text-red-400 bg-red-950/20':'border-gray-800 text-gray-500'}">Absent</button></div></div>`).join('')}</div>`:'<div class="p-8 text-center text-gray-600 text-sm">No students found in this batch.</div>'; }
-    async function markAttendance(student_id,status){const res=await authFetch('/api/attendance/mark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:Number(selectedBranchId),student_id,batch:$('attendance-batch').value,date:$('attendance-date').value,status})});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Could not save attendance');return;}await renderAttendance();}
-    async function submitStudent(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),name:$('s-name').value.trim(),batch:$('s-batch').value.trim(),roll_number:$('s-roll').value.trim(),parent_contact:$('s-pcontact').value.trim()};const res=await authFetch('/api/students',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save student');return;}toggleModal('student-modal');e.target.reset();await loadWorkspaceData();}
-    async function submitTeacher(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),name:$('t-name').value.trim(),subject:$('t-subject').value.trim(),contact_number:$('t-contact').value.trim()};const res=await authFetch('/api/teachers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save teacher');return;}toggleModal('teacher-modal');e.target.reset();await loadWorkspaceData();}
-    async function submitSyllabus(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),subject:$('sys-subject').value.trim(),topic:$('sys-topic').value.trim(),teacher_name:$('sys-teacher').value.trim(),number_of_lectures:Number($('sys-lectures').value),date:$('sys-date').value};const res=await authFetch('/api/syllabus',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!res.ok){alert((await res.json()).detail||'Failed to save syllabus');return;}toggleModal('syllabus-modal');e.target.reset();await loadWorkspaceData();}
-    function openAcademicImport(module){academicImportModule=module;$('academic-import-title').textContent=`Import ${module==='students'?'Students':module==='teachers'?'Teachers':'Syllabus'} PDF`;$('academic-import-fields').textContent={students:'Required fields: Name, Batch, Roll Number, Parent\'s Contact Number.',teachers:'Required fields: Name, Subject, Contact Number.',syllabus:'Required fields: Subject, Topic, Teacher\'s Name, Number of Lectures, Date.'}[module];$('academic-import-error').textContent='';$('academic-import-file').value='';toggleModal('academic-import-modal');}
-    async function submitAcademicImport(){const file=$('academic-import-file').files[0];if(!file){$('academic-import-error').textContent='Choose a PDF first.';return;}const fd=new FormData();fd.append('module',academicImportModule);fd.append('branch_id',selectedBranchId);fd.append('file',file);const res=await authFetch('/api/academic/import-pdf',{method:'POST',body:fd});const d=await res.json().catch(()=>({}));if(!res.ok){$('academic-import-error').textContent=d.detail||'Import failed.';return;}toggleModal('academic-import-modal');alert(`Imported ${d.inserted} record(s).`);await loadWorkspaceData();}
-    async function submitBranch(e){e.preventDefault();const res=await authFetch('/api/branches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('b-name').value.trim()})});if(res.ok){toggleModal('branch-modal');$('b-name').value='';await loadBranches();}else alert((await res.json()).detail||'Could not create branch');}
-    async function submitClassroom(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),room_name:$('c-name').value,capacity:Number($('c-capacity').value),rows:Number($('c-rows').value),columns:Number($('c-cols').value),document_url:null};const res=await authFetch('/api/classrooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('classroom-modal');e.target.reset();await loadWorkspaceData();}else alert('Failed to save classroom');}
-    async function submitInvigilator(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),full_name:$('i-name').value,contact_number:$('i-contact').value};const res=await authFetch('/api/invigilators',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('invigilator-modal');e.target.reset();await loadWorkspaceData();}else alert((await res.json()).detail||'Failed to save invigilator');}
-    async function submitFee(e){e.preventDefault();const payload={branch_id:Number(selectedBranchId),student_id:Number($('fee-student-select').value),amount_due:Number($('f-amount').value),due_date:$('f-date').value};const res=await authFetch('/api/fees',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(res.ok){toggleModal('fee-modal');e.target.reset();await loadWorkspaceData();}else alert((await res.json()).detail||'Failed to save fee');}
-    function exportPDF(title,headers){const rows=[];document.querySelectorAll('section:not(.hidden) tbody tr').forEach(tr=>rows.push([...tr.children].map(td=>td.innerText.trim())));const w=window.open('','_blank');if(!w)return;w.document.write(`<html><head><title>${esc(title)}</title><style>body{font-family:Arial;padding:32px}h1{font-size:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:8px;text-align:left;font-size:12px}</style></head><body><h1>${esc(title)}</h1><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table><script>window.print();</script></body></html>`);w.document.close();}
-    if(token)initApp();
-  </script>
+  async function renderDashboard() {
+    $('content').innerHTML=`<div class="space-y-6"><div class="panel p-7 md:p-9"><p class="text-[10px] uppercase tracking-[.3em] text-gray-500">Executive overview</p><h1 class="welcome-heading gold-text text-4xl md:text-6xl mt-3">WELCOME, ${esc((identity.full_name||'THERE').toUpperCase())}</h1><p class="text-xs text-gray-500 mt-3">Live operational analytics for ${esc(identity.institute_name)} · <span id="dashboardViewedAt">updating…</span></p></div><div id="dashboardStats" class="grid grid-cols-2 xl:grid-cols-4 gap-3"></div><div class="grid xl:grid-cols-5 gap-5"><div class="panel p-5 xl:col-span-3"><div class="flex justify-between items-center mb-5"><div><p class="label text-amber-500">Attendance this week</p><h3 class="display-font text-lg">BATCH PERFORMANCE</h3></div><span class="badge">Last 7 days</span></div><div id="attendanceGraph" class="space-y-4"></div></div><div class="panel p-5 xl:col-span-2"><div class="mb-5"><p class="label text-amber-500">Live timetable</p><h3 class="display-font text-lg">ONGOING LECTURES</h3></div><div id="ongoingLectures" class="space-y-2"></div></div></div><div class="grid xl:grid-cols-2 gap-5"><div class="panel p-5"><p class="label text-amber-500">Accounts receivable</p><h3 class="display-font text-lg mb-4">PENDING FEES</h3><div id="pendingFees"></div></div><div class="panel p-5"><p class="label text-amber-500">At a glance</p><h3 class="display-font text-lg mb-4">OPERATIONS NOTE</h3><p class="text-sm text-gray-400 leading-7">Attendance totals include marks recorded during the last seven calendar days. Ongoing lectures are evaluated against the current UTC clock and the active branch timetable.</p></div></div></div>`;
+    try { const res=await api(`/api/dashboard/${currentBranchId}`); const data=await res.json(); if(!res.ok) throw new Error(data.detail||'Dashboard unavailable'); $('dashboardViewedAt').textContent=`viewed ${new Date(data.viewed_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`; const stats=[['Active students',data.summary.students],['Faculty',data.summary.teachers],['Classrooms',data.summary.classrooms],['Fees pending',`₹${Number(data.summary.fees_pending||0).toLocaleString('en-IN')}`]]; $('dashboardStats').innerHTML=stats.map(([label,value])=>`<div class="soft-panel p-5"><p class="label">${label}</p><div class="stat-value">${esc(value)}</div></div>`).join(''); $('attendanceGraph').innerHTML=data.attendance_this_week.length?data.attendance_this_week.map(item=>`<div><div class="flex justify-between text-xs mb-1"><span class="text-white font-bold">${esc(item.batch)}</span><span class="text-amber-300">${item.percentage}% <span class="text-gray-600">(${item.present}/${item.marked} marked)</span></span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Number(item.percentage)||0)}%"></div></div></div>`).join(''):'<p class="text-sm text-gray-600">No batch attendance marks recorded this week.</p>'; $('ongoingLectures').innerHTML=data.ongoing_lectures.length?data.ongoing_lectures.map(x=>`<div class="soft-panel p-3"><div class="flex justify-between gap-2"><b class="text-sm text-white">${esc(x.subject)}</b><span class="badge badge-green">LIVE</span></div><p class="text-[11px] text-gray-400 mt-1">${esc(x.batch_name)} · ${esc(x.teacher)}</p><p class="text-[10px] text-amber-400 mt-1">Lecture ${esc(x.lecture_number)} · ${esc(x.time_slot)}${x.room?' · '+esc(x.room):''}</p></div>`).join(''):'<p class="text-sm text-gray-600">No lecture is live right now.</p>'; $('pendingFees').innerHTML=data.pending_fees.length?`<div class="space-y-2">${data.pending_fees.map(f=>`<div class="flex justify-between gap-3 border-b border-[#222] pb-2"><span class="text-xs text-gray-300">${esc(f.student_name)}<small class="block text-[10px] text-gray-600">Due ${esc(f.due_date||'not set')}</small></span><span class="text-xs text-red-300 font-bold">₹${Number(f.amount_inr||0).toLocaleString('en-IN')}</span></div>`).join('')}</div>`:'<p class="text-sm text-emerald-400">No pending fees. Excellent.</p>'; } catch(error) { notify(error.message); }
+  }
+
+  function exportButtons(module) { return `<div class="flex gap-2"><button class="secondary" onclick="downloadExport('${module}','pdf')">PDF</button><button class="secondary" onclick="downloadExport('${module}','xlsx')">XLSX</button></div>`; }
+  async function downloadExport(module,format) { const res=await api(`/api/export/${module}/${currentBranchId}.${format}`); if(!res.ok) return notify((await res.json()).detail||'Export unavailable'); const blob=await res.blob(); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`algorithmic-${module}.${format}`; a.click(); URL.revokeObjectURL(url); }
+  function actionButtons(module,row) { if(!canWrite(module)) return '<span class="text-gray-700">Read only</span>'; return `<button class="text-amber-400 hover:underline mr-3" onclick='openRecordEditor(${JSON.stringify(module)},${JSON.stringify(row).replaceAll("'","\\u0027")})'>Edit</button><button class="text-red-400 hover:underline" onclick="deleteRecord('${module}',${row.id})">Delete</button>`; }
+  function displayValue(module,key,row) { if(key==='amount_inr') return `₹${Number(row[key]||0).toLocaleString('en-IN')}`; if(key==='document') return row[key]?`<a class="text-amber-400 underline" target="_blank" href="/uploads/${encodeURIComponent(row[key])}">Open</a>`:'—'; return esc(row[key] ?? '—'); }
+
+  async function renderRecords(module) {
+    const meta=META[module]; $('content').innerHTML=`<div class="space-y-5"><div class="panel p-5 flex flex-wrap gap-3 justify-between items-center"><div><p class="label text-amber-500">Branch records</p><h3 class="display-font text-2xl">${meta.title}</h3><p class="text-xs text-gray-500 mt-1">Every field can be edited after saving.</p></div><div class="flex gap-2">${canWrite(module)?`<button class="primary text-xs uppercase tracking-widest" onclick="openRecordEditor('${module}')">+ Add record</button>`:''}${exportButtons(module)}</div></div><div class="soft-panel p-3"><input id="recordSearch" class="field" placeholder="Search this module…"></div><div class="table-wrap"><table><thead><tr>${meta.fields.map(f=>`<th>${f[1]}</th>`).join('')}<th>Actions</th></tr></thead><tbody id="recordsBody"></tbody></table></div></div>`; $('recordSearch').oninput=()=>renderRows(); let records=[]; try { const res=await api(`/api/records/${module}/${currentBranchId}`); records=await res.json(); if(!res.ok) throw new Error(records.detail||'Could not load records'); } catch(error) { notify(error.message); return; } function renderRows(){ const q=($('recordSearch').value||'').toLowerCase(); const shown=records.filter(row=>JSON.stringify(row).toLowerCase().includes(q)); $('recordsBody').innerHTML=shown.length?shown.map(row=>`<tr>${meta.fields.map(f=>`<td>${displayValue(module,f[0],row)}</td>`).join('')}<td class="whitespace-nowrap">${actionButtons(module,row)}</td></tr>`).join(''):`<tr><td colspan="${meta.fields.length+1}" class="text-center text-gray-600 py-10">No records found.</td></tr>`; } renderRows();
+  }
+  function renderSeating() { $('content').innerHTML=`<div class="panel p-7 space-y-5"><div class="flex flex-wrap justify-between gap-3"><div><p class="label text-amber-500">Examination</p><h3 class="display-font text-2xl">EXAM SEATING LAYOUT</h3><p class="text-sm text-gray-500 mt-2">The seating matrix is ready to be generated from current student and classroom records.</p></div>${exportButtons('seating')}</div><div class="soft-panel p-5 text-sm text-gray-400">Use the Student and Classroom departments to keep the seating source data current. Export the current matrix as PDF or XLSX.</div></div>`; }
+
+  function openRecordEditor(module,row=null) { const meta=META[module]; $('recordModalTitle').textContent=row?`EDIT ${meta.title}`:`ADD ${meta.title}`; $('recordFields').innerHTML=meta.fields.map(([key,label,type,required])=>`<div class="${type==='textarea'?'md:col-span-2':''}"><label class="label">${label}${required?` <span class="text-red-400">*</span>`:''}</label>${type==='textarea'?`<textarea class="field" data-key="${key}" ${required?'required':''}>${esc(row?.[key]??'')}</textarea>`:`<input class="field" data-key="${key}" type="${type}" value="${esc(row?.[key]??'')}" ${required?'required':''}>`}</div>`).join('')+`<div class="md:col-span-2"><label class="label">Attach / replace document</label><input id="recordFile" class="field" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"></div>`; $('recordForm').dataset.module=module; $('recordForm').dataset.id=row?.id||''; openModal('recordModal'); }
+  $('recordForm').onsubmit=async event=>{event.preventDefault(); const form=event.target,module=form.dataset.module,id=form.dataset.id; const data={}; form.querySelectorAll('[data-key]').forEach(input=>{data[input.dataset.key]=input.type==='number'&&input.value!==''?Number(input.value):input.value;}); try { let res; const file=$('recordFile').files[0]; if(id){ if(file){const fd=new FormData();fd.append('data_json',JSON.stringify(data));fd.append('file',file);res=await api(`/api/records/${module}/${id}`,{method:'PATCH',body:fd});} else res=await api(`/api/records/${module}/${id}`,{method:'PATCH',headers:jsonHeaders,body:JSON.stringify(data)}); } else {const fd=new FormData();fd.append('branch_id',currentBranchId);fd.append('data_json',JSON.stringify(data));if(file)fd.append('file',file);res=await api(`/api/records/${module}`,{method:'POST',body:fd});} const result=await res.json(); if(!res.ok) throw new Error(result.detail||'Could not save record'); closeModal('recordModal');notify(id?'Record updated':'Record created');renderCurrent(); } catch(error){notify(error.message);} };
+  async function deleteRecord(module,id){if(!confirm('Delete this record?'))return;const res=await api(`/api/records/${module}/${id}`,{method:'DELETE'});if(!res.ok)return notify((await res.json()).detail||'Could not delete');notify('Record deleted');renderCurrent();}
+
+  async function renderAttendance() { $('content').innerHTML=`<div class="space-y-5"><div class="panel p-5 flex flex-wrap gap-3 justify-between items-center"><div><p class="label text-amber-500">Daily register + history</p><h3 class="display-font text-2xl">ATTENDANCE</h3><p class="text-xs text-gray-500 mt-1">Click a student’s history to see every past date and status.</p></div>${exportButtons('attendance')}</div><div class="soft-panel p-4 grid md:grid-cols-3 gap-3"><div><label class="label">Batch</label><select id="attendanceBatch" class="field"></select></div><div><label class="label">Date</label><input id="attendanceDate" class="field" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div><label class="label">Search</label><input id="attendanceSearch" class="field" placeholder="Student name"></div></div><div id="attendanceList" class="panel overflow-hidden"></div></div>`; const batchesRes=await api(`/api/student-batches?branch_id=${currentBranchId}`); const batches=batchesRes.ok?await batchesRes.json():[]; $('attendanceBatch').innerHTML=batches.map(b=>`<option>${esc(b)}</option>`).join(''); ['change','input'].forEach(event=>{ $('attendanceBatch').addEventListener(event,loadAttendanceRows); $('attendanceDate').addEventListener(event,loadAttendanceRows); $('attendanceSearch').addEventListener(event,loadAttendanceRows); }); await loadAttendanceRows(); }
+  async function loadAttendanceRows(){ const batch=$('attendanceBatch')?.value;if(!batch)return; const res=await api(`/api/attendance/students?branch_id=${currentBranchId}&batch=${encodeURIComponent(batch)}&date=${$('attendanceDate').value}&q=${encodeURIComponent($('attendanceSearch').value)}`); const rows=await res.json(); $('attendanceList').innerHTML=rows.length?`<div class="divide-y divide-[#222]">${rows.map(s=>`<div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><b class="text-sm text-white">${esc(s.name)}</b><p class="text-[10px] text-gray-600 uppercase tracking-widest">${esc(s.batch)} · Roll ${esc(s.roll_number||'—')}</p></div><div class="flex items-center gap-2"><button class="secondary ${s.attendance_status==='Present'?'!text-emerald-300 !border-emerald-700':''}" onclick="markAttendance(${s.id},'Present')">Present</button><button class="secondary ${s.attendance_status==='Absent'?'!text-red-300 !border-red-700':''}" onclick="markAttendance(${s.id},'Absent')">Absent</button><button class="text-amber-400 text-xs hover:underline ml-2" onclick="showHistory(${s.id},${JSON.stringify(s.name).replaceAll('\"','&quot;')})">View history</button></div></div>`).join('')}</div>`:'<div class="p-10 text-center text-gray-600">No students in this batch.</div>'; }
+  async function markAttendance(studentId,status){const res=await api('/api/attendance/mark',{method:'POST',headers:jsonHeaders,body:JSON.stringify({branch_id:currentBranchId,student_id:studentId,date:$('attendanceDate').value,status})});if(!res.ok)return notify((await res.json()).detail||'Could not mark attendance');loadAttendanceRows();}
+  async function showHistory(studentId,name){$('historyTitle').textContent=`${name.toUpperCase()} · ATTENDANCE`; $('historyBody').innerHTML='<p class="text-sm text-gray-500">Loading…</p>';openModal('historyModal');const res=await api(`/api/attendance/student/${studentId}/history?branch_id=${currentBranchId}`);const data=await res.json();if(!res.ok)return $('historyBody').innerHTML=`<p class="text-red-400 text-sm">${esc(data.detail||'Could not load history')}</p>`; $('historyBody').innerHTML=`<div class="grid grid-cols-3 gap-2 mb-5"><div class="soft-panel p-3"><p class="label">Present</p><b class="text-emerald-300 text-xl">${data.summary.present}</b></div><div class="soft-panel p-3"><p class="label">Absent</p><b class="text-red-300 text-xl">${data.summary.absent}</b></div><div class="soft-panel p-3"><p class="label">Rate</p><b class="text-amber-300 text-xl">${data.summary.percentage}%</b></div></div><div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Lecture / subject</th></tr></thead><tbody>${data.history.length?data.history.map(r=>`<tr><td>${esc(r.date)}</td><td><span class="badge ${r.status==='Present'?'badge-green':'badge-red'}">${esc(r.status)}</span></td><td>${esc(r.lecture||'—')}</td></tr>`).join(''):'<tr><td colspan="3" class="text-center text-gray-600">No attendance history.</td></tr>'}</tbody></table></div>`; }
+
+  function dayChecks(selected=DAYS.slice(0,5)){ $('dayChecks').innerHTML=DAYS.map(day=>`<label class="badge cursor-pointer ${selected.includes(day)?'badge-gold':''}"><input class="day-check mr-1" type="checkbox" value="${day}" ${selected.includes(day)?'checked':''}>${day.slice(0,3)}</label>`).join(''); }
+  function timingRow(data={}){ const row=document.createElement('div');row.className='timing-row';row.innerHTML=`<div><label class="label">No.</label><input class="field lecture-number" type="number" min="1" required value="${esc(data.lecture_number||$('timingRows').children.length+1)}"></div><div><label class="label">Start</label><input class="field timing-start" type="time" required value="${esc((data.start_time||'09:00').slice(0,5))}"></div><div><label class="label">End</label><input class="field timing-end" type="time" required value="${esc((data.end_time||'10:00').slice(0,5))}"></div><button type="button" class="secondary remove-row" title="Remove timing">×</button>`;$('timingRows').appendChild(row); }
+  function teacherRow(data={}){ const row=document.createElement('div');row.className='teacher-row';row.innerHTML=`<div><label class="label">Teacher</label><input class="field teacher-name" required value="${esc(data.name||'')}"></div><div><label class="label">Subject</label><input class="field teacher-subject" required value="${esc(data.subject||'')}"></div><div><label class="label">Lectures / week</label><input class="field teacher-count" type="number" min="1" required value="${esc(data.lectures_per_week||1)}"></div><div><label class="label">Unavailable days</label><select class="field teacher-unavailable" multiple title="Ctrl/Cmd-click for multiple days">${DAYS.map(d=>`<option value="${d}" ${(data.unavailable_days||[]).includes(d)?'selected':''}>${d}</option>`).join('')}</select></div><button type="button" class="secondary remove-row" title="Remove subject">×</button>`;$('teacherRows').appendChild(row); }
+  function fillTimetableEditor(config={}) { $('ttBatch').value=config.batch_name||''; $('timingRows').innerHTML=''; $('teacherRows').innerHTML=''; dayChecks(config.days||DAYS.slice(0,5)); (config.timings||[{lecture_number:1,start_time:'09:00',end_time:'10:00'}]).forEach(timingRow); (config.teachers_config||[{name:'',subject:'',lectures_per_week:1,unavailable_days:[]}]).forEach(teacherRow); $('timetableError').textContent=''; $('generateButton').textContent=config.batch_name?'Regenerate timetable':'Generate timetable'; }
+  async function openTimetableEditor(){ const latestRes=await api(`/api/timetable/generations/${currentBranchId}`);const latest=latestRes.ok?await latestRes.json():[];window.timetableConfigs=Object.fromEntries(latest.map(item=>[item.batch_name,item.config]));$('ttExistingBatch').innerHTML='<option value="">New batch timetable…</option>'+latest.map(item=>`<option value="${esc(item.batch_name)}">${esc(item.batch_name)}</option>`).join('');$('ttExistingBatch').value=latest[0]?.batch_name||'';fillTimetableEditor(latest[0]?.config||{});openModal('timetableModal'); }
+  $('ttExistingBatch').onchange=()=>{const batch=$('ttExistingBatch').value;if(batch)fillTimetableEditor(window.timetableConfigs?.[batch]||{});else fillTimetableEditor({});};
+  $('addTiming').onclick=()=>timingRow();$('addTeacher').onclick=()=>teacherRow();document.addEventListener('click',event=>{if(event.target.classList.contains('remove-row'))event.target.closest('.timing-row,.teacher-row').remove();});
+  $('timetableForm').onsubmit=async event=>{event.preventDefault();if(timetableBusy)return;timetableBusy=true;$('generateButton').disabled=true;$('generateButton').textContent='Generating…';$('timetableError').textContent='';const timings=[...document.querySelectorAll('#timingRows .timing-row')].map(row=>({lecture_number:Number(row.querySelector('.lecture-number').value),start_time:row.querySelector('.timing-start').value,end_time:row.querySelector('.timing-end').value}));const teachers=[...document.querySelectorAll('#teacherRows .teacher-row')].map(row=>({name:row.querySelector('.teacher-name').value.trim(),subject:row.querySelector('.teacher-subject').value.trim(),lectures_per_week:Number(row.querySelector('.teacher-count').value),unavailable_days:[...row.querySelector('.teacher-unavailable').selectedOptions].map(o=>o.value)}));const days=[...document.querySelectorAll('.day-check:checked')].map(x=>x.value);try{const res=await api('/api/timetable/generate',{method:'POST',headers:jsonHeaders,body:JSON.stringify({branch_id:currentBranchId,batch_name:$('ttBatch').value.trim(),teachers_config:teachers,timings,days})});const data=await res.json();if(!res.ok)throw new Error(data.detail||'Timetable could not be generated');closeModal('timetableModal');notify(`Timetable replaced with ${data.slots.length} lectures`);renderTimetable();}catch(error){$('timetableError').textContent=error.message;}finally{timetableBusy=false;$('generateButton').disabled=false;$('generateButton').textContent='Generate / regenerate timetable';}};
+
+  async function renderTimetable(){ $('content').innerHTML=`<div class="space-y-5"><div class="panel p-5 flex flex-wrap gap-3 justify-between items-center"><div><p class="label text-amber-500">Constraint-safe scheduling</p><h3 class="display-font text-2xl">TIMETABLE</h3><p class="text-xs text-gray-500 mt-1">Lecture number is shown beside every timing. Regenerate a batch without stacking old generations.</p></div><div class="flex gap-2">${canWrite('timetable')?'<button class="primary text-xs uppercase tracking-widest" onclick="openTimetableEditor()">+ Generate / edit</button>':''}${exportButtons('timetable')}</div></div><div class="table-wrap"><table><thead><tr><th>Batch</th><th>Day</th><th>Lecture no.</th><th>Timing</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Actions</th></tr></thead><tbody id="timetableBody"></tbody></table></div></div>`;const res=await api(`/api/timetable/slots/${currentBranchId}`);const slots=await res.json();if(!res.ok)return notify(slots.detail||'Could not load timetable');$('timetableBody').innerHTML=slots.length?slots.map(slot=>`<tr><td class="text-white font-bold">${esc(slot.batch_name)}</td><td>${esc(slot.day)}</td><td><span class="badge badge-gold">${esc(slot.lecture_number)}</span></td><td class="text-amber-200 whitespace-nowrap">${esc(slot.time_slot)}</td><td>${esc(slot.subject)}</td><td>${esc(slot.teacher)}</td><td>${esc(slot.room||'—')}</td><td>${canWrite('timetable')?`<button class="text-amber-400 hover:underline" onclick='openSlotEditor(${JSON.stringify(slot).replaceAll("'","\\u0027")})'>Edit</button>`:'<span class="text-gray-700">Read only</span>'}</td></tr>`).join(''):'<tr><td colspan="8" class="text-center text-gray-600 py-12">No timetable yet. Generate one with its constraints.</td></tr>'; }
+  function openSlotEditor(slot){$('slotId').value=slot.id;$('slotDay').innerHTML=DAYS.map(d=>`<option ${slot.day===d?'selected':''}>${d}</option>`).join('');$('slotNumber').value=slot.lecture_number;$('slotStart').value=(slot.start_time||'09:00').slice(0,5);$('slotEnd').value=(slot.end_time||'10:00').slice(0,5);$('slotSubject').value=slot.subject||'';$('slotTeacher').value=slot.teacher||'';$('slotRoom').value=slot.room||'';$('slotError').textContent='';openModal('slotModal');}
+  $('slotForm').onsubmit=async event=>{event.preventDefault();const id=$('slotId').value;const payload={day:$('slotDay').value,lecture_number:Number($('slotNumber').value),start_time:$('slotStart').value,end_time:$('slotEnd').value,subject:$('slotSubject').value,teacher:$('slotTeacher').value,room:$('slotRoom').value};const res=await api(`/api/timetable/slots/${id}`,{method:'PATCH',headers:jsonHeaders,body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)return $('slotError').textContent=data.detail||'Could not edit lecture';closeModal('slotModal');notify('Lecture updated');renderTimetable();};
+
+  async function renderUsers(){ if(!identity.is_owner)return; const res=await api('/api/users');const users=await res.json();if(!res.ok)return notify(users.detail||'Could not load users');$('content').innerHTML=`<div class="space-y-5"><div class="panel p-5 flex flex-wrap gap-3 justify-between items-center"><div><p class="label text-amber-500">Boss-only administration</p><h3 class="display-font text-2xl">MANAGE USERS</h3><p class="text-xs text-gray-500 mt-1">Designation is required. Add or revoke module privileges at any time.</p></div><button class="primary text-xs uppercase tracking-widest" onclick="openUserEditor()">+ Add user</button></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Designation</th><th>Privileges</th><th>Actions</th></tr></thead><tbody>${users.length?users.map(user=>`<tr><td class="text-white font-bold">${esc(user.full_name)}</td><td>${esc(user.email)}</td><td><span class="badge badge-gold">${esc(user.designation)}</span></td><td class="max-w-[480px]">${Object.entries(user.permissions||{}).filter(([,p])=>p.read||p.write).map(([m,p])=>`<span class="badge mr-1 mb-1 ${p.write?'badge-gold':''}">${MODULE_LABELS[m]}${p.write?' · edit':' · read'}</span>`).join('')||'<span class="text-gray-600">No access</span>'}</td><td class="whitespace-nowrap"><button class="text-amber-400 hover:underline mr-3" onclick='openUserEditor(${JSON.stringify(user).replaceAll("'","\\u0027")})'>Edit access</button><button class="text-red-400 hover:underline" onclick="removeUser(${user.id})">Revoke user</button></td></tr>`).join(''):'<tr><td colspan="5" class="text-center text-gray-600 py-12">No staff users yet.</td></tr>'}</tbody></table></div></div>`; }
+  async function openUserEditor(user=null){ if(!Object.keys(permissionPresets).length){const res=await api('/api/designations');const data=await res.json();permissionPresets=data.presets||{};} $('userModalTitle').textContent=user?'EDIT USER ACCESS':'ADD USER';$('userId').value=user?.id||'';$('userName').value=user?.full_name||'';$('userEmail').value=user?.email||'';$('userPassword').value='';$('passwordHint').textContent=user?'(leave blank to keep current password)':'(minimum 8 characters)';$('userDesignation').innerHTML='<option value="">Choose a designation</option>'+Object.keys(permissionPresets).map(d=>`<option value="${d}" ${user?.designation===d?'selected':''}>${d.toUpperCase()}</option>`).join('');buildPermissions(user?.permissions||permissionPresets[user?.designation]||{});openModal('userModal'); }
+  function buildPermissions(perms){$('permissionsGrid').innerHTML=MODULES.map(module=>`<div class="soft-panel p-3 flex justify-between items-center gap-2"><span class="text-xs text-gray-300 font-bold">${MODULE_LABELS[module]}</span><span class="flex gap-2 text-[10px]"><label><input type="checkbox" class="perm-read mr-1" data-module="${module}" ${perms[module]?.read?'checked':''}>Read</label><label><input type="checkbox" class="perm-write mr-1" data-module="${module}" ${perms[module]?.write?'checked':''}>Edit</label></span></div>`).join(''); }
+  $('userDesignation').onchange=()=>{const designation=$('userDesignation').value;if(designation&&permissionPresets[designation])buildPermissions(permissionPresets[designation]);};$('applyPreset').onclick=()=>{const designation=$('userDesignation').value;if(designation&&permissionPresets[designation])buildPermissions(permissionPresets[designation]);};
+  $('userForm').onsubmit=async event=>{event.preventDefault();const permissions={};document.querySelectorAll('.perm-read').forEach(input=>{const m=input.dataset.module;permissions[m]={read:input.checked,write:!!document.querySelector(`.perm-write[data-module="${m}"]`)?.checked};});const payload={full_name:$('userName').value,email:$('userEmail').value,designation:$('userDesignation').value,permissions};if($('userPassword').value)payload.password=$('userPassword').value;if(!payload.designation)return $('userError').textContent='Choose a designation before saving.';if(!$('userId').value&&!payload.password)return $('userError').textContent='A password is required for a new user.';const url=$('userId').value?`/api/users/${$('userId').value}`:'/api/users';const res=await api(url,{method:$('userId').value?'PATCH':'POST',headers:jsonHeaders,body:JSON.stringify(payload)});const data=await res.json();if(!res.ok)return $('userError').textContent=data.detail||'Could not save user';closeModal('userModal');notify('User access saved');renderUsers();};
+  async function removeUser(id){if(!confirm('Revoke this user and end their sessions?'))return;const res=await api(`/api/users/${id}`,{method:'DELETE'});if(!res.ok)return notify((await res.json()).detail||'Could not revoke user');notify('User revoked');renderUsers();}
+
+  (async function resume(){ if(!token)return; try {const res=await api('/api/auth/me');const data=await res.json();if(!res.ok)throw new Error('Session expired');applyIdentity(data);showApp();await initApp();}catch(error){localStorage.removeItem('algorithmic_token');token=null;showAuth(false);}})();
+</script>
 </body>
 </html>
