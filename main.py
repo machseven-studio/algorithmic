@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
 from fastapi.responses import HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
@@ -97,9 +96,11 @@ def init_db():
             branch_id INTEGER,
             name TEXT,
             email TEXT,
-            course TEXT,
+            batch TEXT,
             status TEXT,
             document TEXT,
+            roll_number TEXT,
+            parent_contact TEXT,
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
@@ -111,9 +112,25 @@ def init_db():
             subject TEXT,
             department TEXT,
             document TEXT,
+            contact_number TEXT,
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
+    # Migration for pre-existing DBs: 'course' was renamed to 'batch', and
+    # students/teachers/syllabus each gained the new fields below.
+    try:
+        cursor.execute("ALTER TABLE students RENAME COLUMN course TO batch")
+    except sqlite3.OperationalError:
+        pass
+    for col, coltype in [("roll_number", "TEXT"), ("parent_contact", "TEXT")]:
+        try:
+            cursor.execute(f"ALTER TABLE students ADD COLUMN {col} {coltype}")
+        except sqlite3.OperationalError:
+            pass
+    try:
+        cursor.execute("ALTER TABLE teachers ADD COLUMN contact_number TEXT")
+    except sqlite3.OperationalError:
+        pass
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS classrooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,9 +150,19 @@ def init_db():
             semester TEXT,
             units INTEGER,
             document TEXT,
+            topic TEXT,
+            teacher_name TEXT,
+            num_lectures INTEGER,
+            lecture_date TEXT,
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
+    # Migration for pre-existing DBs created before these syllabus fields existed.
+    for col, coltype in [("topic", "TEXT"), ("teacher_name", "TEXT"), ("num_lectures", "INTEGER"), ("lecture_date", "TEXT")]:
+        try:
+            cursor.execute(f"ALTER TABLE syllabus ADD COLUMN {col} {coltype}")
+        except sqlite3.OperationalError:
+            pass
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,35 +215,6 @@ def init_db():
 
 
 init_db()
-
-
-# Schema migrations for the redesigned academic modules. Existing legacy
-# columns are intentionally retained so old databases remain readable, while
-# the public API/UI expose only the new fields.
-def migrate_academic_schema():
-    conn = get_conn()
-    cursor = conn.cursor()
-    migrations = {
-        "students": [
-            ("roll_number", "TEXT"), ("full_name", "TEXT"), ("batch", "TEXT"),
-            ("parent_contact", "TEXT")
-        ],
-        "teachers": [("full_name", "TEXT"), ("contact_number", "TEXT")],
-        "syllabus": [
-            ("topic", "TEXT"), ("teacher_name", "TEXT"),
-            ("number_of_lectures", "INTEGER"), ("lecture_date", "TEXT")
-        ],
-        "attendance": [("student_id", "INTEGER"), ("batch", "TEXT")]
-    }
-    for table, cols in migrations.items():
-        existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()}
-        for name, typ in cols:
-            if name not in existing:
-                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
-    conn.commit()
-    conn.close()
-
-migrate_academic_schema()
 
 
 # ---------------------------------------------------------------------------
@@ -655,17 +653,17 @@ async def add_record(
     cursor = conn.cursor()
 
     if module == 'students':
-        cursor.execute("INSERT INTO students (branch_id, name, email, course, status, document) VALUES (?, ?, ?, ?, ?, ?)",
-                       (branch_id, data.get('name'), data.get('email'), data.get('course'), data.get('status', 'Active'), doc_filename))
+        cursor.execute("INSERT INTO students (branch_id, name, batch, roll_number, parent_contact) VALUES (?, ?, ?, ?, ?)",
+                       (branch_id, data.get('name'), data.get('batch'), data.get('roll_number'), data.get('parent_contact')))
     elif module == 'teachers':
-        cursor.execute("INSERT INTO teachers (branch_id, name, subject, department, document) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('name'), data.get('subject'), data.get('department'), doc_filename))
+        cursor.execute("INSERT INTO teachers (branch_id, name, subject, contact_number) VALUES (?, ?, ?, ?)",
+                       (branch_id, data.get('name'), data.get('subject'), data.get('contact_number')))
     elif module == 'classrooms':
         cursor.execute("INSERT INTO classrooms (branch_id, room_no, capacity, building, document) VALUES (?, ?, ?, ?, ?)",
                        (branch_id, data.get('room_no'), data.get('capacity'), data.get('building'), doc_filename))
     elif module == 'syllabus':
-        cursor.execute("INSERT INTO syllabus (branch_id, subject, semester, units, document) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('subject'), data.get('semester'), data.get('units'), doc_filename))
+        cursor.execute("INSERT INTO syllabus (branch_id, subject, topic, teacher_name, num_lectures, lecture_date) VALUES (?, ?, ?, ?, ?, ?)",
+                       (branch_id, data.get('subject'), data.get('topic'), data.get('teacher_name'), data.get('num_lectures'), data.get('lecture_date')))
     elif module == 'attendance':
         cursor.execute("INSERT INTO attendance (branch_id, student_name, date, status, document) VALUES (?, ?, ?, ?, ?)",
                        (branch_id, data.get('student_name'), data.get('date'), data.get('status'), doc_filename))
@@ -712,8 +710,8 @@ BULK_IMPORT_COLUMNS = {
     "students": ["name", "batch", "roll_number", "parent_contact"],
     "teachers": ["name", "subject", "contact_number"],
     "classrooms": ["room_no", "capacity"],
-    "syllabus": ["subject", "topic", "teacher_name", "number_of_lectures", "date"],
-    "attendance": ["student_name", "batch", "date", "status"],
+    "syllabus": ["subject", "topic", "teacher_name", "num_lectures", "lecture_date"],
+    "attendance": ["student_name", "date", "status"],
     "invigilation": ["teacher_name", "exam_date", "room"],
     "fees": ["student_name", "amount_inr", "status", "due_date"],
 }
@@ -764,26 +762,20 @@ async def bulk_import_records(
             continue  # skip blank rows
 
         if module == 'students':
-            cursor.execute(
-                "INSERT INTO students (branch_id, name, roll_number, full_name, batch, parent_contact) VALUES (?, ?, ?, ?, ?, ?)",
-                (branch_id, row.get('name'), row.get('roll_number'), row.get('name'), row.get('batch'), row.get('parent_contact'))
-            )
+            cursor.execute("INSERT INTO students (branch_id, name, batch, roll_number, parent_contact) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('name'), row.get('batch'), row.get('roll_number'), row.get('parent_contact')))
         elif module == 'teachers':
-            cursor.execute(
-                "INSERT INTO teachers (branch_id, name, full_name, subject, contact_number) VALUES (?, ?, ?, ?, ?)",
-                (branch_id, row.get('name'), row.get('name'), row.get('subject'), row.get('contact_number'))
-            )
+            cursor.execute("INSERT INTO teachers (branch_id, name, subject, contact_number) VALUES (?, ?, ?, ?)",
+                           (branch_id, row.get('name'), row.get('subject'), row.get('contact_number')))
         elif module == 'classrooms':
             cursor.execute("INSERT INTO classrooms (branch_id, room_no, capacity, building, document) VALUES (?, ?, ?, ?, ?)",
                            (branch_id, row.get('room_no'), row.get('capacity'), None, None))
         elif module == 'syllabus':
-            cursor.execute(
-                "INSERT INTO syllabus (branch_id, subject, topic, teacher_name, number_of_lectures, lecture_date) VALUES (?, ?, ?, ?, ?, ?)",
-                (branch_id, row.get('subject'), row.get('topic'), row.get('teacher_name'), row.get('number_of_lectures'), row.get('date'))
-            )
+            cursor.execute("INSERT INTO syllabus (branch_id, subject, topic, teacher_name, num_lectures, lecture_date) VALUES (?, ?, ?, ?, ?, ?)",
+                           (branch_id, row.get('subject'), row.get('topic'), row.get('teacher_name'), row.get('num_lectures'), row.get('lecture_date')))
         elif module == 'attendance':
-            cursor.execute("INSERT INTO attendance (branch_id, student_name, batch, date, status) VALUES (?, ?, ?, ?, ?)",
-                           (branch_id, row.get('student_name'), row.get('batch'), row.get('date'), row.get('status')))
+            cursor.execute("INSERT INTO attendance (branch_id, student_name, date, status, document) VALUES (?, ?, ?, ?, ?)",
+                           (branch_id, row.get('student_name'), row.get('date'), row.get('status'), None))
         elif module == 'invigilation':
             cursor.execute("INSERT INTO invigilation (branch_id, teacher_name, exam_date, room, document) VALUES (?, ?, ?, ?, ?)",
                            (branch_id, row.get('teacher_name'), row.get('exam_date'), row.get('room'), None))
@@ -800,239 +792,49 @@ async def bulk_import_records(
 
 
 # ---------------------------------------------------------------------------
-# Redesigned academic module APIs
+# Attendance (batchwise present/absent marking, sourced from Student Department)
 # ---------------------------------------------------------------------------
 
-class StudentCreate(BaseModel):
+class AttendanceMarkRequest(BaseModel):
     branch_id: int
-    name: str
-    batch: str
-    roll_number: str
-    parent_contact: str
-
-class TeacherCreate(BaseModel):
-    branch_id: int
-    name: str
-    subject: str
-    contact_number: str
-
-class SyllabusCreate(BaseModel):
-    branch_id: int
-    subject: str
-    topic: str
-    teacher_name: str
-    number_of_lectures: int
+    student_name: str
     date: str
+    status: str  # 'Present' or 'Absent'
 
-class AttendanceMark(BaseModel):
-    branch_id: int
-    student_id: int
-    batch: str
-    date: str
-    status: str
-
-class ClassroomCreate(BaseModel):
-    branch_id: int
-    room_name: str
-    capacity: int
-    rows: int
-    columns: int
-
-class InvigilatorCreate(BaseModel):
-    branch_id: int
-    full_name: str
-    contact_number: str
-
-class FeeCreate(BaseModel):
-    branch_id: int
-    student_id: int
-    amount_due: float
-    due_date: str
-
-
-def _student_public(row):
-    return {
-        "id": row["id"], "name": row["full_name"] or row["name"] or "",
-        "batch": row["batch"] or "", "roll_number": row["roll_number"] or "",
-        "parent_contact": row["parent_contact"] or ""
-    }
-
-@app.get("/api/students")
-def api_students(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("""SELECT id, name, full_name, batch, roll_number, parent_contact
-                         FROM students WHERE branch_id=?
-                         ORDER BY LOWER(COALESCE(batch,'')), LOWER(COALESCE(full_name,name,''))""", (branch_id,)).fetchall()
-    conn.close(); return [_student_public(r) for r in rows]
-
-@app.post("/api/students")
-def api_create_student(req: StudentCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("INSERT INTO students (branch_id,name,full_name,batch,roll_number,parent_contact) VALUES (?,?,?,?,?,?)",
-                (req.branch_id,req.name,req.name,req.batch,req.roll_number,req.parent_contact))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/classrooms")
-def api_classrooms(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("SELECT id, room_no AS room_name, capacity, building, document FROM classrooms WHERE branch_id=? ORDER BY id",(branch_id,)).fetchall()
-    conn.close(); return [dict(r) for r in rows]
-
-@app.post("/api/classrooms")
-def api_create_classroom(req: ClassroomCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("INSERT INTO classrooms (branch_id,room_no,capacity,building,document) VALUES (?,?,?,?,NULL)",(req.branch_id,req.room_name,req.capacity,f"{req.rows} x {req.columns}"))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/invigilators")
-def api_invigilators(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("SELECT id, teacher_name AS full_name, '' AS contact_number, room AS assigned_room FROM invigilation WHERE branch_id=? ORDER BY id",(branch_id,)).fetchall()
-    conn.close(); return [dict(r) for r in rows]
-
-@app.post("/api/invigilators")
-def api_create_invigilator(req: InvigilatorCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("INSERT INTO invigilation (branch_id,teacher_name,exam_date,room,document) VALUES (?,?,?,?,NULL)",(req.branch_id,req.full_name,'',None))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/fees/defaulters")
-def api_fee_defaulters(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("""SELECT f.id, f.student_name, COALESCE(s.roll_number,'') AS roll_number,
-                       f.amount_inr AS amount_due, f.due_date, f.status, f.document
-                       FROM fees f LEFT JOIN students s ON s.id=f.student_name
-                       WHERE f.branch_id=? ORDER BY f.due_date""",(branch_id,)).fetchall()
-    out=[]
-    today=datetime.utcnow().date()
-    for r in rows:
-        try: days=(datetime.fromisoformat(r['due_date']).date()-today).days
-        except Exception: days=999
-        out.append({**dict(r),"days_remaining":days,"urgent_alert":days<=3})
-    conn.close(); return out
-
-@app.post("/api/fees")
-def api_create_fee(req: FeeCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("SELECT COALESCE(full_name,name), roll_number FROM students WHERE id=? AND branch_id=?",(req.student_id,req.branch_id)); st=cur.fetchone()
-    if not st: conn.close(); raise HTTPException(status_code=404,detail="Student not found")
-    cur.execute("INSERT INTO fees (branch_id,student_name,amount_inr,status,due_date,document) VALUES (?,?,?,?,?,NULL)",(req.branch_id,st[0],req.amount_due,'Pending',req.due_date))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/student-batches")
-def api_student_batches(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn()
-    rows=conn.execute("SELECT DISTINCT batch FROM students WHERE branch_id=? AND TRIM(COALESCE(batch,''))<>'' ORDER BY LOWER(batch)", (branch_id,)).fetchall()
-    conn.close(); return [r[0] for r in rows]
-
-@app.get("/api/teachers")
-def api_teachers(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("SELECT id, COALESCE(full_name,name) AS full_name, subject, contact_number FROM teachers WHERE branch_id=? ORDER BY LOWER(COALESCE(full_name,name,''))", (branch_id,)).fetchall()
-    conn.close(); return [dict(r) for r in rows]
-
-@app.post("/api/teachers")
-def api_create_teacher(req: TeacherCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("INSERT INTO teachers (branch_id,name,full_name,subject,contact_number) VALUES (?,?,?,?,?)", (req.branch_id,req.name,req.name,req.subject,req.contact_number))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/syllabus")
-def api_syllabus(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("""SELECT id, subject, topic, teacher_name, number_of_lectures, lecture_date
-                         FROM syllabus WHERE branch_id=? ORDER BY lecture_date DESC, LOWER(subject)""", (branch_id,)).fetchall()
-    conn.close(); return [dict(r) for r in rows]
-
-@app.post("/api/syllabus")
-def api_create_syllabus(req: SyllabusCreate, institute: CurrentInstitute = Depends(require_write_access)):
-    verify_branch_ownership(req.branch_id, institute.id)
-    if req.number_of_lectures < 1: raise HTTPException(status_code=400, detail="Number of lectures must be at least 1")
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("INSERT INTO syllabus (branch_id,subject,topic,teacher_name,number_of_lectures,lecture_date) VALUES (?,?,?,?,?,?)",
-                (req.branch_id,req.subject,req.topic,req.teacher_name,req.number_of_lectures,req.date))
-    conn.commit(); rid=cur.lastrowid; conn.close(); return {"id":rid,"status":"success"}
-
-@app.get("/api/attendance/students")
-def api_attendance_students(branch_id: int, batch: str, date: str = None, q: str = "", institute: CurrentInstitute = Depends(get_current_institute)):
-    verify_branch_ownership(branch_id, institute.id)
-    conn=get_conn(); conn.row_factory=sqlite3.Row
-    rows=conn.execute("""SELECT s.id, COALESCE(s.full_name,s.name) AS name, s.batch, s.roll_number,
-                       COALESCE(a.status,'') AS attendance_status
-                       FROM students s LEFT JOIN attendance a
-                       ON a.student_id=s.id AND a.branch_id=s.branch_id AND a.date=?
-                       WHERE s.branch_id=? AND s.batch=? AND LOWER(COALESCE(s.full_name,s.name,'')) LIKE LOWER(?)
-                       ORDER BY LOWER(COALESCE(s.full_name,s.name,''))""", (date or "", branch_id, batch, f"%{q}%" )).fetchall()
-    conn.close(); return [dict(r) for r in rows]
 
 @app.post("/api/attendance/mark")
-def api_mark_attendance(req: AttendanceMark, institute: CurrentInstitute = Depends(require_write_access)):
+def mark_attendance(req: AttendanceMarkRequest, institute: CurrentInstitute = Depends(require_write_access)):
     verify_branch_ownership(req.branch_id, institute.id)
-    if req.status not in ("Present", "Absent"): raise HTTPException(status_code=400, detail="Status must be Present or Absent")
-    conn=get_conn(); cur=conn.cursor()
-    cur.execute("SELECT id FROM students WHERE id=? AND branch_id=? AND batch=?", (req.student_id, req.branch_id, req.batch))
-    if not cur.fetchone(): conn.close(); raise HTTPException(status_code=404, detail="Student not found in selected batch")
-    cur.execute("SELECT id FROM attendance WHERE branch_id=? AND student_id=? AND date=?", (req.branch_id,req.student_id,req.date))
-    existing=cur.fetchone()
-    if existing:
-        cur.execute("UPDATE attendance SET student_name=(SELECT COALESCE(full_name,name) FROM students WHERE id=?), batch=?, status=?, document=NULL WHERE id=?", (req.student_id,req.batch,req.status,existing[0]))
-    else:
-        cur.execute("INSERT INTO attendance (branch_id,student_id,student_name,batch,date,status) VALUES (?,?,?,?,?,?)", (req.branch_id,req.student_id,None,req.batch,req.date,req.status))
-        cur.execute("UPDATE attendance SET student_name=(SELECT COALESCE(full_name,name) FROM students WHERE id=?) WHERE id=?", (req.student_id,cur.lastrowid))
-    conn.commit(); conn.close(); return {"status":"success","attendance_status":req.status}
+    if req.status not in ("Present", "Absent"):
+        raise HTTPException(status_code=400, detail="Status must be 'Present' or 'Absent'")
 
-@app.post("/api/academic/import-pdf")
-async def import_academic_pdf(module: str = Form(...), branch_id: int = Form(...), file: UploadFile = File(...), institute: CurrentInstitute = Depends(require_write_access)):
+    conn = get_conn()
+    cursor = conn.cursor()
+    # Re-marking the same student on the same day replaces the old mark
+    # instead of piling up duplicate attendance rows.
+    cursor.execute(
+        "DELETE FROM attendance WHERE branch_id = ? AND student_name = ? AND date = ?",
+        (req.branch_id, req.student_name, req.date),
+    )
+    cursor.execute(
+        "INSERT INTO attendance (branch_id, student_name, date, status) VALUES (?, ?, ?, ?)",
+        (req.branch_id, req.student_name, req.date, req.status),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+
+@app.get("/api/attendance/{branch_id}/{date}")
+def get_attendance_for_date(branch_id: int, date: str, institute: CurrentInstitute = Depends(get_current_institute)):
     verify_branch_ownership(branch_id, institute.id)
-    if module not in ("students","teachers","syllabus"): raise HTTPException(status_code=400, detail="PDF import is available for students, teachers and syllabus")
-    if not (file.filename or "").lower().endswith(".pdf"): raise HTTPException(status_code=400, detail="Please upload a PDF file")
-    raw=await file.read()
-    if len(raw)>MAX_UPLOAD_BYTES: raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
-    try:
-        from pypdf import PdfReader
-        import io, csv
-        text="\n".join((page.extract_text() or "") for page in PdfReader(io.BytesIO(raw)).pages)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not read this PDF: {exc}")
-    lines=[line.strip() for line in text.splitlines() if line.strip()]
-    expected=BULK_IMPORT_COLUMNS[module]
-    norm={h.lower().replace(" ","_"):h for h in expected}
-    header_idx=None
-    for i,line in enumerate(lines[:40]):
-        parts=[x.strip().lower().replace(" ","_") for x in line.replace("|",",").split(",")]
-        if len(set(parts)&set(norm)) >= max(2, len(expected)-1): header_idx=i; break
-    if header_idx is None: raise HTTPException(status_code=400, detail=f"PDF must contain a tabular header using: {', '.join(expected)}")
-    headers=[x.strip().lower().replace(" ","_") for x in lines[header_idx].replace("|",",").split(",")]
-    conn=get_conn(); cur=conn.cursor(); inserted=0
-    for line in lines[header_idx+1:]:
-        parts=[x.strip() for x in line.replace("|",",").split(",")]
-        if len(parts)<len(headers): continue
-        row=dict(zip(headers,parts))
-        try:
-            if module=="students":
-                cur.execute("INSERT INTO students (branch_id,name,full_name,batch,roll_number,parent_contact) VALUES (?,?,?,?,?,?)",(branch_id,row.get("name"),row.get("name"),row.get("batch"),row.get("roll_number"),row.get("parent_contact")))
-            elif module=="teachers":
-                cur.execute("INSERT INTO teachers (branch_id,name,full_name,subject,contact_number) VALUES (?,?,?,?,?)",(branch_id,row.get("name"),row.get("name"),row.get("subject"),row.get("contact_number")))
-            else:
-                cur.execute("INSERT INTO syllabus (branch_id,subject,topic,teacher_name,number_of_lectures,lecture_date) VALUES (?,?,?,?,?,?)",(branch_id,row.get("subject"),row.get("topic"),row.get("teacher_name"),int(row.get("number_of_lectures",0)),row.get("date")))
-            inserted+=1
-        except (ValueError, sqlite3.Error):
-            continue
-    conn.commit(); conn.close()
-    if not inserted: raise HTTPException(status_code=400, detail="No readable records were found in the PDF")
-    return {"status":"success","inserted":inserted}
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT student_name, status FROM attendance WHERE branch_id = ? AND date = ?", (branch_id, date))
+    marks = {row["student_name"]: row["status"] for row in cursor.fetchall()}
+    conn.close()
+    return marks
 
 
 # ---------------------------------------------------------------------------
@@ -1147,17 +949,7 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    # Always serve the external index.html.  The previous fallback embedded
-    # an older copy of the UI inside main.py, which could silently make a
-    # deployment appear unchanged when index.html was missing/not deployed.
-    index_path = os.path.join(os.path.dirname(__file__), "index.html")
-    if not os.path.isfile(index_path):
-        return HTMLResponse(
-            content="<h1>Frontend file missing</h1><p>index.html must be deployed alongside main.py.</p>",
-            status_code=500,
-        )
-    with open(index_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read(), status_code=200)
+    return HTMLResponse(content=HTML_CONTENT, status_code=200)
 
 
 HTML_CONTENT = """<!DOCTYPE html>
@@ -1241,6 +1033,14 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         .row-delete-btn { color: #6b7280; transition: color 0.1s ease; }
         .row-delete-btn:hover { color: #f87171; }
+
+        @keyframes welcomeFadeSlide {
+            0% { opacity: 0; transform: translateY(16px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .welcome-animate { animation: welcomeFadeSlide 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
+
+        .batch-group-row td { background: rgba(212, 175, 55, 0.06); }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -1452,6 +1252,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         let authToken = localStorage.getItem('algorithmic_token');
         let isOwner = false;
         let myPermission = 'owner';
+        let myFullName = '';
         let bulkImportModule = null;
 
         // ---- Auth ----
@@ -1500,6 +1301,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         function applyIdentity(data) {
             isOwner = !!data.is_owner;
             myPermission = data.permission || 'owner';
+            myFullName = data.full_name || data.institute_name || '';
             document.getElementById('headerInstituteName').textContent = data.institute_name;
             document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
             document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
@@ -1628,6 +1430,10 @@ HTML_CONTENT = """<!DOCTYPE html>
                 renderTimetableModule(container);
             } else if (currentModule === 'users') {
                 await renderUsersModule(container);
+            } else if (currentModule === 'students') {
+                await renderStudentsModule(container);
+            } else if (currentModule === 'attendance') {
+                await renderAttendanceModule(container);
             } else {
                 await renderDataModule(container, currentModule);
             }
@@ -1639,12 +1445,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
                         <div class="max-w-3xl relative z-10 space-y-4">
                             <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
-                            <h2 class="text-4xl font-black text-white tracking-tight leading-tight">Institutional Operations, <span class="gold-gradient-text">Mastered.</span></h2>
-                            <p class="text-lg text-gray-300 font-medium leading-relaxed pt-2">We simplify the boring clerical work. Not by hiring more clerks, but by never needing to do so.</p>
-                            <div class="pt-4 flex items-center space-x-4">
-                                <button onclick="switchModule('students')" class="gold-bg hover:opacity-95 text-black font-extrabold px-6 py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Manage Students</button>
-                                <button onclick="switchModule('fees')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-6 py-3 rounded-xl text-xs uppercase tracking-wider fast-transition">View Fees (INR ₹)</button>
-                            </div>
+                            <h2 class="welcome-animate elegant-font text-5xl font-black gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -1702,6 +1503,23 @@ HTML_CONTENT = """<!DOCTYPE html>
             await loadModuleRecords(moduleName);
         }
 
+        // Explicit column order/labels for modules with a fixed, curated column set.
+        // Modules not listed here fall back to showing every DB column returned.
+        const MODULE_COLUMNS = {
+            teachers: [
+                { key: 'name', label: 'Name' },
+                { key: 'subject', label: 'Subject' },
+                { key: 'contact_number', label: 'Contact Number' },
+            ],
+            syllabus: [
+                { key: 'subject', label: 'Subject' },
+                { key: 'topic', label: 'Topic' },
+                { key: 'teacher_name', label: "Teacher's Name" },
+                { key: 'num_lectures', label: 'Number of Lectures' },
+                { key: 'lecture_date', label: 'Date' },
+            ],
+        };
+
         async function loadModuleRecords(moduleName) {
             if (!currentBranchId) return;
             const canWrite = myPermission !== 'read_only';
@@ -1710,29 +1528,213 @@ HTML_CONTENT = """<!DOCTYPE html>
             const thead = document.getElementById('moduleTableHead');
             const tbody = document.getElementById('moduleTableBody');
 
-            // 'building' is retired from classrooms, and record ownership fields never render.
-            const hiddenKeys = ['id', 'branch_id', 'building'];
-
             if (records.length === 0) {
                 thead.innerHTML = `<tr><th class="p-4">Status</th></tr>`;
                 tbody.innerHTML = `<tr><td class="p-8 text-center text-gray-500">No records found for ${moduleName}. ${canWrite ? "Click '+ Add New Record' to create one." : ''}</td></tr>`;
                 return;
             }
 
-            const keys = Object.keys(records[0]).filter(k => !hiddenKeys.includes(k));
-            thead.innerHTML = `<tr>${keys.map(k => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${k.replace('_', ' ')}</th>`).join('')}${canWrite ? '<th class="p-4"></th>' : ''}</tr>`;
+            // 'building' is retired from classrooms, and record ownership fields never render.
+            const hiddenKeys = ['id', 'branch_id', 'building'];
+            const columns = MODULE_COLUMNS[moduleName] ||
+                Object.keys(records[0]).filter(k => !hiddenKeys.includes(k)).map(k => ({ key: k, label: k.replace('_', ' ') }));
+
+            thead.innerHTML = `<tr>${columns.map(c => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${c.label}</th>`).join('')}${canWrite ? '<th class="p-4"></th>' : ''}</tr>`;
             tbody.innerHTML = records.map(r => `
                 <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
-                    ${keys.map(k => {
-                        let val = r[k];
-                        if (moduleName === 'fees' && k === 'amount_inr') { val = `₹${parseFloat(val || 0).toLocaleString('en-IN')}`; }
-                        if (k === 'document' && val) { val = `<a href="/uploads/${val}" target="_blank" class="text-yellow-500 underline text-xs font-semibold">View File</a>`; }
-                        else if (k === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
+                    ${columns.map(c => {
+                        let val = r[c.key];
+                        if (moduleName === 'fees' && c.key === 'amount_inr') { val = `₹${parseFloat(val || 0).toLocaleString('en-IN')}`; }
+                        if (c.key === 'document' && val) { val = `<a href="/uploads/${val}" target="_blank" class="text-yellow-500 underline text-xs font-semibold">View File</a>`; }
+                        else if (c.key === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
                         return `<td class="p-4 font-medium">${val ?? ''}</td>`;
                     }).join('')}
                     ${canWrite ? `<td class="p-4 text-right"><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
                 </tr>
             `).join('');
+        }
+
+        // ---- Student Department (batchwise segregation + search) ----
+
+        let allStudentRecords = [];
+
+        async function renderStudentsModule(container) {
+            const canWrite = myPermission !== 'read_only';
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center flex-wrap gap-4">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Student Department</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Segregated Batchwise • A-Z</p>
+                        </div>
+                        ${canWrite ? `
+                        <div class="flex items-center space-x-3">
+                            <button onclick="openRecordModal('students')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add New Record</button>
+                            <button onclick="openBulkImportModal('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>
+                        </div>` : ''}
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl">
+                        <input type="text" id="studentSearchInput" placeholder="Search student by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none mb-4">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-gray-300">
+                                <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
+                                    <tr>
+                                        <th class="p-4 font-bold tracking-wider">Name</th>
+                                        <th class="p-4 font-bold tracking-wider">Batch</th>
+                                        <th class="p-4 font-bold tracking-wider">Roll Number</th>
+                                        <th class="p-4 font-bold tracking-wider">Parent's Contact Number</th>
+                                        ${canWrite ? '<th class="p-4"></th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody id="studentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('studentSearchInput').addEventListener('input', renderStudentTable);
+            await loadStudentRecords();
+        }
+
+        async function loadStudentRecords() {
+            if (!currentBranchId) return;
+            const res = await authFetch(`/api/records/students/${currentBranchId}`);
+            allStudentRecords = await res.json();
+            renderStudentTable();
+        }
+
+        function renderStudentTable() {
+            const canWrite = myPermission !== 'read_only';
+            const tbody = document.getElementById('studentTableBody');
+            const query = (document.getElementById('studentSearchInput')?.value || '').trim().toLowerCase();
+
+            let students = allStudentRecords.slice();
+            if (query) students = students.filter(s => (s.name || '').toLowerCase().includes(query));
+
+            // Segregate batchwise: alphabetical by batch name, then alphabetical by student name within each batch.
+            students.sort((a, b) => {
+                const batchA = (a.batch || '').trim(), batchB = (b.batch || '').trim();
+                if (batchA !== batchB) return batchA.localeCompare(batchB);
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            if (students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-gray-500">No students found.</td></tr>`;
+                return;
+            }
+
+            let rows = '';
+            let lastBatch = null;
+            students.forEach(s => {
+                const batch = (s.batch || '').trim() || 'Unassigned';
+                if (batch !== lastBatch) {
+                    rows += `<tr class="batch-group-row"><td colspan="${canWrite ? 5 : 4}" class="p-2.5 text-xs font-extrabold uppercase tracking-widest gold-gradient-text">${batch}</td></tr>`;
+                    lastBatch = batch;
+                }
+                rows += `
+                    <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                        <td class="p-4 font-medium">${s.name ?? ''}</td>
+                        <td class="p-4">${s.batch ?? ''}</td>
+                        <td class="p-4">${s.roll_number ?? ''}</td>
+                        <td class="p-4">${s.parent_contact ?? ''}</td>
+                        ${canWrite ? `<td class="p-4 text-right"><button onclick="deleteRecord('students', ${s.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
+                    </tr>`;
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // ---- Attendance (batchwise, sourced live from Student Department) ----
+
+        let attendanceAllStudents = [];
+        let attendanceMarksToday = {};
+        const attendanceToday = new Date().toISOString().slice(0, 10);
+
+        async function renderAttendanceModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Attendance</h2>
+                        <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Batchwise • ${attendanceToday}</p>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl space-y-5">
+                        <div class="flex flex-wrap items-end gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Batch</label>
+                                <select id="attendanceBatchSelect" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none min-w-[200px]"></select>
+                            </div>
+                            <div class="flex-1 min-w-[220px]">
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Search Student</label>
+                                <input type="text" id="attendanceSearchInput" placeholder="Search by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                            </div>
+                        </div>
+                        <div id="attendanceStudentList" class="divide-y divide-gray-900"></div>
+                    </div>
+                </div>
+            `;
+            await loadAttendanceBatches();
+            document.getElementById('attendanceBatchSelect').addEventListener('change', renderAttendanceStudentList);
+            document.getElementById('attendanceSearchInput').addEventListener('input', renderAttendanceStudentList);
+        }
+
+        async function loadAttendanceBatches() {
+            if (!currentBranchId) return;
+            const [sRes, aRes] = await Promise.all([
+                authFetch(`/api/records/students/${currentBranchId}`),
+                authFetch(`/api/attendance/${currentBranchId}/${attendanceToday}`)
+            ]);
+            attendanceAllStudents = await sRes.json();
+            attendanceMarksToday = await aRes.json();
+
+            const batches = [...new Set(attendanceAllStudents.map(s => (s.batch || '').trim()).filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b));
+            const select = document.getElementById('attendanceBatchSelect');
+            select.innerHTML = batches.length === 0
+                ? '<option value="">No batches found</option>'
+                : batches.map(b => `<option value="${b}">${b}</option>`).join('');
+            renderAttendanceStudentList();
+        }
+
+        function renderAttendanceStudentList() {
+            const listEl = document.getElementById('attendanceStudentList');
+            const canWrite = myPermission !== 'read_only';
+            const selectedBatch = document.getElementById('attendanceBatchSelect').value;
+            const query = document.getElementById('attendanceSearchInput').value.trim().toLowerCase();
+
+            let students = attendanceAllStudents.filter(s => (s.batch || '').trim() === selectedBatch);
+            if (query) students = students.filter(s => (s.name || '').toLowerCase().includes(query));
+            students.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            if (students.length === 0) {
+                listEl.innerHTML = `<p class="text-center text-gray-500 text-sm py-8">No students found${selectedBatch ? ` in ${selectedBatch}` : ''}.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = students.map(s => {
+                const mark = attendanceMarksToday[s.name];
+                const safeName = (s.name || '').replace(/'/g, "\\'");
+                return `
+                <div class="flex items-center justify-between py-3">
+                    <span class="text-sm font-medium text-gray-200">${s.name ?? ''}</span>
+                    <div class="flex items-center space-x-2">
+                        <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Present')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Present' ? 'bg-green-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-green-400'}">Present</button>
+                        <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Absent')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Absent' ? 'bg-red-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-red-400'}">Absent</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function markAttendance(studentName, status) {
+            const res = await authFetch('/api/attendance/mark', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: currentBranchId, student_name: studentName, date: attendanceToday, status })
+            });
+            if (res.ok) {
+                attendanceMarksToday[studentName] = status;
+                renderAttendanceStudentList();
+            } else {
+                alert('Failed to mark attendance.');
+            }
         }
 
         async function deleteRecord(moduleName, recordId) {
@@ -1780,10 +1782,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
 
         const BULK_IMPORT_COLUMNS = {
-            students: ['name', 'course', 'status'],
-            teachers: ['name', 'subject', 'department'],
+            students: ['name', 'batch', 'roll_number', 'parent_contact'],
+            teachers: ['name', 'subject', 'contact_number'],
             classrooms: ['room_no', 'capacity'],
-            syllabus: ['subject', 'semester', 'units'],
+            syllabus: ['subject', 'topic', 'teacher_name', 'num_lectures', 'lecture_date'],
             attendance: ['student_name', 'date', 'status'],
             invigilation: ['teacher_name', 'exam_date', 'room'],
             fees: ['student_name', 'amount_inr', 'status', 'due_date'],
@@ -2019,15 +2021,16 @@ HTML_CONTENT = """<!DOCTYPE html>
             let fieldsConfig = [];
             if (moduleName === 'students') {
                 fieldsConfig = [
-                    { id: 'name', label: 'Full Name', type: 'text', placeholder: 'Aarav Sharma' },
-                    { id: 'course', label: 'Course / Program', type: 'text', placeholder: 'B.Tech Computer Science' },
-                    { id: 'status', label: 'Status', type: 'text', placeholder: 'Active' }
+                    { id: 'name', label: 'Name', type: 'text', placeholder: 'Aarav Sharma' },
+                    { id: 'batch', label: 'Batch', type: 'text', placeholder: 'Batch A' },
+                    { id: 'roll_number', label: 'Roll Number', type: 'text', placeholder: '24' },
+                    { id: 'parent_contact', label: "Parent's Contact Number", type: 'text', placeholder: '+91 98765 43210' }
                 ];
             } else if (moduleName === 'teachers') {
                 fieldsConfig = [
-                    { id: 'name', label: 'Teacher Name', type: 'text', placeholder: 'Dr. Ramesh Kumar' },
-                    { id: 'subject', label: 'Specialization', type: 'text', placeholder: 'Artificial Intelligence' },
-                    { id: 'department', label: 'Department', type: 'text', placeholder: 'School of Engineering' }
+                    { id: 'name', label: 'Name', type: 'text', placeholder: 'Dr. Ramesh Kumar' },
+                    { id: 'subject', label: 'Subject', type: 'text', placeholder: 'Artificial Intelligence' },
+                    { id: 'contact_number', label: 'Contact Number', type: 'text', placeholder: '+91 98765 43210' }
                 ];
             } else if (moduleName === 'classrooms') {
                 fieldsConfig = [
@@ -2036,9 +2039,11 @@ HTML_CONTENT = """<!DOCTYPE html>
                 ];
             } else if (moduleName === 'syllabus') {
                 fieldsConfig = [
-                    { id: 'subject', label: 'Subject Name', type: 'text', placeholder: 'Data Structures & Algorithms' },
-                    { id: 'semester', label: 'Semester', type: 'text', placeholder: 'Fall 2026' },
-                    { id: 'units', label: 'Credit Units', type: 'number', placeholder: '4' }
+                    { id: 'subject', label: 'Subject', type: 'text', placeholder: 'Data Structures & Algorithms' },
+                    { id: 'topic', label: 'Topic', type: 'text', placeholder: 'Binary Search Trees' },
+                    { id: 'teacher_name', label: "Teacher's Name", type: 'text', placeholder: 'Dr. Ramesh Kumar' },
+                    { id: 'num_lectures', label: 'Number of Lectures', type: 'number', placeholder: '4' },
+                    { id: 'lecture_date', label: 'Date', type: 'text', placeholder: '2026-09-15' }
                 ];
             } else if (moduleName === 'attendance') {
                 fieldsConfig = [
