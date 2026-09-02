@@ -960,7 +960,7 @@ HTML_CONTENT = """<!DOCTYPE html>
     <title>ALGORITHMIC - Enterprise Institutional Operations</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700&display=swap');
 
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -979,6 +979,9 @@ HTML_CONTENT = """<!DOCTYPE html>
         /* Bold display serif used for headlines - premium, editorial, unmistakably "statement" typography */
         .elegant-font { font-family: 'Fraunces', serif; font-weight: 600; }
         h1, h2, h3 { font-family: 'Fraunces', serif; letter-spacing: -0.01em; }
+
+        /* Heavier, higher-contrast display serif reserved for the institute name and the homepage welcome line - bolder and more formal than the base Fraunces headings */
+        .premium-heading-font { font-family: 'Playfair Display', serif; font-weight: 800; letter-spacing: -0.01em; }
 
         .gold-gradient-text {
             background: linear-gradient(135deg, #F4E5A1 0%, #E8C767 20%, #BF953F 45%, #8a6a22 60%, #E8C767 80%, #F4E5A1 100%);
@@ -1112,7 +1115,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <header class="border-b gold-border bg-[#0a0a0a] px-8 py-4 flex justify-between items-center sticky top-0 z-40">
             <div class="flex items-center space-x-4">
                 <div class="group flex items-center space-x-2">
-                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name elegant-font text-3xl font-black gold-gradient-text tracking-tight leading-none">—</h1>
+                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name premium-heading-font text-3xl font-black gold-gradient-text tracking-tight leading-none">—</h1>
                     <button onclick="openRenameInstituteModal()" title="Rename institute" class="text-gray-600 hover:text-yellow-500 text-sm fast-transition opacity-0 group-hover:opacity-100">✎</button>
                 </div>
             </div>
@@ -1445,7 +1448,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
                         <div class="max-w-3xl relative z-10 space-y-4">
                             <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
-                            <h2 class="welcome-animate elegant-font text-5xl font-black gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
+                            <h2 class="welcome-animate premium-heading-font text-5xl font-black gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
