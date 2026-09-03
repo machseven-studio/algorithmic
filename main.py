@@ -25,11 +25,12 @@ ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 VALID_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'invigilation', 'fees']
+SEATING_MODULE = 'seating'
 
 # 'timetables' isn't a generic /api/records table (it has its own dedicated
 # endpoints below) but it IS a sidebar module a staff designation can be
 # granted or denied access to, so it's included here for permission checks.
-ALL_ACCESS_MODULES = VALID_MODULES + ['timetables']
+ALL_ACCESS_MODULES = VALID_MODULES + ['timetables', SEATING_MODULE]
 
 DESIGNATION_PRESETS = ['Admin', 'Accountant', 'Teacher', 'Head', 'Clerk', 'Custom']
 
@@ -221,6 +222,19 @@ def init_db():
             teachers_config_json TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             UNIQUE(branch_id, batch_name),
+            FOREIGN KEY(branch_id) REFERENCES branches(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exam_seatings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_id INTEGER NOT NULL,
+            exam_date TEXT NOT NULL,
+            room_number TEXT NOT NULL,
+            rows INTEGER NOT NULL,
+            columns INTEGER NOT NULL,
+            assignments_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
@@ -1074,9 +1088,12 @@ class TimetableGenerateRequest(BaseModel):
 
 @app.post("/api/timetable/generate")
 def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitute = Depends(require_write_access)):
-    """(Re)generates the timetable for exactly one batch. Always erases that
-    batch's previous slots first and rebuilds from scratch - other batches'
-    slots are untouched, so nothing ever stacks on top of a prior run."""
+    """Generate one batch timetable while deliberately spreading each teacher's
+    weekly lectures across the week whenever the constraints allow it.
+
+    Preferred weekdays are evenly spaced (for example Mon/Wed/Fri for three
+    lectures), then batch, teacher and room conflicts are checked.
+    """
     check_module_access(institute, "timetables")
     verify_branch_ownership(req.branch_id, institute.id)
     if not req.timings:
@@ -1085,75 +1102,127 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
     conn = get_conn()
     cursor = conn.cursor()
 
-    # Erase this batch's old timetable before generating the new one - never
-    # stacked on top of a prior run.
-    cursor.execute("DELETE FROM timetables_slots WHERE branch_id = ? AND batch_name = ?", (req.branch_id, req.batch_name))
+    # Regenerate exactly this batch; other batches remain available for teacher
+    # and room conflict checks.
+    cursor.execute(
+        "DELETE FROM timetables_slots WHERE branch_id = ? AND batch_name = ?",
+        (req.branch_id, req.batch_name),
+    )
 
-    # Real classrooms for this branch, used for room assignment instead of a hardcoded room.
     cursor.execute("SELECT room_no FROM classrooms WHERE branch_id = ? ORDER BY id", (req.branch_id,))
     available_rooms = [row[0] for row in cursor.fetchall() if row[0]]
 
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    day_index = {day: i for i, day in enumerate(days)}
     timings_sorted = sorted(req.timings, key=lambda t: t.lecture_number)
     generated_slots = []
     warnings = []
 
+    # Current batch load is kept in memory as well as in SQLite so scoring is cheap.
+    batch_load = {day: 0 for day in days}
+
+    def slot_is_free(day, timing, teacher_name):
+        slot_time = timing.time_slot
+        cursor.execute(
+            """SELECT COUNT(*) FROM timetables_slots
+               WHERE branch_id = ? AND batch_name = ? AND day = ? AND time_slot = ?""",
+            (req.branch_id, req.batch_name, day, slot_time),
+        )
+        if cursor.fetchone()[0] > 0:
+            return False
+        cursor.execute(
+            """SELECT COUNT(*) FROM timetables_slots
+               WHERE branch_id = ? AND day = ? AND time_slot = ? AND teacher = ?""",
+            (req.branch_id, day, slot_time, teacher_name),
+        )
+        return cursor.fetchone()[0] == 0
+
+    def free_room(day, slot_time):
+        for candidate_room in available_rooms:
+            cursor.execute(
+                """SELECT COUNT(*) FROM timetables_slots
+                   WHERE branch_id = ? AND day = ? AND time_slot = ? AND room = ?""",
+                (req.branch_id, day, slot_time, candidate_room),
+            )
+            if cursor.fetchone()[0] == 0:
+                return candidate_room
+        return "Unassigned (no free classroom)" if available_rooms else "Unassigned (add a classroom)"
+
     for t_config in req.teachers_config:
-        teacher_name = t_config['name']
-        subject = t_config['subject']
-        target_lectures = int(t_config['lectures_per_week'])
-        unavailable = t_config.get('unavailable_days', [])
+        teacher_name = str(t_config.get('name', '')).strip()
+        subject = str(t_config.get('subject', '')).strip()
+        target_lectures = max(0, int(t_config.get('lectures_per_week', 0)))
+        unavailable = {str(d).strip() for d in t_config.get('unavailable_days', [])}
+
+        if not teacher_name or target_lectures == 0:
+            continue
 
         assigned_count = 0
-        for day in days:
-            if day in unavailable:
-                continue
-            if assigned_count >= target_lectures:
+        used_days = []
+        eligible_days = [d for d in days if d not in unavailable]
+
+        # Evenly distribute the requested weekly lectures: 2 -> Mon/Fri,
+        # 3 -> Mon/Wed/Fri, 4 -> Mon/Tue/Thu/Fri, 5 -> every weekday.
+        if target_lectures <= 1:
+            preferred_day_indices = [0] if eligible_days else []
+        elif target_lectures <= len(eligible_days):
+            preferred_day_indices = [
+                round(i * (len(eligible_days) - 1) / (target_lectures - 1))
+                for i in range(target_lectures)
+            ]
+        else:
+            preferred_day_indices = [i % len(eligible_days) for i in range(target_lectures)] if eligible_days else []
+
+        # Each lecture is chosen from ALL free day/time candidates. The scoring
+        # strongly prefers the next evenly-spaced weekday, then an unused day,
+        # then a lightly loaded day/time. Conflicts can still force a fallback.
+        for lecture_index in range(target_lectures):
+            candidates = []
+            desired_idx = preferred_day_indices[lecture_index] if preferred_day_indices else 0
+            desired_day = eligible_days[desired_idx] if eligible_days else None
+            for day in days:
+                if day in unavailable:
+                    continue
+                for timing in timings_sorted:
+                    if not slot_is_free(day, timing, teacher_name):
+                        continue
+                    room = free_room(day, timing.time_slot)
+                    idx = day_index[day]
+                    min_distance = min((abs(idx - used) for used in used_days), default=5)
+                    same_day_penalty = 1000 if idx in used_days and len(set(used_days)) < len(eligible_days) else 0
+                    preferred_distance = abs(idx - day_index[desired_day]) if desired_day else 0
+                    # Lower score wins. Preferred weekdays dominate, while
+                    # day load and distance provide sensible tie-breaking.
+                    score = (
+                        preferred_distance * 100
+                        + same_day_penalty
+                        + batch_load[day] * 25
+                        - min_distance * 2
+                        + idx * 0.01
+                        + timing.lecture_number * 0.001
+                    )
+                    candidates.append((score, day, timing, room))
+
+            if not candidates:
                 break
-            for timing in timings_sorted:
-                slot_time = timing.time_slot
-                if assigned_count >= target_lectures:
-                    break
 
-                # 1. Is this batch already busy at this day/time?
-                cursor.execute("""
-                    SELECT COUNT(*) FROM timetables_slots
-                    WHERE branch_id = ? AND batch_name = ? AND day = ? AND time_slot = ?
-                """, (req.branch_id, req.batch_name, day, slot_time))
-                if cursor.fetchone()[0] > 0:
-                    continue
-
-                # 2. Is this teacher already teaching a DIFFERENT batch at this day/time?
-                #    (this is the check the old version never did)
-                cursor.execute("""
-                    SELECT COUNT(*) FROM timetables_slots
-                    WHERE branch_id = ? AND day = ? AND time_slot = ? AND teacher = ?
-                """, (req.branch_id, day, slot_time, teacher_name))
-                if cursor.fetchone()[0] > 0:
-                    continue
-
-                # 3. Find a real, currently-free classroom for this day/time
-                room = None
-                for candidate_room in available_rooms:
-                    cursor.execute("""
-                        SELECT COUNT(*) FROM timetables_slots
-                        WHERE branch_id = ? AND day = ? AND time_slot = ? AND room = ?
-                    """, (req.branch_id, day, slot_time, candidate_room))
-                    if cursor.fetchone()[0] == 0:
-                        room = candidate_room
-                        break
-                if room is None:
-                    room = "Unassigned (no free classroom)" if available_rooms else "Unassigned (add a classroom)"
-
-                cursor.execute("""
-                    INSERT INTO timetables_slots (branch_id, batch_name, day, time_slot, lecture_number, subject, teacher, room)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (req.branch_id, req.batch_name, day, slot_time, timing.lecture_number, subject, teacher_name, room))
-                generated_slots.append({
-                    "day": day, "time_slot": slot_time, "lecture_number": timing.lecture_number,
-                    "subject": subject, "teacher": teacher_name, "room": room,
-                })
-                assigned_count += 1
+            _, day, timing, room = min(candidates, key=lambda x: x[0])
+            cursor.execute(
+                """INSERT INTO timetables_slots
+                   (branch_id, batch_name, day, time_slot, lecture_number, subject, teacher, room)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (req.branch_id, req.batch_name, day, timing.time_slot,
+                 timing.lecture_number, subject, teacher_name, room),
+            )
+            generated_slots.append({
+                "day": day, "time_slot": timing.time_slot,
+                "lecture_number": timing.lecture_number,
+                "subject": subject, "teacher": teacher_name, "room": room,
+            })
+            assigned_count += 1
+            batch_load[day] += 1
+            used_days.append(day_index[day])
+            teacher_days.append(day)
 
         if assigned_count < target_lectures:
             warnings.append(
@@ -1161,22 +1230,38 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
                 f"(not enough free day/time slots without a conflict)."
             )
 
-    # Save the exact prerequisites used, so this batch can be reloaded and
-    # regenerated later without retyping (or accidentally drifting from) them.
     cursor.execute(
-        """INSERT INTO timetable_configs (branch_id, batch_name, timings_json, teachers_config_json, updated_at)
+        """INSERT INTO timetable_configs
+           (branch_id, batch_name, timings_json, teachers_config_json, updated_at)
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(branch_id, batch_name) DO UPDATE SET
                timings_json = excluded.timings_json,
                teachers_config_json = excluded.teachers_config_json,
                updated_at = excluded.updated_at""",
-        (req.branch_id, req.batch_name, json.dumps([t.dict() for t in req.timings]),
+        (req.branch_id, req.batch_name,
+         json.dumps([t.dict() for t in req.timings]),
          json.dumps(req.teachers_config), datetime.utcnow().isoformat()),
     )
 
     conn.commit()
     conn.close()
     return {"status": "success", "slots": generated_slots, "warnings": warnings}
+
+
+@app.delete("/api/timetable/all/{branch_id}")
+def delete_all_timetables(branch_id: int, institute: CurrentInstitute = Depends(require_write_access)):
+    """Completely reset the timetable workspace for the selected branch."""
+    check_module_access(institute, "timetables")
+    verify_branch_ownership(branch_id, institute.id)
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM timetables_slots WHERE branch_id = ?", (branch_id,))
+    slots_deleted = cursor.rowcount
+    cursor.execute("DELETE FROM timetable_configs WHERE branch_id = ?", (branch_id,))
+    configs_deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return {"status": "cleared", "slots_deleted": slots_deleted, "configs_deleted": configs_deleted}
 
 
 class TimetableSlotEdit(BaseModel):
@@ -1211,6 +1296,171 @@ def edit_timetable_slot(slot_id: int, req: TimetableSlotEdit, institute: Current
     conn.commit()
     conn.close()
     return {"status": "updated"}
+
+
+# ---------------------------------------------------------------------------
+# Exam seating
+# ---------------------------------------------------------------------------
+
+class SeatingGenerateRequest(BaseModel):
+    branch_id: int
+    exam_date: str
+    room_number: str
+    rows: int
+    columns: int
+
+
+def _build_seating_layout(students, rows, columns):
+    """Assign students to a grid so orthogonally adjacent seats never share a
+    batch. Uses multiple deterministic greedy restarts and rejects impossible
+    layouts instead of silently violating the rule."""
+    from collections import Counter
+
+    capacity = rows * columns
+    if len(students) > capacity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Room capacity is {capacity}, but {len(students)} students were selected.",
+        )
+    if not students:
+        raise HTTPException(status_code=400, detail="No students found in this branch.")
+
+    batches = Counter((s["batch"] or "Unassigned").strip() or "Unassigned" for s in students)
+    if max(batches.values()) > (capacity + 1) // 2:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid no-adjacent layout is impossible because one batch contains too many students for this room. Increase the room size or use a different exam room.",
+        )
+
+    # Row-major cells; each cell only constrains left and above neighbors.
+    cells = [(r, c) for r in range(rows) for c in range(columns)]
+    batch_names = sorted(batches, key=lambda b: (-batches[b], b.lower()))
+
+    for attempt in range(120):
+        remaining = dict(batches)
+        placed_batches = {}
+        failed = False
+
+        # Mild deterministic variation between attempts helps with awkward
+        # batch-size combinations without making the result nondeterministic.
+        rotation = attempt % max(1, len(batch_names))
+        priority_order = batch_names[rotation:] + batch_names[:rotation]
+
+        # Only the first N cells need students; remaining room capacity stays empty.
+        cells_to_fill = cells[:len(students)]
+        for r, c in cells_to_fill:
+            forbidden = set()
+            if c > 0:
+                forbidden.add(placed_batches[(r, c - 1)])
+            if r > 0:
+                forbidden.add(placed_batches[(r - 1, c)])
+
+            candidates = [b for b in priority_order if remaining[b] > 0 and b not in forbidden]
+            if not candidates:
+                failed = True
+                break
+
+            # Largest remaining batch first prevents a dominant batch from
+            # being stranded at the end; a small positional tie-break varies
+            # across attempts.
+            candidates.sort(key=lambda b: (-remaining[b], priority_order.index(b)))
+            chosen = candidates[0]
+            placed_batches[(r, c)] = chosen
+            remaining[chosen] -= 1
+
+        if not failed:
+            by_batch = {b: [] for b in batches}
+            for student in students:
+                by_batch[(student["batch"] or "Unassigned").strip() or "Unassigned"].append(student)
+            for b in by_batch:
+                by_batch[b].sort(key=lambda x: (x.get("roll_number") or "", x.get("name") or ""))
+
+            assignments = []
+            counters = {b: 0 for b in by_batch}
+            for r, c in cells_to_fill:
+                b = placed_batches.get((r, c))
+                if not b:
+                    continue
+                student = by_batch[b][counters[b]]
+                counters[b] += 1
+                assignments.append({
+                    "row": r + 1,
+                    "column": c + 1,
+                    "student_id": student["id"],
+                    "name": student["name"],
+                    "batch": b,
+                    "roll_number": student["roll_number"],
+                })
+            return assignments
+
+    raise HTTPException(
+        status_code=400,
+        detail="Could not find a valid seating arrangement for these batch sizes and room dimensions. Try a larger room or different room dimensions.",
+    )
+
+
+@app.get("/api/seating/{branch_id}")
+def get_seating_layouts(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, SEATING_MODULE)
+    verify_branch_ownership(branch_id, institute.id)
+    conn = get_conn(); conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT id, exam_date, room_number, rows, columns, assignments_json, created_at FROM exam_seatings WHERE branch_id = ? ORDER BY exam_date DESC, id DESC",
+        (branch_id,),
+    ).fetchall()
+    conn.close()
+    return [{**dict(r), "assignments": json.loads(r["assignments_json"])} for r in rows]
+
+
+@app.post("/api/seating/generate")
+def generate_seating(req: SeatingGenerateRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    check_module_access(institute, SEATING_MODULE)
+    verify_branch_ownership(req.branch_id, institute.id)
+    if req.rows < 1 or req.columns < 1:
+        raise HTTPException(status_code=400, detail="Rows and columns must both be at least 1.")
+    room_number = req.room_number.strip()
+    if not room_number:
+        raise HTTPException(status_code=400, detail="Room number is required.")
+
+    conn = get_conn(); conn.row_factory = sqlite3.Row
+    students = conn.execute(
+        """SELECT id, COALESCE(full_name, name) AS name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
+           FROM students WHERE branch_id = ? ORDER BY LOWER(COALESCE(batch, '')), LOWER(COALESCE(full_name, name, ''))""",
+        (req.branch_id,),
+    ).fetchall()
+    student_rows = [dict(r) for r in students]
+    assignments = _build_seating_layout(student_rows, req.rows, req.columns)
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """DELETE FROM exam_seatings WHERE branch_id = ? AND exam_date = ? AND room_number = ?""",
+        (req.branch_id, req.exam_date, room_number),
+    )
+    cursor.execute(
+        """INSERT INTO exam_seatings (branch_id, exam_date, room_number, rows, columns, assignments_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (req.branch_id, req.exam_date, room_number, req.rows, req.columns,
+         json.dumps(assignments), datetime.utcnow().isoformat()),
+    )
+    layout_id = cursor.lastrowid
+    conn.commit(); conn.close()
+    return {"status": "success", "id": layout_id, "assignments": assignments}
+
+
+@app.delete("/api/seating/{layout_id}")
+def delete_seating_layout(layout_id: int, institute: CurrentInstitute = Depends(require_write_access)):
+    check_module_access(institute, SEATING_MODULE)
+    conn = get_conn(); cursor = conn.cursor()
+    cursor.execute(
+        """SELECT exam_seatings.id FROM exam_seatings JOIN branches ON branches.id = exam_seatings.branch_id
+           WHERE exam_seatings.id = ? AND branches.institute_id = ?""",
+        (layout_id, institute.id),
+    )
+    if not cursor.fetchone():
+        conn.close(); raise HTTPException(status_code=404, detail="Seating layout not found")
+    cursor.execute("DELETE FROM exam_seatings WHERE id = ?", (layout_id,))
+    conn.commit(); conn.close()
+    return {"status": "deleted"}
 
 
 # ---------------------------------------------------------------------------
@@ -1349,7 +1599,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         /* Bold, all-caps "statement" font for the institute name and welcome
            line - heavier and blockier than premium-heading-font, on brand
            with the "not a website, a statement" direction. */
-        .command-heading-font { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; letter-spacing: 0.01em; text-transform: uppercase; }
+        .command-heading-font { font-family: "Footlight MT Light", "Footlight MT", "Times New Roman", serif; font-weight: 300; letter-spacing: 0.01em; }
 
         .mini-bar-track { background: rgba(212,175,55,0.08); border-radius: 999px; overflow: hidden; height: 8px; }
         .mini-bar-fill { background: linear-gradient(90deg, #8a6a22, #E8C767); height: 100%; border-radius: 999px; transition: width 0.4s ease; }
@@ -1518,6 +1768,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <button id="navSyllabus" data-module="syllabus" onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
                 <button id="navAttendance" data-module="attendance" onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
                 <button id="navTimetables" data-module="timetables" onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
+                <button id="navSeating" data-module="seating" onclick="switchModule('seating')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🪑</span><span>Exam Seating</span></button>
                 <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
                 <button id="navFees" data-module="fees" onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
                 <button id="navManageUsers" onclick="switchModule('users')" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
@@ -1676,7 +1927,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         let myDesignation = 'Owner';
         let myAllowedModules = [];
         let bulkImportModule = null;
-        const ALL_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'invigilation', 'fees'];
+        const ALL_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'seating', 'invigilation', 'fees'];
 
         // ---- Auth ----
 
@@ -1871,6 +2122,8 @@ HTML_CONTENT = """<!DOCTYPE html>
                 await renderStudentsModule(container);
             } else if (currentModule === 'attendance') {
                 await renderAttendanceModule(container);
+            } else if (currentModule === 'seating') {
+                await renderSeatingModule(container);
             } else {
                 await renderDataModule(container, currentModule);
             }
@@ -2021,7 +2274,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${moduleName} Department</h2>
-                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Branch Synchronized • Document Supported</p>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Branch Synchronized</p>
                         </div>
                         ${canWrite ? `
                         <div class="flex items-center space-x-3">
@@ -2064,6 +2317,21 @@ HTML_CONTENT = """<!DOCTYPE html>
                 { key: 'teacher_name', label: "Teacher's Name" },
                 { key: 'num_lectures', label: 'Number of Lectures' },
                 { key: 'lecture_date', label: 'Date' },
+            ],
+            classrooms: [
+                { key: 'room_no', label: 'Room Number' },
+                { key: 'capacity', label: 'Seating Capacity' },
+            ],
+            invigilation: [
+                { key: 'teacher_name', label: 'Teacher Name' },
+                { key: 'exam_date', label: 'Exam Date' },
+                { key: 'room', label: 'Exam Hall' },
+            ],
+            fees: [
+                { key: 'student_name', label: 'Student Name' },
+                { key: 'amount_inr', label: 'Amount (INR)' },
+                { key: 'status', label: 'Status' },
+                { key: 'due_date', label: 'Due Date' },
             ],
         };
 
@@ -2412,7 +2680,7 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         const MODULE_LABELS = {
             students: 'Students', teachers: 'Teachers', classrooms: 'Classrooms', syllabus: 'Syllabus',
-            attendance: 'Attendance', timetables: 'Timetable', invigilation: 'Invigilator Duty', fees: 'Fees',
+            attendance: 'Attendance', timetables: 'Timetable', seating: 'Exam Seating', invigilation: 'Invigilator Duty', fees: 'Fees',
         };
 
         let usersCache = [];
@@ -2565,6 +2833,91 @@ HTML_CONTENT = """<!DOCTYPE html>
             { lecture_number: 4, time_slot: '01:15 PM - 02:15 PM' },
         ];
 
+        async function renderSeatingModule(container) {
+            const canWrite = myPermission !== 'read_only';
+            const res = await authFetch(`/api/seating/${currentBranchId}`);
+            const layouts = await res.json();
+            window.seatingLayouts = layouts;
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <div class="flex justify-between items-center flex-wrap gap-3">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Exam Seating Layout</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">No same-batch students side-by-side or front-back</p>
+                        </div>
+                    </div>
+                    ${canWrite ? `
+                    <div class="glass-panel border gold-border p-6 rounded-2xl shadow-2xl">
+                        <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Build Seating Plan</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Exam Date</label><input id="seatExamDate" type="date" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                            <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Room Number</label><input id="seatRoom" type="text" required placeholder="Exam Hall 204" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                            <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Rows</label><input id="seatRows" type="number" min="1" max="100" value="5" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                            <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Columns</label><input id="seatColumns" type="number" min="1" max="100" value="8" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-4">Students are pulled from the current branch. The generator spaces batches so orthogonally adjacent seats never contain the same batch.</p>
+                        <button onclick="generateSeatingPlan()" class="mt-5 gold-bg hover:opacity-95 text-black font-extrabold px-6 py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate Seating Plan</button>
+                    </div>` : ''}
+                    <div id="seatingLayoutsContainer" class="space-y-6"></div>
+                </div>`;
+            renderSavedSeatingLayouts();
+        }
+
+        async function generateSeatingPlan() {
+            const exam_date = document.getElementById('seatExamDate').value;
+            const room_number = document.getElementById('seatRoom').value.trim();
+            const rows = parseInt(document.getElementById('seatRows').value, 10);
+            const columns = parseInt(document.getElementById('seatColumns').value, 10);
+            if (!exam_date || !room_number || !rows || !columns) { alert('Exam date, room number, rows and columns are required.'); return; }
+            const res = await authFetch('/api/seating/generate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch_id: currentBranchId, exam_date, room_number, rows, columns })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { alert(data.detail || 'Could not generate seating plan.'); return; }
+            alert('Exam seating plan generated successfully.');
+            const listRes = await authFetch(`/api/seating/${currentBranchId}`);
+            window.seatingLayouts = await listRes.json();
+            renderSavedSeatingLayouts();
+        }
+
+        function renderSavedSeatingLayouts() {
+            const container = document.getElementById('seatingLayoutsContainer');
+            if (!container) return;
+            const layouts = window.seatingLayouts || [];
+            if (!layouts.length) {
+                container.innerHTML = '<div class="glass-panel border gold-border p-8 rounded-2xl text-center text-gray-500">No exam seating plans yet.</div>';
+                return;
+            }
+            const canWrite = myPermission !== 'read_only';
+            container.innerHTML = layouts.map(layout => {
+                const assignments = layout.assignments || [];
+                const byCell = new Map(assignments.map(a => [`${a.row}-${a.column}`, a]));
+                let grid = '';
+                for (let r = 1; r <= layout.rows; r++) {
+                    for (let c = 1; c <= layout.columns; c++) {
+                        const a = byCell.get(`${r}-${c}`);
+                        grid += `<div class="min-h-20 rounded-xl border ${a ? 'gold-border bg-[#10100d]' : 'border-gray-900 bg-[#080808]'} p-2 flex flex-col justify-between">${a ? `<div class="text-[11px] font-bold text-gray-100">${esc(a.name)}</div><div class="text-[10px] text-yellow-500">${esc(a.batch)}</div><div class="text-[9px] text-gray-500">Roll ${esc(a.roll_number)}</div>` : '<span class="text-[10px] text-gray-700">EMPTY</span>'}</div>`;
+                    }
+                }
+                return `<div class="glass-panel border gold-border p-6 rounded-2xl shadow-2xl">
+                    <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+                        <div><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">${esc(layout.room_number)}</h3><p class="text-xs text-gray-500 mt-1">${esc(layout.exam_date)} · ${layout.rows} × ${layout.columns} · ${assignments.length} students</p></div>
+                        ${canWrite ? `<button onclick="deleteSeatingLayout(${layout.id})" class="text-red-400 border border-red-900/40 bg-[#171010] hover:bg-[#241313] px-3 py-2 rounded-lg text-xs font-bold">Delete</button>` : ''}
+                    </div>
+                    <div class="grid gap-2" style="grid-template-columns: repeat(${layout.columns}, minmax(80px, 1fr));">${grid}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function deleteSeatingLayout(layoutId) {
+            if (!confirm('Delete this exam seating plan?')) return;
+            const res = await authFetch(`/api/seating/${layoutId}`, { method: 'DELETE' });
+            if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.detail || 'Failed to delete seating plan.'); return; }
+            window.seatingLayouts = (window.seatingLayouts || []).filter(x => x.id !== layoutId);
+            renderSavedSeatingLayouts();
+        }
+
         async function renderTimetableModule(container) {
             const canWrite = myPermission !== 'read_only';
             const [tRes, sRes, cRes] = await Promise.all([
@@ -2585,7 +2938,10 @@ HTML_CONTENT = """<!DOCTYPE html>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Timetable Generation & Batch Scheduler</h2>
                             <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Conflict-checked · one batch at a time · never stacked</p>
                         </div>
-                        <button onclick="window.print()" class="bg-[#141414] hover:bg-[#202020] gold-gradient-text border gold-border px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Download PDF / Print Timetable</button>
+                        <div class="flex items-center gap-3">
+                            <button onclick="deleteAllTimetables()" class="bg-[#171010] hover:bg-[#241313] text-red-400 border border-red-900/40 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition">Delete All Timetables</button>
+                            <button onclick="window.print()" class="bg-[#141414] hover:bg-[#202020] gold-gradient-text border gold-border px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Download PDF / Print Timetable</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div class="glass-panel border gold-border p-6 rounded-2xl space-y-6">
@@ -2725,6 +3081,18 @@ HTML_CONTENT = """<!DOCTYPE html>
                     ${canWrite ? `<td class="p-3 text-right"><button onclick="openTimetableSlotEdit(${s.id})" title="Edit slot" class="row-delete-btn fast-transition text-sm leading-none">✎</button></td>` : ''}
                 </tr>
             `).join('');
+        }
+
+        async function deleteAllTimetables() {
+            if (!confirm('Delete EVERY timetable and saved timetable configuration for this branch? This cannot be undone.')) return;
+            const res = await authFetch(`/api/timetable/all/${currentBranchId}`, { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert(`Timetable workspace cleared. ${data.slots_deleted || 0} lecture(s) removed.`);
+                refreshCurrentModule();
+            } else {
+                alert(data.detail || 'Failed to clear timetables.');
+            }
         }
 
         async function generateTimetableSchedule() {
