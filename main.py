@@ -78,6 +78,58 @@ def init_db():
         "UPDATE branches SET tenant_id = institute_id WHERE tenant_id IS NULL",
         "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS designation TEXT",
         "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS module_access TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS email TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS batch TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS status TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_number TEXT",
+        "ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_contact TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS name TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS subject TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS department TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE teachers ADD COLUMN IF NOT EXISTS contact_number TEXT",
+        "ALTER TABLE classrooms ADD COLUMN IF NOT EXISTS room_no TEXT",
+        "ALTER TABLE classrooms ADD COLUMN IF NOT EXISTS capacity INTEGER",
+        "ALTER TABLE classrooms ADD COLUMN IF NOT EXISTS building TEXT",
+        "ALTER TABLE classrooms ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS subject TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS semester TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS units INTEGER",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS topic TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS teacher_name TEXT",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS num_lectures INTEGER",
+        "ALTER TABLE syllabus ADD COLUMN IF NOT EXISTS lecture_date TEXT",
+        "ALTER TABLE attendance ADD COLUMN IF NOT EXISTS student_name TEXT",
+        "ALTER TABLE attendance ADD COLUMN IF NOT EXISTS date TEXT",
+        "ALTER TABLE attendance ADD COLUMN IF NOT EXISTS status TEXT",
+        "ALTER TABLE attendance ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS batch_name TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS day TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS time_slot TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS lecture_number INTEGER",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS subject TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS teacher TEXT",
+        "ALTER TABLE timetables_slots ADD COLUMN IF NOT EXISTS room TEXT",
+        "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS timings_json TEXT",
+        "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS teachers_config_json TEXT",
+        "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS exam_date TEXT",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS room_number TEXT",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS rows INTEGER",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS columns INTEGER",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS assignments_json TEXT",
+        "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ",
+        "ALTER TABLE invigilation ADD COLUMN IF NOT EXISTS teacher_name TEXT",
+        "ALTER TABLE invigilation ADD COLUMN IF NOT EXISTS exam_date TEXT",
+        "ALTER TABLE invigilation ADD COLUMN IF NOT EXISTS room TEXT",
+        "ALTER TABLE invigilation ADD COLUMN IF NOT EXISTS document TEXT",
+        "ALTER TABLE fees ADD COLUMN IF NOT EXISTS student_name TEXT",
+        "ALTER TABLE fees ADD COLUMN IF NOT EXISTS amount_inr NUMERIC(12,2)",
+        "ALTER TABLE fees ADD COLUMN IF NOT EXISTS status TEXT",
+        "ALTER TABLE fees ADD COLUMN IF NOT EXISTS due_date TEXT",
+        "ALTER TABLE fees ADD COLUMN IF NOT EXISTS document TEXT",
         "ALTER TABLE fees ADD COLUMN IF NOT EXISTS utr_reference TEXT",
         "ALTER TABLE fees ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ",
         "ALTER TABLE fees ADD COLUMN IF NOT EXISTS paid_by INTEGER",
@@ -975,10 +1027,18 @@ def list_timetable_configs(branch_id: int, institute: CurrentInstitute = Depends
         cursor.execute("SELECT branch_id, batch_name, timings_json, teachers_config_json FROM timetable_configs WHERE branch_id = %s ORDER BY batch_name", (branch_id,))
     configs = []
     for row in cursor.fetchall():
+        try:
+            timings = json.loads(row["timings_json"] or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            timings = []
+        try:
+            teachers_config = json.loads(row["teachers_config_json"] or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            teachers_config = []
         configs.append({
             "batch_name": row["batch_name"],
-            "timings": json.loads(row["timings_json"]),
-            "teachers_config": json.loads(row["teachers_config_json"]),
+            "timings": timings if isinstance(timings, list) else [],
+            "teachers_config": teachers_config if isinstance(teachers_config, list) else [],
         })
     conn.close()
     return configs
@@ -1438,65 +1498,105 @@ def mark_fee_paid(fee_id: int, req: FeeMarkPaidRequest, institute: CurrentInstit
 
 @app.get("/api/analytics/{branch_id}")
 def get_analytics(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    """Return analytics without allowing one malformed/legacy record to take
+    down the entire dashboard. Every query remains server-side and tenant-scoped."""
     verify_branch_read_access(branch_id, institute.id)
-    conn = get_conn(); cur = conn.cursor()
+    conn = get_conn()
+    cur = conn.cursor()
     scope = "branch_id IN (SELECT id FROM branches WHERE tenant_id = %s)" if branch_id == 0 else "branch_id = %s"
     scope_param = institute.id if branch_id == 0 else branch_id
-    cur.execute(f"SELECT COUNT(*) FROM students WHERE {scope}", (scope_param,)); students_total = cur.fetchone()[0]
-    cur.execute(f"SELECT COUNT(*) FROM teachers WHERE {scope}", (scope_param,)); teachers_total = cur.fetchone()[0]
-    cur.execute(f"SELECT COUNT(*) FROM classrooms WHERE {scope}", (scope_param,)); classrooms_total = cur.fetchone()[0]
-    cur.execute(f"SELECT COUNT(*) FROM exam_seatings WHERE {scope}", (scope_param,)); seating_plans = cur.fetchone()[0]
-    cur.execute(f"SELECT COALESCE(SUM(amount_inr),0), COUNT(*) FROM fees WHERE {scope} AND LOWER(COALESCE(status,'')) = 'paid'", (scope_param,)); paid_amount, paid_count = cur.fetchone()
-    cur.execute(f"SELECT COALESCE(SUM(amount_inr),0), COUNT(*) FROM fees WHERE {scope} AND LOWER(COALESCE(status,'')) != 'paid'", (scope_param,)); pending_amount, pending_count = cur.fetchone()
-    now_ist = datetime.utcnow() + IST_OFFSET; today = now_ist.date(); week_start = today - timedelta(days=6)
-    cur.execute(f"SELECT status, COUNT(*) FROM attendance WHERE {scope} AND date >= %s AND date <= %s GROUP BY status", (scope_param, week_start.isoformat(), today.isoformat())); att_counts = {r[0]: r[1] for r in cur.fetchall()}
-    marked = sum(att_counts.values()); present = att_counts.get('Present',0); absent = att_counts.get('Absent',0)
-    trend=[]
+
+    def one(sql, params, default=0):
+        try:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            return row[0] if row else default
+        except Exception as exc:
+            conn.rollback()
+            print(f"[analytics] query failed: {exc}")
+            return default
+
+    def all_rows(sql, params, default=None):
+        try:
+            cur.execute(sql, params)
+            return cur.fetchall()
+        except Exception as exc:
+            conn.rollback()
+            print(f"[analytics] query failed: {exc}")
+            return [] if default is None else default
+
+    students_total = one(f"SELECT COUNT(*) FROM students WHERE {scope}", (scope_param,))
+    teachers_total = one(f"SELECT COUNT(*) FROM teachers WHERE {scope}", (scope_param,))
+    classrooms_total = one(f"SELECT COUNT(*) FROM classrooms WHERE {scope}", (scope_param,))
+    seating_plans = one(f"SELECT COUNT(*) FROM exam_seatings WHERE {scope}", (scope_param,))
+    try:
+        cur.execute(f"SELECT COALESCE(SUM(amount_inr),0), COUNT(*) FROM fees WHERE {scope} AND LOWER(COALESCE(status,'')) = 'paid'", (scope_param,))
+        paid_amount, paid_count = cur.fetchone() or (0, 0)
+    except Exception as exc:
+        conn.rollback(); print(f"[analytics] fees paid query failed: {exc}"); paid_amount, paid_count = 0, 0
+    try:
+        cur.execute(f"SELECT COALESCE(SUM(amount_inr),0), COUNT(*) FROM fees WHERE {scope} AND LOWER(COALESCE(status,'')) != 'paid'", (scope_param,))
+        pending_amount, pending_count = cur.fetchone() or (0, 0)
+    except Exception as exc:
+        conn.rollback(); print(f"[analytics] fees pending query failed: {exc}"); pending_amount, pending_count = 0, 0
+
+    now_ist = datetime.now(timezone.utc) + IST_OFFSET
+    today = now_ist.date()
+    week_start = today - timedelta(days=6)
+    att_counts = {}
+    rows = all_rows(f"SELECT status, COUNT(*) FROM attendance WHERE {scope} AND date >= %s AND date <= %s GROUP BY status", (scope_param, week_start.isoformat(), today.isoformat()))
+    for r in rows:
+        att_counts[str(r[0])] = int(r[1])
+    marked = sum(att_counts.values())
+    present = att_counts.get('Present', 0)
+    absent = att_counts.get('Absent', 0)
+
+    trend = []
     for i in range(7):
-        d=(week_start+timedelta(days=i)).isoformat()
-        cur.execute(f"SELECT COUNT(*) FILTER (WHERE status='Present'), COUNT(*) FROM attendance WHERE {scope} AND date = %s", (scope_param,d)); p,t=cur.fetchone(); trend.append({"label": (week_start+timedelta(days=i)).strftime('%a'), "pct": round(100*p/t) if t else 0, "present": p, "marked": t})
-    cur.execute(f"SELECT COALESCE(batch,'Unassigned'), COUNT(*) FILTER (WHERE status='Present'), COUNT(*) FROM attendance WHERE {scope} AND date >= %s GROUP BY COALESCE(batch,'Unassigned')", (scope_param, week_start.isoformat())) if False else None
-    # Batch attendance is joined through student names; this keeps aggregation in PostgreSQL.
-    cur.execute(f"""SELECT COALESCE(s.batch,'Unassigned') AS batch, COUNT(*) FILTER (WHERE a.status='Present') AS present, COUNT(*) AS total
-                    FROM attendance a LEFT JOIN students s ON s.branch_id=a.branch_id AND s.name=a.student_name
-                    WHERE a.{ 'branch_id IN (SELECT id FROM branches WHERE tenant_id = %s)' if branch_id == 0 else 'branch_id = %s'} AND a.date >= %s GROUP BY COALESCE(s.batch,'Unassigned') ORDER BY batch""", (scope_param, week_start.isoformat()))
-    by_batch=[]
-    for b,pv,tv in cur.fetchall(): by_batch.append({"batch":b,"present":pv,"total":tv,"pct":round(100*pv/tv) if tv else 0})
-    cur.execute(f"SELECT day, COUNT(*) FROM timetables_slots WHERE {scope} GROUP BY day ORDER BY MIN(id)", (scope_param,)); by_day=[{"day":r[0],"count":r[1]} for r in cur.fetchall()]
-    cur.execute(f"SELECT COUNT(*) FROM timetables_slots WHERE {scope}", (scope_param,)); scheduled=cur.fetchone()[0]
-    cur.execute(f"SELECT COUNT(*) FROM syllabus WHERE {scope} AND lecture_date >= %s", (scope_param, week_start.isoformat())); logged=cur.fetchone()[0]
-    # Revenue graph: use actual payment timestamp when available. For legacy
-    # paid rows without paid_at, only accept ISO YYYY-MM-DD due dates. Never cast
-    # arbitrary legacy text directly to timestamptz because one malformed value
-    # would make the entire Analytics endpoint fail with HTTP 500.
-    cur.execute(f"""
-        SELECT COALESCE(
-            TO_CHAR(paid_at, 'YYYY-MM-DD'),
-            CASE
-                WHEN due_date ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}$' THEN due_date
-                ELSE NULL
-            END
-        ) AS day,
-        COALESCE(SUM(amount_inr),0)
+        d = week_start + timedelta(days=i)
+        rows = all_rows(f"SELECT COUNT(*) FILTER (WHERE status='Present'), COUNT(*) FROM attendance WHERE {scope} AND date = %s", (scope_param, d.isoformat()))
+        p, total = (rows[0] if rows else (0, 0))
+        trend.append({"label": d.strftime('%a'), "pct": round(100 * p / total) if total else 0, "present": int(p or 0), "marked": int(total or 0)})
+
+    by_batch = []
+    rows = all_rows(f"""SELECT COALESCE(s.batch,'Unassigned') AS batch,
+                              COUNT(*) FILTER (WHERE a.status='Present') AS present,
+                              COUNT(*) AS total
+                       FROM attendance a
+                       LEFT JOIN students s ON s.branch_id=a.branch_id AND s.name=a.student_name
+                       WHERE a.{ 'branch_id IN (SELECT id FROM branches WHERE tenant_id = %s)' if branch_id == 0 else 'branch_id = %s'}
+                         AND a.date >= %s
+                       GROUP BY COALESCE(s.batch,'Unassigned') ORDER BY batch""", (scope_param, week_start.isoformat()))
+    for b, pv, tv in rows:
+        by_batch.append({"batch": b, "present": int(pv or 0), "total": int(tv or 0), "pct": round(100 * pv / tv) if tv else 0})
+
+    by_day = [{"day": r[0], "count": int(r[1])} for r in all_rows(f"SELECT day, COUNT(*) FROM timetables_slots WHERE {scope} GROUP BY day ORDER BY MIN(id)", (scope_param,))]
+    scheduled = int(one(f"SELECT COUNT(*) FROM timetables_slots WHERE {scope}", (scope_param,)))
+    logged = int(one(f"SELECT COUNT(*) FROM syllabus WHERE {scope} AND lecture_date >= %s", (scope_param, week_start.isoformat())))
+
+    # Payment date is intentionally derived from paid_at first, then a strictly
+    # validated ISO due_date fallback. No arbitrary text is cast to a date.
+    revenue_rows = all_rows(f"""
+        SELECT COALESCE(TO_CHAR(paid_at, 'YYYY-MM-DD'),
+                        CASE WHEN due_date ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN due_date END) AS day,
+               COALESCE(SUM(amount_inr),0)
         FROM fees
         WHERE {scope} AND LOWER(COALESCE(status,''))='paid'
-        GROUP BY day
-        HAVING COALESCE(
-            TO_CHAR(paid_at, 'YYYY-MM-DD'),
-            CASE
-                WHEN due_date ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}$' THEN due_date
-                ELSE NULL
-            END
-        ) IS NOT NULL
-        ORDER BY day DESC
-        LIMIT 30
-    """, (scope_param,))
-    revenue=[{"date":r[0],"amount":float(r[1] or 0)} for r in cur.fetchall()]
-    cur.close(); conn.close()
-    return {"students_total":students_total,"teachers_total":teachers_total,"classrooms_total":classrooms_total,"seating_plans":seating_plans,
-            "attendance":{"present":present,"absent":absent,"marked":marked,"pct":round(100*present/marked) if marked else 0,"trend":trend,"by_batch":by_batch},
-            "fees":{"paid_amount":float(paid_amount or 0),"paid_count":paid_count,"pending_amount":float(pending_amount or 0),"pending_count":pending_count,"revenue":revenue},
-            "lectures":{"scheduled_this_week":scheduled,"logged_last_7_days":logged,"by_day":by_day}}
+        GROUP BY 1
+        HAVING COALESCE(TO_CHAR(paid_at, 'YYYY-MM-DD'),
+                        CASE WHEN due_date ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN due_date END) IS NOT NULL
+        ORDER BY 1 DESC LIMIT 30""", (scope_param,))
+    revenue = [{"date": r[0], "amount": float(r[1] or 0)} for r in revenue_rows]
+    conn.close()
+    return {
+        "students_total": int(students_total or 0),
+        "teachers_total": int(teachers_total or 0),
+        "classrooms_total": int(classrooms_total or 0),
+        "seating_plans": int(seating_plans or 0),
+        "attendance": {"present": present, "absent": absent, "marked": marked, "pct": round(100 * present / marked) if marked else 0, "trend": trend, "by_batch": by_batch},
+        "fees": {"paid_amount": float(paid_amount or 0), "paid_count": int(paid_count or 0), "pending_amount": float(pending_amount or 0), "pending_count": int(pending_count or 0), "revenue": revenue},
+        "lectures": {"scheduled_this_week": scheduled, "logged_last_7_days": logged, "by_day": by_day},
+    }
 
 
 # ---------------------------------------------------------------------------
