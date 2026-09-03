@@ -199,18 +199,18 @@
             <nav class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
                 <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
                 <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
-                <button onclick="switchModule('home')" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
-                <button id="navAnalytics" data-module="analytics" onclick="switchModule('analytics')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3" style="display:flex !important;"><span>◈</span><span>Analytics</span></button>
-                <button id="navStudents" data-module="students" onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
-                <button id="navTeachers" data-module="teachers" onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
-                <button id="navClassrooms" data-module="classrooms" onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
-                <button id="navSyllabus" data-module="syllabus" onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
-                <button id="navAttendance" data-module="attendance" onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
-                <button id="navTimetables" data-module="timetables" onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
-                <button id="navSeating" data-module="seating" onclick="switchModule('seating')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🪑</span><span>Exam Seating</span></button>
-                <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
-                <button id="navFees" data-module="fees" onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
-                <button id="navManageUsers" onclick="switchModule('users')" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
+                <button onclick="switchModule('home', this)" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
+                <button id="navAnalytics" data-module="analytics" onclick="switchModule('analytics', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3" style="display:flex !important;"><span>◈</span><span>Analytics</span></button>
+                <button id="navStudents" data-module="students" onclick="switchModule('students', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
+                <button id="navTeachers" data-module="teachers" onclick="switchModule('teachers', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
+                <button id="navClassrooms" data-module="classrooms" onclick="switchModule('classrooms', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
+                <button id="navSyllabus" data-module="syllabus" onclick="switchModule('syllabus', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
+                <button id="navAttendance" data-module="attendance" onclick="switchModule('attendance', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
+                <button id="navTimetables" data-module="timetables" onclick="switchModule('timetables', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
+                <button id="navSeating" data-module="seating" onclick="switchModule('seating', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🪑</span><span>Exam Seating</span></button>
+                <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
+                <button id="navFees" data-module="fees" onclick="switchModule('fees', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
+                <button id="navManageUsers" onclick="switchModule('users', this)" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
 
                 <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
                     <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
@@ -546,44 +546,61 @@
             }
         }
 
-        function switchModule(moduleName) {
+        async function switchModule(moduleName, clickedButton = null) {
             if (moduleName !== 'home' && moduleName !== 'users' && moduleName !== 'analytics' && !isOwner && !myAllowedModules.includes(moduleName)) {
                 alert('Your account does not have access to that module.');
                 return;
             }
             currentModule = moduleName;
             document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            if (window.event && window.event.currentTarget) window.event.currentTarget.classList.add('active');
-            refreshCurrentModule();
+            if (clickedButton) clickedButton.classList.add('active');
+            else {
+                const fallback = document.querySelector(`[data-module="${moduleName}"]`);
+                if (fallback) fallback.classList.add('active');
+            }
+            await refreshCurrentModule();
         }
 
         async function initApp() {
-            await loadBranches();
-            refreshCurrentModule();
+            try {
+                await loadBranches();
+                await refreshCurrentModule();
+            } catch (err) {
+                const container = document.getElementById('mainContent');
+                if (container) container.innerHTML = `<div class="glass-panel border border-red-900/40 p-8 rounded-2xl text-center"><div class="text-red-400 font-bold mb-2">Unable to load the workspace</div><div class="text-xs text-gray-500">${esc(err.message || 'Please refresh and try again.')}</div></div>`;
+            }
         }
 
         async function refreshCurrentModule() {
             const container = document.getElementById('mainContent');
-            if (currentModule === 'home') {
-                renderHomeModule(container);
-            } else if (currentModule === 'analytics') {
-                await renderAnalyticsModule(container);
-            } else if (currentModule === 'timetables') {
-                renderTimetableModule(container);
-            } else if (currentModule === 'users') {
-                await renderUsersModule(container);
-            } else if (currentModule === 'students') {
-                await renderStudentsModule(container);
-            } else if (currentModule === 'attendance') {
-                await renderAttendanceModule(container);
-            } else if (currentModule === 'seating') {
-                await renderSeatingModule(container);
-            } else {
-                await renderDataModule(container, currentModule);
+            if (!container) return;
+            try {
+                if (currentModule === 'home') {
+                    await renderHomeModule(container);
+                } else if (currentModule === 'analytics') {
+                    await renderAnalyticsModule(container);
+                } else if (currentModule === 'timetables') {
+                    await renderTimetableModule(container);
+                } else if (currentModule === 'users') {
+                    await renderUsersModule(container);
+                } else if (currentModule === 'students') {
+                    await renderStudentsModule(container);
+                } else if (currentModule === 'attendance') {
+                    await renderAttendanceModule(container);
+                } else if (currentModule === 'seating') {
+                    await renderSeatingModule(container);
+                } else {
+                    await renderDataModule(container, currentModule);
+                }
+            } catch (err) {
+                console.error(`Failed to render ${currentModule}:`, err);
+                container.innerHTML = `<div class="glass-panel border border-red-900/40 p-8 rounded-2xl"><div class="text-red-400 font-bold mb-2">Failed to load ${esc(currentModule)}</div><div class="text-xs text-gray-500 mb-4">${esc(err.message || 'Unexpected error.')}</div><button onclick="refreshCurrentModule()" class="gold-bg text-black px-4 py-2 rounded-lg text-xs font-extrabold uppercase">Retry</button></div>`;
             }
         }
 
         async function renderAnalyticsModule(container) {
+            const renderToken = Symbol('analytics-render');
+            window.__analyticsRenderToken = renderToken;
             container.innerHTML = `
                 <div class="space-y-8">
                     <div class="flex justify-between items-end flex-wrap gap-3">
@@ -601,8 +618,8 @@
                 if (!currentBranchId) throw new Error('No branch selected.');
                 const res = await authFetch(`/api/analytics/${currentBranchId}`);
                 const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.detail || 'Failed to load analytics.');
-                renderAnalyticsContent(data);
+                if (!res.ok) throw new Error(data.detail || `Analytics request failed (HTTP ${res.status}).`);
+                if (window.__analyticsRenderToken === renderToken && currentModule === 'analytics') renderAnalyticsContent(data);
             } catch (err) {
                 const error = document.getElementById('analyticsError');
                 if (error) error.textContent = err.message || 'Failed to load analytics.';
@@ -1498,7 +1515,7 @@
             renderSavedSeatingLayouts();
         }
 
-        async function renderTimetableModule(container) {
+        async function renderTimetableModuleUnsafe(container) {
             const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const [tRes, sRes, cRes] = await Promise.all([
                 authFetch(`/api/records/teachers/${currentBranchId}`),
@@ -1585,6 +1602,21 @@
             `;
             setTimingRows(TT_DEFAULT_TIMINGS);
             renderTimetableGrid();
+        }
+
+        async function renderTimetableModule(container) {
+            container.innerHTML = `<div class="glass-panel border gold-border p-10 rounded-2xl text-center text-gray-500">Loading timetable…</div>`;
+            try {
+                await renderTimetableModuleUnsafe(container);
+            } catch (err) {
+                console.error('Timetable load failed:', err);
+                container.innerHTML = `
+                    <div class="glass-panel border border-red-900/40 p-8 rounded-2xl">
+                        <div class="text-red-400 font-bold text-lg mb-2">Timetable could not be loaded</div>
+                        <div class="text-xs text-gray-500 mb-5">${esc(err.message || 'The timetable API returned an unexpected error.')}</div>
+                        <button onclick="refreshCurrentModule()" class="gold-bg text-black px-4 py-2.5 rounded-lg text-xs font-extrabold uppercase">Retry</button>
+                    </div>`;
+            }
         }
 
         function timingRowHtml(lectureNumber, timeSlot) {
