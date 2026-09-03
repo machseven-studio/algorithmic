@@ -1,6 +1,11 @@
 name: Apply exam upgrade
 
 on:
+  pull_request:
+    paths:
+      - 'tools/**'
+      - 'main.py'
+      - 'index.html'
   push:
     paths:
       - 'tools/**'
@@ -16,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Apply upgrade
         run: python tools/apply_exam_upgrade.py
@@ -32,5 +38,5 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Add Results and History examination modules"
-            git push origin HEAD:main
+            git push origin HEAD:${GITHUB_HEAD_REF:-main}
           fi
