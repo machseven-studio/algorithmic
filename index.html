@@ -210,6 +210,7 @@
                 <button id="navSeating" data-module="seating" onclick="switchModule('seating', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🪑</span><span>Exam Seating</span></button>
                 <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
                 <button id="navFees" data-module="fees" onclick="switchModule('fees', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
+                <button id="navAssistant" data-module="assistant" onclick="switchModule('assistant', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>✦</span><span>Parallax</span></button>
                 <button id="navManageUsers" onclick="switchModule('users', this)" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
 
                 <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
@@ -589,6 +590,8 @@
                     await renderAttendanceModule(container);
                 } else if (currentModule === 'seating') {
                     await renderSeatingModule(container);
+                } else if (currentModule === 'assistant') {
+                    await renderAssistantModule(container);
                 } else {
                     await renderDataModule(container, currentModule);
                 }
@@ -1282,7 +1285,7 @@
 
         const MODULE_LABELS = {
             students: 'Students', teachers: 'Teachers', classrooms: 'Classrooms', syllabus: 'Syllabus',
-            attendance: 'Attendance', analytics: 'Analytics', timetables: 'Timetable', seating: 'Exam Seating', invigilation: 'Invigilator Duty', fees: 'Fees',
+            attendance: 'Attendance', analytics: 'Analytics', timetables: 'Timetable', seating: 'Exam Seating', invigilation: 'Invigilator Duty', fees: 'Fees', assistant: 'Parallax',
         };
 
         let usersCache = [];
@@ -1434,6 +1437,76 @@
             { lecture_number: 3, time_slot: '11:15 AM - 12:15 PM' },
             { lecture_number: 4, time_slot: '01:15 PM - 02:15 PM' },
         ];
+
+        window.parallaxHistory = window.parallaxHistory || [];
+
+        async function renderAssistantModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Parallax</h2>
+                        <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Ask anything about this institute's data — any wording, any format</p>
+                    </div>
+                    <div id="parallaxThread" class="glass-panel border gold-border p-6 rounded-2xl space-y-4 max-h-[55vh] overflow-y-auto"></div>
+                    <div id="parallaxError" class="auth-error"></div>
+                    <form id="parallaxForm" onsubmit="submitParallaxQuestion(event)" class="flex gap-3">
+                        <input id="parallaxInput" type="text" autocomplete="off" placeholder="e.g. who hasn't paid fees this month?" class="flex-1 bg-[#0c0c0c] border gold-border rounded-xl p-3 text-xs text-gray-200 focus:outline-none" />
+                        <button type="submit" id="parallaxSubmitBtn" class="gold-bg hover:opacity-95 text-black font-extrabold px-6 py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Ask</button>
+                    </form>
+                </div>
+            `;
+            renderParallaxThread();
+        }
+
+        function renderParallaxThread() {
+            const thread = document.getElementById('parallaxThread');
+            if (!thread) return;
+            if (window.parallaxHistory.length === 0) {
+                thread.innerHTML = '<div class="text-gray-500 text-xs">No questions asked yet this session. Try something like "list students with pending fees" or just "attendance today?".</div>';
+                return;
+            }
+            thread.innerHTML = window.parallaxHistory.map(turn => `
+                <div class="space-y-2">
+                    <div class="text-xs font-bold text-gray-300 uppercase tracking-wider">You asked</div>
+                    <div class="text-sm text-gray-200">${esc(turn.question)}</div>
+                    <div class="text-xs font-bold gold-gradient-text uppercase tracking-wider mt-3">Parallax</div>
+                    <div class="text-sm text-gray-300 whitespace-pre-wrap">${turn.pending ? '<span class="text-gray-500">Thinking…</span>' : esc(turn.answer)}</div>
+                </div>
+                <div class="border-t border-gray-800"></div>
+            `).join('');
+            thread.scrollTop = thread.scrollHeight;
+        }
+
+        async function submitParallaxQuestion(e) {
+            e.preventDefault();
+            const input = document.getElementById('parallaxInput');
+            const errorEl = document.getElementById('parallaxError');
+            const btn = document.getElementById('parallaxSubmitBtn');
+            const question = (input.value || '').trim();
+            if (!question) return;
+            if (!currentBranchId) { errorEl.textContent = 'No branch selected.'; return; }
+            errorEl.textContent = '';
+            input.value = '';
+            btn.disabled = true;
+            const turn = { question, answer: '', pending: true };
+            window.parallaxHistory.push(turn);
+            renderParallaxThread();
+            try {
+                const res = await authFetch(`/api/assistant/${currentBranchId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await readApiJson(res, 'Parallax');
+                turn.answer = data.answer || '(no answer returned)';
+            } catch (err) {
+                turn.answer = `Couldn't get an answer: ${err.message || 'unknown error'}`;
+            } finally {
+                turn.pending = false;
+                btn.disabled = false;
+                renderParallaxThread();
+            }
+        }
 
         async function renderSeatingModule(container) {
             const canWrite = myPermission !== 'read_only' && !isGlobalView;
