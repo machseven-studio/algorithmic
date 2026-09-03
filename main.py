@@ -26,6 +26,13 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 VALID_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'invigilation', 'fees']
 
+# 'timetables' isn't a generic /api/records table (it has its own dedicated
+# endpoints below) but it IS a sidebar module a staff designation can be
+# granted or denied access to, so it's included here for permission checks.
+ALL_ACCESS_MODULES = VALID_MODULES + ['timetables']
+
+DESIGNATION_PRESETS = ['Admin', 'Accountant', 'Teacher', 'Head', 'Clerk', 'Custom']
+
 
 # ---------------------------------------------------------------------------
 # Database setup
@@ -80,6 +87,14 @@ def init_db():
             FOREIGN KEY(institute_id) REFERENCES institutes(id)
         )
     """)
+    # Migration: designation (label like "Admin"/"Teacher") and module_access
+    # (JSON list of module keys this staff member may open; NULL/'all' = every
+    # module) for pre-existing DBs created before per-designation access existed.
+    for col, coltype in [("designation", "TEXT"), ("module_access", "TEXT")]:
+        try:
+            cursor.execute(f"ALTER TABLE staff_users ADD COLUMN {col} {coltype}")
+        except sqlite3.OperationalError:
+            pass
     # branches now belong to a single institute -> real multi-tenancy
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS branches (
@@ -181,9 +196,31 @@ def init_db():
             batch_name TEXT,
             day TEXT,
             time_slot TEXT,
+            lecture_number INTEGER,
             subject TEXT,
             teacher TEXT,
             room TEXT,
+            FOREIGN KEY(branch_id) REFERENCES branches(id)
+        )
+    """)
+    # Migration for pre-existing DBs created before lecture_number existed.
+    try:
+        cursor.execute("ALTER TABLE timetables_slots ADD COLUMN lecture_number INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    # Stores the exact teacher/timing prerequisites used for a batch's
+    # timetable, so it can be reloaded and regenerated without the user
+    # having to retype (and possibly get wrong) lectures-per-week/unavailable
+    # days a second time.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS timetable_configs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_id INTEGER NOT NULL,
+            batch_name TEXT NOT NULL,
+            timings_json TEXT NOT NULL,
+            teachers_config_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(branch_id, batch_name),
             FOREIGN KEY(branch_id) REFERENCES branches(id)
         )
     """)
@@ -247,6 +284,17 @@ class CurrentInstitute(BaseModel):
     email: str
     is_owner: bool
     permission: str  # 'owner' | 'edit' | 'read_only'
+    designation: str = "Owner"
+    allowed_modules: list = ALL_ACCESS_MODULES  # modules this login may open in the sidebar
+
+
+def check_module_access(institute: "CurrentInstitute", module: str):
+    """Owners always pass. Staff logins are blocked from any module their
+    designation wasn't explicitly granted."""
+    if institute.is_owner:
+        return
+    if module not in institute.allowed_modules:
+        raise HTTPException(status_code=403, detail=f"Your account does not have access to the {module.title()} module")
 
 
 def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute:
@@ -281,6 +329,11 @@ def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute
         conn.close()
         if not staff:
             raise HTTPException(status_code=401, detail="Invalid session")
+        raw_access = staff["module_access"] if "module_access" in staff.keys() else None
+        try:
+            allowed = json.loads(raw_access) if raw_access else []
+        except (TypeError, ValueError):
+            allowed = []
         return CurrentInstitute(
             id=institute["id"],
             institute_name=institute["institute_name"],
@@ -288,6 +341,8 @@ def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute
             email=staff["email"],
             is_owner=False,
             permission=staff["permission"],
+            designation=(staff["designation"] if "designation" in staff.keys() and staff["designation"] else "Staff"),
+            allowed_modules=allowed,
         )
 
     conn.close()
@@ -376,6 +431,8 @@ def signup(req: SignupRequest):
         "full_name": req.full_name,
         "is_owner": True,
         "permission": "owner",
+        "designation": "Owner",
+        "allowed_modules": ALL_ACCESS_MODULES,
     }
 
 
@@ -402,6 +459,8 @@ def login(req: LoginRequest):
                 "full_name": institute["full_name"] or "",
                 "is_owner": True,
                 "permission": "owner",
+                "designation": "Owner",
+                "allowed_modules": ALL_ACCESS_MODULES,
             }
 
     # Not an owner account (or wrong password) - check staff logins.
@@ -414,12 +473,18 @@ def login(req: LoginRequest):
             parent_institute = cursor.fetchone()
             conn.close()
             token = create_session(staff["institute_id"], staff_user_id=staff["id"])
+            try:
+                staff_modules = json.loads(staff["module_access"]) if staff["module_access"] else []
+            except (TypeError, ValueError):
+                staff_modules = []
             return {
                 "token": token,
                 "institute_name": parent_institute["institute_name"] if parent_institute else "",
                 "full_name": staff["full_name"],
                 "is_owner": False,
                 "permission": staff["permission"],
+                "designation": staff["designation"] or "Staff",
+                "allowed_modules": staff_modules,
             }
 
     conn.close()
@@ -433,6 +498,8 @@ def whoami(institute: CurrentInstitute = Depends(get_current_institute)):
         "full_name": institute.full_name,
         "is_owner": institute.is_owner,
         "permission": institute.permission,
+        "designation": institute.designation,
+        "allowed_modules": institute.allowed_modules,
     }
 
 
@@ -476,10 +543,20 @@ class StaffUserCreate(BaseModel):
     email: EmailStr
     password: str
     permission: str  # 'edit' | 'read_only'
+    designation: str  # e.g. 'Admin', 'Accountant', 'Teacher', 'Head', 'Clerk', 'Custom'
+    modules: list = []  # which sidebar modules this designation may open
 
 
 class StaffPermissionUpdate(BaseModel):
-    permission: str
+    permission: str | None = None
+    designation: str | None = None
+    modules: list | None = None
+
+
+def _validate_modules(modules: list):
+    bad = [m for m in modules if m not in ALL_ACCESS_MODULES]
+    if bad:
+        raise HTTPException(status_code=400, detail=f"Unknown module(s): {', '.join(bad)}")
 
 
 @app.get("/api/users")
@@ -488,10 +565,18 @@ def list_staff_users(institute: CurrentInstitute = Depends(require_owner)):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, full_name, email, permission, created_at FROM staff_users WHERE institute_id = ?",
+        "SELECT id, full_name, email, permission, designation, module_access, created_at FROM staff_users WHERE institute_id = ?",
         (institute.id,),
     )
-    users = [dict(row) for row in cursor.fetchall()]
+    users = []
+    for row in cursor.fetchall():
+        u = dict(row)
+        try:
+            u["modules"] = json.loads(u.pop("module_access") or "[]")
+        except ValueError:
+            u["modules"] = []
+        u["designation"] = u.get("designation") or "Staff"
+        users.append(u)
     conn.close()
     return users
 
@@ -502,6 +587,9 @@ def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(r
         raise HTTPException(status_code=400, detail="Permission must be 'edit' or 'read_only'")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not req.designation.strip():
+        raise HTTPException(status_code=400, detail="Designation is required")
+    _validate_modules(req.modules)
 
     salt = secrets.token_hex(16)
     password_hash = hash_password(req.password, salt)
@@ -510,9 +598,10 @@ def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(r
     cursor = conn.cursor()
     try:
         cursor.execute(
-            """INSERT INTO staff_users (institute_id, full_name, email, password_hash, password_salt, permission, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (institute.id, req.full_name, req.email.lower(), password_hash, salt, req.permission, datetime.utcnow().isoformat()),
+            """INSERT INTO staff_users (institute_id, full_name, email, password_hash, password_salt, permission, designation, module_access, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (institute.id, req.full_name, req.email.lower(), password_hash, salt, req.permission,
+             req.designation.strip(), json.dumps(req.modules), datetime.utcnow().isoformat()),
         )
         conn.commit()
         user_id = cursor.lastrowid
@@ -520,7 +609,8 @@ def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(r
         conn.close()
         raise HTTPException(status_code=400, detail="A user with this email already exists")
     conn.close()
-    return {"id": user_id, "full_name": req.full_name, "email": req.email.lower(), "permission": req.permission}
+    return {"id": user_id, "full_name": req.full_name, "email": req.email.lower(), "permission": req.permission,
+            "designation": req.designation.strip(), "modules": req.modules}
 
 
 def verify_staff_ownership(user_id: int, institute_id: int):
@@ -535,14 +625,34 @@ def verify_staff_ownership(user_id: int, institute_id: int):
 
 @app.patch("/api/users/{user_id}")
 def update_staff_permission(user_id: int, req: StaffPermissionUpdate, institute: CurrentInstitute = Depends(require_owner)):
-    if req.permission not in ("edit", "read_only"):
-        raise HTTPException(status_code=400, detail="Permission must be 'edit' or 'read_only'")
+    """Partial update - the boss can change permission, designation, and/or
+    module access (grant/revoke) independently or all at once."""
     verify_staff_ownership(user_id, institute.id)
+
+    updates, params = [], []
+    if req.permission is not None:
+        if req.permission not in ("edit", "read_only"):
+            raise HTTPException(status_code=400, detail="Permission must be 'edit' or 'read_only'")
+        updates.append("permission = ?")
+        params.append(req.permission)
+    if req.designation is not None:
+        if not req.designation.strip():
+            raise HTTPException(status_code=400, detail="Designation cannot be empty")
+        updates.append("designation = ?")
+        params.append(req.designation.strip())
+    if req.modules is not None:
+        _validate_modules(req.modules)
+        updates.append("module_access = ?")
+        params.append(json.dumps(req.modules))
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
     conn = get_conn()
-    conn.execute("UPDATE staff_users SET permission = ? WHERE id = ?", (req.permission, user_id))
+    conn.execute(f"UPDATE staff_users SET {', '.join(updates)} WHERE id = ?", (*params, user_id))
     conn.commit()
     conn.close()
-    return {"id": user_id, "permission": req.permission}
+    return {"id": user_id, "status": "updated"}
 
 
 @app.delete("/api/users/{user_id}")
@@ -602,6 +712,7 @@ def add_branch(branch: BranchCreate, institute: CurrentInstitute = Depends(requi
 def get_records(module: str, branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
     if module not in VALID_MODULES:
         raise HTTPException(status_code=400, detail="Invalid module")
+    check_module_access(institute, module)
     verify_branch_ownership(branch_id, institute.id)
 
     conn = get_conn()
@@ -634,6 +745,22 @@ def save_upload(file: UploadFile) -> str:
     return filename
 
 
+# Non-document columns each module accepts from the client, in the order
+# they're bound into INSERT/UPDATE statements. Shared by add_record and
+# edit_record so the two can never drift out of sync with each other.
+RECORD_FIELDS = {
+    "students": ["name", "batch", "roll_number", "parent_contact"],
+    "teachers": ["name", "subject", "contact_number"],
+    "classrooms": ["room_no", "capacity", "building"],
+    "syllabus": ["subject", "topic", "teacher_name", "num_lectures", "lecture_date"],
+    "attendance": ["student_name", "date", "status"],
+    "invigilation": ["teacher_name", "exam_date", "room"],
+    "fees": ["student_name", "amount_inr", "status", "due_date"],
+}
+# Modules whose table has a 'document' column that a file upload fills in.
+RECORD_HAS_DOCUMENT = {"classrooms", "attendance", "invigilation", "fees"}
+
+
 @app.post("/api/records/{module}")
 async def add_record(
     module: str,
@@ -644,46 +771,74 @@ async def add_record(
 ):
     if module not in VALID_MODULES:
         raise HTTPException(status_code=400, detail="Invalid module")
+    check_module_access(institute, module)
     verify_branch_ownership(branch_id, institute.id)
 
     data = json.loads(data_json)
     doc_filename = save_upload(file) if file else None
 
+    fields = RECORD_FIELDS[module]
+    columns = ["branch_id"] + fields + (["document"] if module in RECORD_HAS_DOCUMENT else [])
+    values = [branch_id] + [data.get(f) for f in fields] + ([doc_filename] if module in RECORD_HAS_DOCUMENT else [])
+    placeholders = ", ".join("?" for _ in columns)
+
     conn = get_conn()
     cursor = conn.cursor()
-
-    if module == 'students':
-        cursor.execute("INSERT INTO students (branch_id, name, batch, roll_number, parent_contact) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('name'), data.get('batch'), data.get('roll_number'), data.get('parent_contact')))
-    elif module == 'teachers':
-        cursor.execute("INSERT INTO teachers (branch_id, name, subject, contact_number) VALUES (?, ?, ?, ?)",
-                       (branch_id, data.get('name'), data.get('subject'), data.get('contact_number')))
-    elif module == 'classrooms':
-        cursor.execute("INSERT INTO classrooms (branch_id, room_no, capacity, building, document) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('room_no'), data.get('capacity'), data.get('building'), doc_filename))
-    elif module == 'syllabus':
-        cursor.execute("INSERT INTO syllabus (branch_id, subject, topic, teacher_name, num_lectures, lecture_date) VALUES (?, ?, ?, ?, ?, ?)",
-                       (branch_id, data.get('subject'), data.get('topic'), data.get('teacher_name'), data.get('num_lectures'), data.get('lecture_date')))
-    elif module == 'attendance':
-        cursor.execute("INSERT INTO attendance (branch_id, student_name, date, status, document) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('student_name'), data.get('date'), data.get('status'), doc_filename))
-    elif module == 'invigilation':
-        cursor.execute("INSERT INTO invigilation (branch_id, teacher_name, exam_date, room, document) VALUES (?, ?, ?, ?, ?)",
-                       (branch_id, data.get('teacher_name'), data.get('exam_date'), data.get('room'), doc_filename))
-    elif module == 'fees':
-        cursor.execute("INSERT INTO fees (branch_id, student_name, amount_inr, status, due_date, document) VALUES (?, ?, ?, ?, ?, ?)",
-                       (branch_id, data.get('student_name'), data.get('amount_inr'), data.get('status'), data.get('due_date'), doc_filename))
-
+    # module/columns come from our own fixed RECORD_FIELDS map, never from the
+    # request, so building the column list this way is not injectable.
+    cursor.execute(f"INSERT INTO {module} ({', '.join(columns)}) VALUES ({placeholders})", values)
     conn.commit()
     record_id = cursor.lastrowid
     conn.close()
     return {"id": record_id, "status": "success"}
 
 
+@app.patch("/api/records/{module}/{record_id}")
+async def edit_record(
+    module: str,
+    record_id: int,
+    data_json: str = Form(...),
+    file: UploadFile = File(None),
+    institute: CurrentInstitute = Depends(require_write_access),
+):
+    """Generic edit for any module - lets the user change any field on an
+    existing record, and optionally replace its attached document."""
+    if module not in VALID_MODULES:
+        raise HTTPException(status_code=400, detail="Invalid module")
+    check_module_access(institute, module)
+
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        f"""SELECT {module}.id FROM {module}
+            JOIN branches ON branches.id = {module}.branch_id
+            WHERE {module}.id = ? AND branches.institute_id = ?""",
+        (record_id, institute.id),
+    )
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    data = json.loads(data_json)
+    fields = RECORD_FIELDS[module]
+    set_clauses = [f"{f} = ?" for f in fields]
+    values = [data.get(f) for f in fields]
+
+    if module in RECORD_HAS_DOCUMENT and file:
+        set_clauses.append("document = ?")
+        values.append(save_upload(file))
+
+    cursor.execute(f"UPDATE {module} SET {', '.join(set_clauses)} WHERE id = ?", (*values, record_id))
+    conn.commit()
+    conn.close()
+    return {"id": record_id, "status": "updated"}
+
+
 @app.delete("/api/records/{module}/{record_id}")
 def delete_record(module: str, record_id: int, institute: CurrentInstitute = Depends(require_write_access)):
     if module not in VALID_MODULES:
         raise HTTPException(status_code=400, detail="Invalid module")
+    check_module_access(institute, module)
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -728,6 +883,7 @@ async def bulk_import_records(
     record in individually through the Add Record form."""
     if module not in VALID_MODULES:
         raise HTTPException(status_code=400, detail="Invalid module")
+    check_module_access(institute, module)
     verify_branch_ownership(branch_id, institute.id)
 
     if not (file.filename or "").lower().endswith(".csv"):
@@ -804,6 +960,7 @@ class AttendanceMarkRequest(BaseModel):
 
 @app.post("/api/attendance/mark")
 def mark_attendance(req: AttendanceMarkRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    check_module_access(institute, "attendance")
     verify_branch_ownership(req.branch_id, institute.id)
     if req.status not in ("Present", "Absent"):
         raise HTTPException(status_code=400, detail="Status must be 'Present' or 'Absent'")
@@ -827,6 +984,7 @@ def mark_attendance(req: AttendanceMarkRequest, institute: CurrentInstitute = De
 
 @app.get("/api/attendance/{branch_id}/{date}")
 def get_attendance_for_date(branch_id: int, date: str, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "attendance")
     verify_branch_ownership(branch_id, institute.id)
     conn = get_conn()
     conn.row_factory = sqlite3.Row
@@ -837,38 +995,98 @@ def get_attendance_for_date(branch_id: int, date: str, institute: CurrentInstitu
     return marks
 
 
+@app.get("/api/attendance/history/{branch_id}")
+def get_attendance_history(branch_id: int, student_name: str, institute: CurrentInstitute = Depends(get_current_institute)):
+    """Full past attendance record for one student, most recent date first -
+    the 'view attendance report for each student' feature."""
+    check_module_access(institute, "attendance")
+    verify_branch_ownership(branch_id, institute.id)
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, status FROM attendance WHERE branch_id = ? AND student_name = ? ORDER BY date DESC",
+        (branch_id, student_name),
+    )
+    history = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    present = sum(1 for h in history if h["status"] == "Present")
+    return {
+        "student_name": student_name,
+        "history": history,
+        "total_marked": len(history),
+        "present_count": present,
+        "absent_count": len(history) - present,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Timetable generation
 # ---------------------------------------------------------------------------
 
 @app.get("/api/timetable/slots/{branch_id}")
 def get_timetable_slots(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "timetables")
     verify_branch_ownership(branch_id, institute.id)
     conn = get_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM timetables_slots WHERE branch_id = ?", (branch_id,))
+    cursor.execute("SELECT * FROM timetables_slots WHERE branch_id = ? ORDER BY batch_name, lecture_number", (branch_id,))
     slots = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return slots
+
+
+@app.get("/api/timetable/configs/{branch_id}")
+def list_timetable_configs(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    """The saved prerequisites (timings + per-teacher lectures/unavailable
+    days) for every batch that's had a timetable generated, so the frontend
+    can offer 'load this batch to edit & regenerate' without the user
+    retyping anything."""
+    check_module_access(institute, "timetables")
+    verify_branch_ownership(branch_id, institute.id)
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT batch_name, timings_json, teachers_config_json FROM timetable_configs WHERE branch_id = ? ORDER BY batch_name", (branch_id,))
+    configs = []
+    for row in cursor.fetchall():
+        configs.append({
+            "batch_name": row["batch_name"],
+            "timings": json.loads(row["timings_json"]),
+            "teachers_config": json.loads(row["teachers_config_json"]),
+        })
+    conn.close()
+    return configs
+
+
+class TimingSlot(BaseModel):
+    lecture_number: int
+    time_slot: str  # e.g. "09:00 AM - 10:00 AM"
 
 
 class TimetableGenerateRequest(BaseModel):
     branch_id: int
     batch_name: str
     teachers_config: list  # [{name, subject, lectures_per_week, unavailable_days: []}]
-    timings: list  # ["09:00 AM - 10:00 AM", ...]
+    timings: list[TimingSlot]
 
 
 @app.post("/api/timetable/generate")
 def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    """(Re)generates the timetable for exactly one batch. Always erases that
+    batch's previous slots first and rebuilds from scratch - other batches'
+    slots are untouched, so nothing ever stacks on top of a prior run."""
+    check_module_access(institute, "timetables")
     verify_branch_ownership(req.branch_id, institute.id)
+    if not req.timings:
+        raise HTTPException(status_code=400, detail="Add at least one lecture timing")
 
     conn = get_conn()
     cursor = conn.cursor()
 
-    # Clear old slots for this batch only - other batches' slots stay intact
-    # so we can still check teacher/room conflicts against them below.
+    # Erase this batch's old timetable before generating the new one - never
+    # stacked on top of a prior run.
     cursor.execute("DELETE FROM timetables_slots WHERE branch_id = ? AND batch_name = ?", (req.branch_id, req.batch_name))
 
     # Real classrooms for this branch, used for room assignment instead of a hardcoded room.
@@ -876,6 +1094,7 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
     available_rooms = [row[0] for row in cursor.fetchall() if row[0]]
 
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    timings_sorted = sorted(req.timings, key=lambda t: t.lecture_number)
     generated_slots = []
     warnings = []
 
@@ -891,7 +1110,8 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
                 continue
             if assigned_count >= target_lectures:
                 break
-            for slot_time in req.timings:
+            for timing in timings_sorted:
+                slot_time = timing.time_slot
                 if assigned_count >= target_lectures:
                     break
 
@@ -926,10 +1146,13 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
                     room = "Unassigned (no free classroom)" if available_rooms else "Unassigned (add a classroom)"
 
                 cursor.execute("""
-                    INSERT INTO timetables_slots (branch_id, batch_name, day, time_slot, subject, teacher, room)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (req.branch_id, req.batch_name, day, slot_time, subject, teacher_name, room))
-                generated_slots.append({"day": day, "time_slot": slot_time, "subject": subject, "teacher": teacher_name, "room": room})
+                    INSERT INTO timetables_slots (branch_id, batch_name, day, time_slot, lecture_number, subject, teacher, room)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (req.branch_id, req.batch_name, day, slot_time, timing.lecture_number, subject, teacher_name, room))
+                generated_slots.append({
+                    "day": day, "time_slot": slot_time, "lecture_number": timing.lecture_number,
+                    "subject": subject, "teacher": teacher_name, "room": room,
+                })
                 assigned_count += 1
 
         if assigned_count < target_lectures:
@@ -938,9 +1161,146 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
                 f"(not enough free day/time slots without a conflict)."
             )
 
+    # Save the exact prerequisites used, so this batch can be reloaded and
+    # regenerated later without retyping (or accidentally drifting from) them.
+    cursor.execute(
+        """INSERT INTO timetable_configs (branch_id, batch_name, timings_json, teachers_config_json, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(branch_id, batch_name) DO UPDATE SET
+               timings_json = excluded.timings_json,
+               teachers_config_json = excluded.teachers_config_json,
+               updated_at = excluded.updated_at""",
+        (req.branch_id, req.batch_name, json.dumps([t.dict() for t in req.timings]),
+         json.dumps(req.teachers_config), datetime.utcnow().isoformat()),
+    )
+
     conn.commit()
     conn.close()
     return {"status": "success", "slots": generated_slots, "warnings": warnings}
+
+
+class TimetableSlotEdit(BaseModel):
+    day: str
+    time_slot: str
+    subject: str
+    teacher: str
+    room: str
+
+
+@app.patch("/api/timetable/slots/{slot_id}")
+def edit_timetable_slot(slot_id: int, req: TimetableSlotEdit, institute: CurrentInstitute = Depends(require_write_access)):
+    """Manual one-off override for a single generated slot (e.g. swapping a
+    room or teacher by hand) - no conflict-checking, since the user is
+    deliberately overriding the auto-generated result."""
+    check_module_access(institute, "timetables")
+    conn = get_conn()
+    cursor = conn.cursor()
+    cursor.execute(
+        """SELECT timetables_slots.id FROM timetables_slots
+           JOIN branches ON branches.id = timetables_slots.branch_id
+           WHERE timetables_slots.id = ? AND branches.institute_id = ?""",
+        (slot_id, institute.id),
+    )
+    if not cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Slot not found")
+    cursor.execute(
+        "UPDATE timetables_slots SET day = ?, time_slot = ?, subject = ?, teacher = ?, room = ? WHERE id = ?",
+        (req.day, req.time_slot, req.subject, req.teacher, req.room, slot_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "updated"}
+
+
+# ---------------------------------------------------------------------------
+# Dashboard analytics
+# ---------------------------------------------------------------------------
+
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _parse_time_range(time_slot: str):
+    """Best-effort parse of a free-text '09:00 AM - 10:00 AM' timing string
+    into two time objects. Returns (None, None) if it doesn't match - a
+    malformed timing just never counts as 'ongoing', it doesn't crash."""
+    import re
+    m = re.match(r"\s*(\d{1,2}:\d{2}\s*[AaPp][Mm])\s*-\s*(\d{1,2}:\d{2}\s*[AaPp][Mm])\s*", time_slot or "")
+    if not m:
+        return None, None
+    try:
+        start = datetime.strptime(m.group(1).upper().replace(" ", ""), "%I:%M%p").time()
+        end = datetime.strptime(m.group(2).upper().replace(" ", ""), "%I:%M%p").time()
+        return start, end
+    except ValueError:
+        return None, None
+
+
+@app.get("/api/dashboard/{branch_id}")
+def get_dashboard(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn = get_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    now_ist = datetime.utcnow() + IST_OFFSET
+    today = now_ist.date()
+    week_start = today - timedelta(days=6)  # last 7 days including today
+
+    # --- Attendance this week, per batch ---
+    attendance_week = []
+    if institute.is_owner or "attendance" in institute.allowed_modules:
+        cursor.execute("SELECT id, name, batch FROM students WHERE branch_id = ?", (branch_id,))
+        student_batch = {row["name"]: (row["batch"] or "Unassigned") for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT student_name, status FROM attendance WHERE branch_id = ? AND date >= ? AND date <= ?",
+            (branch_id, week_start.isoformat(), today.isoformat()),
+        )
+        per_batch = {}
+        for row in cursor.fetchall():
+            batch = student_batch.get(row["student_name"], "Unassigned")
+            b = per_batch.setdefault(batch, {"present": 0, "total": 0})
+            b["total"] += 1
+            if row["status"] == "Present":
+                b["present"] += 1
+        for batch, stats in sorted(per_batch.items()):
+            pct = round(100 * stats["present"] / stats["total"]) if stats["total"] else 0
+            attendance_week.append({"batch": batch, "present": stats["present"], "total": stats["total"], "pct": pct})
+
+    # --- Fees pending ---
+    fees_pending_total, fees_pending_count = 0, 0
+    if institute.is_owner or "fees" in institute.allowed_modules:
+        cursor.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount_inr), 0) FROM fees WHERE branch_id = ? AND LOWER(COALESCE(status, '')) != 'paid'",
+            (branch_id,),
+        )
+        fees_pending_count, fees_pending_total = cursor.fetchone()
+
+    # --- Lectures ongoing right now, per batch ---
+    ongoing_lectures = []
+    if institute.is_owner or "timetables" in institute.allowed_modules:
+        today_name = now_ist.strftime("%A")
+        now_time = now_ist.time()
+        cursor.execute(
+            "SELECT batch_name, day, time_slot, subject, teacher, room FROM timetables_slots WHERE branch_id = ? AND day = ?",
+            (branch_id, today_name),
+        )
+        for row in cursor.fetchall():
+            start, end = _parse_time_range(row["time_slot"])
+            if start and end and start <= now_time <= end:
+                ongoing_lectures.append({
+                    "batch_name": row["batch_name"], "time_slot": row["time_slot"],
+                    "subject": row["subject"], "teacher": row["teacher"], "room": row["room"],
+                })
+
+    conn.close()
+    return {
+        "attendance_week": attendance_week,
+        "fees_pending_total": fees_pending_total,
+        "fees_pending_count": fees_pending_count,
+        "ongoing_lectures": ongoing_lectures,
+        "as_of": now_ist.isoformat(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -959,6 +1319,9 @@ HTML_CONTENT = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALGORITHMIC - Enterprise Institutional Operations</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700&display=swap');
 
@@ -982,6 +1345,16 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         /* Heavier, higher-contrast display serif reserved for the institute name and the homepage welcome line - bolder and more formal than the base Fraunces headings */
         .premium-heading-font { font-family: 'Playfair Display', serif; font-weight: 800; letter-spacing: -0.01em; }
+
+        /* Bold, all-caps "statement" font for the institute name and welcome
+           line - heavier and blockier than premium-heading-font, on brand
+           with the "not a website, a statement" direction. */
+        .command-heading-font { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; letter-spacing: 0.01em; text-transform: uppercase; }
+
+        .mini-bar-track { background: rgba(212,175,55,0.08); border-radius: 999px; overflow: hidden; height: 8px; }
+        .mini-bar-fill { background: linear-gradient(90deg, #8a6a22, #E8C767); height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+        .module-check { accent-color: #D4AF37; }
+        .ongoing-dot { width: 7px; height: 7px; border-radius: 999px; background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.7); display: inline-block; }
 
         .gold-gradient-text {
             background: linear-gradient(135deg, #F4E5A1 0%, #E8C767 20%, #BF953F 45%, #8a6a22 60%, #E8C767 80%, #F4E5A1 100%);
@@ -1115,7 +1488,7 @@ HTML_CONTENT = """<!DOCTYPE html>
         <header class="border-b gold-border bg-[#0a0a0a] px-8 py-4 flex justify-between items-center sticky top-0 z-40">
             <div class="flex items-center space-x-4">
                 <div class="group flex items-center space-x-2">
-                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name premium-heading-font text-3xl font-black gold-gradient-text tracking-tight leading-none">—</h1>
+                    <h1 id="headerInstituteName" onclick="openRenameInstituteModal()" title="Click to rename your institute" class="editable-name command-heading-font text-3xl gold-gradient-text tracking-tight leading-none">—</h1>
                     <button onclick="openRenameInstituteModal()" title="Rename institute" class="text-gray-600 hover:text-yellow-500 text-sm fast-transition opacity-0 group-hover:opacity-100">✎</button>
                 </div>
             </div>
@@ -1139,14 +1512,14 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
                 <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
                 <button onclick="switchModule('home')" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
-                <button onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
-                <button onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
-                <button onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
-                <button onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
-                <button onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
-                <button onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
-                <button onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
-                <button onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
+                <button id="navStudents" data-module="students" onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
+                <button id="navTeachers" data-module="teachers" onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
+                <button id="navClassrooms" data-module="classrooms" onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
+                <button id="navSyllabus" data-module="syllabus" onclick="switchModule('syllabus')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
+                <button id="navAttendance" data-module="attendance" onclick="switchModule('attendance')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
+                <button id="navTimetables" data-module="timetables" onclick="switchModule('timetables')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
+                <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
+                <button id="navFees" data-module="fees" onclick="switchModule('fees')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
                 <button id="navManageUsers" onclick="switchModule('users')" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
 
                 <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
@@ -1176,9 +1549,9 @@ HTML_CONTENT = """<!DOCTYPE html>
 
     <!-- Add Staff User Modal -->
     <div id="userModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
-        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-lg shadow-2xl">
             <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add User</h3>
+                <h3 id="userModalTitle" class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Add User</h3>
                 <button onclick="closeUserModal()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
             </div>
             <div class="space-y-4">
@@ -1186,14 +1559,25 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <input type="email" id="newUserEmail" placeholder="Email Address" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                 <input type="password" id="newUserPassword" placeholder="Password (min 8 characters)" minlength="8" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                 <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Designation</label>
+                    <input type="text" id="newUserDesignation" list="designationPresets" placeholder="e.g. Admin, Accountant, Teacher, Head" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    <datalist id="designationPresets">
+                        <option value="Admin"><option value="Accountant"><option value="Teacher"><option value="Head"><option value="Clerk">
+                    </datalist>
+                </div>
+                <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Permission</label>
                     <select id="newUserPermission" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                         <option value="edit">Edit Access</option>
                         <option value="read_only">Read Only</option>
                     </select>
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Module Access <span class="text-gray-600 normal-case font-normal">(only the boss sees everything)</span></label>
+                    <div id="newUserModuleGrid" class="grid grid-cols-2 gap-2"></div>
+                </div>
                 <div id="userModalError" class="auth-error"></div>
-                <button onclick="submitNewUser()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Create User</button>
+                <button onclick="submitUserForm()" id="userModalSubmitBtn" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Create User</button>
             </div>
         </div>
     </div>
@@ -1228,7 +1612,40 @@ HTML_CONTENT = """<!DOCTYPE html>
                 <div id="recordFormError" class="auth-error"></div>
                 <div class="flex justify-end space-x-3 pt-4 border-t gold-border">
                     <button type="button" onclick="closeRecordModal()" class="px-5 py-2.5 text-xs font-bold uppercase bg-gray-900 hover:bg-gray-800 text-gray-300 rounded-xl fast-transition">Cancel</button>
-                    <button type="submit" class="px-6 py-2.5 text-xs font-extrabold uppercase gold-bg hover:opacity-95 text-black rounded-xl fast-transition shadow-lg">Save Record</button>
+                    <button type="submit" id="recordSubmitBtn" class="px-6 py-2.5 text-xs font-extrabold uppercase gold-bg hover:opacity-95 text-black rounded-xl fast-transition shadow-lg">Save Record</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Attendance History Modal -->
+    <div id="attendanceHistoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="attendanceHistoryTitle" class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Attendance History</h3>
+                <button onclick="closeAttendanceHistory()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div id="attendanceHistoryBody"></div>
+        </div>
+    </div>
+
+    <!-- Timetable Slot Edit Modal -->
+    <div id="timetableSlotEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Edit Timetable Slot</h3>
+                <button onclick="closeTimetableSlotEdit()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <form onsubmit="submitTimetableSlotEdit(event)" class="space-y-4">
+                <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Day</label><input type="text" id="ttSlotEditDay" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Time Slot</label><input type="text" id="ttSlotEditTime" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Subject</label><input type="text" id="ttSlotEditSubject" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Teacher</label><input type="text" id="ttSlotEditTeacher" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                <div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Room</label><input type="text" id="ttSlotEditRoom" required class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none"></div>
+                <p class="text-[11px] text-gray-500">Manual overrides aren't conflict-checked - you're taking the wheel on this one.</p>
+                <div class="flex justify-end space-x-3 pt-4 border-t gold-border">
+                    <button type="button" onclick="closeTimetableSlotEdit()" class="px-5 py-2.5 text-xs font-bold uppercase bg-gray-900 hover:bg-gray-800 text-gray-300 rounded-xl fast-transition">Cancel</button>
+                    <button type="submit" class="px-6 py-2.5 text-xs font-extrabold uppercase gold-bg hover:opacity-95 text-black rounded-xl fast-transition shadow-lg">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -1256,7 +1673,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         let isOwner = false;
         let myPermission = 'owner';
         let myFullName = '';
+        let myDesignation = 'Owner';
+        let myAllowedModules = [];
         let bulkImportModule = null;
+        const ALL_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'invigilation', 'fees'];
 
         // ---- Auth ----
 
@@ -1305,13 +1725,23 @@ HTML_CONTENT = """<!DOCTYPE html>
             isOwner = !!data.is_owner;
             myPermission = data.permission || 'owner';
             myFullName = data.full_name || data.institute_name || '';
+            myDesignation = data.designation || (isOwner ? 'Owner' : 'Staff');
+            myAllowedModules = isOwner ? ALL_MODULES.slice() : (data.allowed_modules || []);
             document.getElementById('headerInstituteName').textContent = data.institute_name;
             document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
             document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
+            ALL_MODULES.forEach(m => {
+                const btn = document.querySelector(`[data-module="${m}"]`);
+                if (btn) btn.classList.toggle('hidden', !isOwner && !myAllowedModules.includes(m));
+            });
             const badge = document.getElementById('headerPermBadge');
-            if (isOwner) { badge.innerHTML = ''; }
-            else if (myPermission === 'read_only') { badge.innerHTML = '<span class="perm-badge perm-readonly">Read Only</span>'; }
-            else { badge.innerHTML = '<span class="perm-badge perm-edit">Edit Access</span>'; }
+            if (isOwner) { badge.innerHTML = `<span class="perm-badge perm-edit">Owner</span>`; }
+            else {
+                const accessBadge = myPermission === 'read_only'
+                    ? '<span class="perm-badge perm-readonly">Read Only</span>'
+                    : '<span class="perm-badge perm-edit">Edit Access</span>';
+                badge.innerHTML = `<span class="perm-badge perm-readonly">${myDesignation}</span> ${accessBadge}`;
+            }
         }
 
         function completeAuth(data) {
@@ -1414,6 +1844,10 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
 
         function switchModule(moduleName) {
+            if (moduleName !== 'home' && moduleName !== 'users' && !isOwner && !myAllowedModules.includes(moduleName)) {
+                alert('Your account does not have access to that module.');
+                return;
+            }
             currentModule = moduleName;
             document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             if (window.event && window.event.currentTarget) window.event.currentTarget.classList.add('active');
@@ -1443,19 +1877,32 @@ HTML_CONTENT = """<!DOCTYPE html>
         }
 
         function renderHomeModule(container) {
+            const can = (m) => isOwner || myAllowedModules.includes(m);
             container.innerHTML = `
                 <div class="space-y-8">
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
                         <div class="max-w-3xl relative z-10 space-y-4">
                             <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
-                            <h2 class="welcome-animate premium-heading-font text-5xl font-black gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
+                            <h2 class="welcome-animate command-heading-font text-5xl gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Active Students</div><div class="text-3xl font-black gold-gradient-text" id="statStudents">—</div></div>
-                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Faculty Members</div><div class="text-3xl font-black gold-gradient-text" id="statTeachers">—</div></div>
-                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Classrooms Available</div><div class="text-3xl font-black gold-gradient-text" id="statClassrooms">—</div></div>
-                        <div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Fee Collection (INR)</div><div class="text-3xl font-black gold-gradient-text" id="statFees">₹0</div></div>
+                        ${can('students') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Active Students</div><div class="text-3xl font-black gold-gradient-text" id="statStudents">—</div></div>` : ''}
+                        ${can('teachers') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Faculty Members</div><div class="text-3xl font-black gold-gradient-text" id="statTeachers">—</div></div>` : ''}
+                        ${can('classrooms') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Classrooms Available</div><div class="text-3xl font-black gold-gradient-text" id="statClassrooms">—</div></div>` : ''}
+                        ${can('fees') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Fees Pending</div><div class="text-3xl font-black gold-gradient-text" id="statFeesPending">—</div></div>` : ''}
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        ${can('attendance') ? `
+                        <div class="glass-panel p-6 rounded-2xl border gold-border">
+                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Attendance This Week · Per Batch</h3>
+                            <div id="dashAttendanceChart" class="space-y-3"><p class="text-xs text-gray-500">Loading…</p></div>
+                        </div>` : ''}
+                        ${can('timetables') ? `
+                        <div class="glass-panel p-6 rounded-2xl border gold-border">
+                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Ongoing Lectures Right Now</h3>
+                            <div id="dashOngoingLectures" class="space-y-2"><p class="text-xs text-gray-500">Loading…</p></div>
+                        </div>` : ''}
                     </div>
                 </div>
             `;
@@ -1465,19 +1912,106 @@ HTML_CONTENT = """<!DOCTYPE html>
         async function loadHomeStats() {
             try {
                 if (!currentBranchId) return;
-                const [sRes, tRes, cRes, fRes] = await Promise.all([
-                    authFetch(`/api/records/students/${currentBranchId}`),
-                    authFetch(`/api/records/teachers/${currentBranchId}`),
-                    authFetch(`/api/records/classrooms/${currentBranchId}`),
-                    authFetch(`/api/records/fees/${currentBranchId}`)
-                ]);
-                document.getElementById('statStudents').textContent = (await sRes.json()).length;
-                document.getElementById('statTeachers').textContent = (await tRes.json()).length;
-                document.getElementById('statClassrooms').textContent = (await cRes.json()).length;
-                const fees = await fRes.json();
-                const total = fees.reduce((acc, curr) => acc + (curr.amount_inr || 0), 0);
-                document.getElementById('statFees').textContent = `₹${total.toLocaleString('en-IN')}`;
+                const can = (m) => isOwner || myAllowedModules.includes(m);
+
+                if (can('students')) {
+                    const r = await authFetch(`/api/records/students/${currentBranchId}`);
+                    document.getElementById('statStudents').textContent = (await r.json()).length;
+                }
+                if (can('teachers')) {
+                    const r = await authFetch(`/api/records/teachers/${currentBranchId}`);
+                    document.getElementById('statTeachers').textContent = (await r.json()).length;
+                }
+                if (can('classrooms')) {
+                    const r = await authFetch(`/api/records/classrooms/${currentBranchId}`);
+                    document.getElementById('statClassrooms').textContent = (await r.json()).length;
+                }
+
+                const dRes = await authFetch(`/api/dashboard/${currentBranchId}`);
+                const dash = await dRes.json();
+
+                if (can('fees')) {
+                    document.getElementById('statFeesPending').textContent = `₹${(dash.fees_pending_total || 0).toLocaleString('en-IN')}`;
+                }
+
+                if (can('attendance')) {
+                    const el = document.getElementById('dashAttendanceChart');
+                    if (!dash.attendance_week.length) {
+                        el.innerHTML = '<p class="text-xs text-gray-500">No attendance marked in the last 7 days.</p>';
+                    } else {
+                        el.innerHTML = dash.attendance_week.map(b => `
+                            <div>
+                                <div class="flex justify-between text-xs mb-1"><span class="text-gray-300 font-semibold">${esc(b.batch)}</span><span class="text-gray-500">${b.present}/${b.total} present · ${b.pct}%</span></div>
+                                <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${b.pct}%"></div></div>
+                            </div>
+                        `).join('');
+                    }
+                }
+
+                if (can('timetables')) {
+                    const el = document.getElementById('dashOngoingLectures');
+                    if (!dash.ongoing_lectures.length) {
+                        el.innerHTML = '<p class="text-xs text-gray-500">No lecture is currently in session.</p>';
+                    } else {
+                        el.innerHTML = dash.ongoing_lectures.map(l => `
+                            <div class="flex items-center justify-between text-xs bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3">
+                                <div class="flex items-center space-x-2"><span class="ongoing-dot"></span><span class="font-semibold text-white">${esc(l.batch_name)}</span><span class="text-gray-500">${esc(l.subject)}</span></div>
+                                <div class="text-gray-400">${esc(l.teacher)} · ${esc(l.room)}</div>
+                            </div>
+                        `).join('');
+                    }
+                }
             } catch (e) { console.error(e); }
+        }
+
+        // Small HTML-escaping helper reused across dashboard/table rendering.
+        function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
+
+        // Shared by the on-screen table AND both export functions, so a
+        // module's columns/order never drift apart between what's shown and
+        // what's exported.
+        function getModuleColumns(moduleName, records) {
+            const hiddenKeys = ['id', 'branch_id', 'building'];
+            return MODULE_COLUMNS[moduleName] ||
+                (records[0] ? Object.keys(records[0]).filter(k => !hiddenKeys.includes(k)).map(k => ({ key: k, label: k.replace('_', ' ') })) : []);
+        }
+
+        function formatExportValue(moduleName, key, val) {
+            if (moduleName === 'fees' && key === 'amount_inr') return `Rs. ${parseFloat(val || 0).toLocaleString('en-IN')}`;
+            if (key === 'document') return val ? 'Attached' : 'No File';
+            return val ?? '';
+        }
+
+        function exportModulePDF(moduleName) {
+            const records = moduleRecordsCache[moduleName] || [];
+            if (!records.length) { alert('Nothing to export yet.'); return; }
+            const columns = getModuleColumns(moduleName, records);
+            const doc = new window.jspdf.jsPDF();
+            doc.setFontSize(14);
+            doc.text(`${moduleName[0].toUpperCase()}${moduleName.slice(1)} - Algorithmic`, 14, 16);
+            doc.autoTable({
+                startY: 22,
+                head: [columns.map(c => c.label)],
+                body: records.map(r => columns.map(c => String(formatExportValue(moduleName, c.key, r[c.key])))),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [20, 20, 20] },
+            });
+            doc.save(`${moduleName}_export.pdf`);
+        }
+
+        function exportModuleExcel(moduleName) {
+            const records = moduleRecordsCache[moduleName] || [];
+            if (!records.length) { alert('Nothing to export yet.'); return; }
+            const columns = getModuleColumns(moduleName, records);
+            const rows = records.map(r => {
+                const row = {};
+                columns.forEach(c => { row[c.label] = formatExportValue(moduleName, c.key, r[c.key]); });
+                return row;
+            });
+            const ws = window.XLSX.utils.json_to_sheet(rows);
+            const wb = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(wb, ws, moduleName.slice(0, 31));
+            window.XLSX.writeFile(wb, `${moduleName}_export.xlsx`);
         }
 
         async function renderDataModule(container, moduleName) {
@@ -1495,6 +2029,10 @@ HTML_CONTENT = """<!DOCTYPE html>
                             <button onclick="openBulkImportModal('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>
                         </div>` : ''}
                     </div>
+                    <div class="flex items-center justify-end space-x-3">
+                        <button onclick="exportModulePDF('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export PDF</button>
+                        <button onclick="exportModuleExcel('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export Excel</button>
+                    </div>
                     <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
                         <table class="w-full text-left text-sm text-gray-300">
                             <thead id="moduleTableHead" class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border"></thead>
@@ -1509,6 +2047,12 @@ HTML_CONTENT = """<!DOCTYPE html>
         // Explicit column order/labels for modules with a fixed, curated column set.
         // Modules not listed here fall back to showing every DB column returned.
         const MODULE_COLUMNS = {
+            students: [
+                { key: 'name', label: 'Name' },
+                { key: 'batch', label: 'Batch' },
+                { key: 'roll_number', label: 'Roll Number' },
+                { key: 'parent_contact', label: "Parent's Contact Number" },
+            ],
             teachers: [
                 { key: 'name', label: 'Name' },
                 { key: 'subject', label: 'Subject' },
@@ -1523,11 +2067,14 @@ HTML_CONTENT = """<!DOCTYPE html>
             ],
         };
 
+        let moduleRecordsCache = {};
+
         async function loadModuleRecords(moduleName) {
             if (!currentBranchId) return;
             const canWrite = myPermission !== 'read_only';
             const res = await authFetch(`/api/records/${moduleName}/${currentBranchId}`);
             const records = await res.json();
+            moduleRecordsCache[moduleName] = records;
             const thead = document.getElementById('moduleTableHead');
             const tbody = document.getElementById('moduleTableBody');
 
@@ -1538,9 +2085,7 @@ HTML_CONTENT = """<!DOCTYPE html>
             }
 
             // 'building' is retired from classrooms, and record ownership fields never render.
-            const hiddenKeys = ['id', 'branch_id', 'building'];
-            const columns = MODULE_COLUMNS[moduleName] ||
-                Object.keys(records[0]).filter(k => !hiddenKeys.includes(k)).map(k => ({ key: k, label: k.replace('_', ' ') }));
+            const columns = getModuleColumns(moduleName, records);
 
             thead.innerHTML = `<tr>${columns.map(c => `<th class="p-4 uppercase tracking-wider text-xs font-bold">${c.label}</th>`).join('')}${canWrite ? '<th class="p-4"></th>' : ''}</tr>`;
             tbody.innerHTML = records.map(r => `
@@ -1552,7 +2097,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                         else if (c.key === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
                         return `<td class="p-4 font-medium">${val ?? ''}</td>`;
                     }).join('')}
-                    ${canWrite ? `<td class="p-4 text-right"><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
+                    ${canWrite ? `<td class="p-4 text-right whitespace-nowrap"><button onclick="openRecordModal('${moduleName}', ${r.id})" title="Edit record" class="row-delete-btn fast-transition text-sm leading-none mr-3">✎</button><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
                 </tr>
             `).join('');
         }
@@ -1575,6 +2120,10 @@ HTML_CONTENT = """<!DOCTYPE html>
                             <button onclick="openRecordModal('students')" class="gold-bg hover:opacity-95 text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add New Record</button>
                             <button onclick="openBulkImportModal('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">+ Add Document</button>
                         </div>` : ''}
+                    </div>
+                    <div class="flex items-center justify-end space-x-3">
+                        <button onclick="exportModulePDF('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export PDF</button>
+                        <button onclick="exportModuleExcel('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export Excel</button>
                     </div>
                     <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl">
                         <input type="text" id="studentSearchInput" placeholder="Search student by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none mb-4">
@@ -1603,6 +2152,7 @@ HTML_CONTENT = """<!DOCTYPE html>
             if (!currentBranchId) return;
             const res = await authFetch(`/api/records/students/${currentBranchId}`);
             allStudentRecords = await res.json();
+            moduleRecordsCache['students'] = allStudentRecords;
             renderStudentTable();
         }
 
@@ -1640,7 +2190,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                         <td class="p-4">${s.batch ?? ''}</td>
                         <td class="p-4">${s.roll_number ?? ''}</td>
                         <td class="p-4">${s.parent_contact ?? ''}</td>
-                        ${canWrite ? `<td class="p-4 text-right"><button onclick="deleteRecord('students', ${s.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
+                        ${canWrite ? `<td class="p-4 text-right whitespace-nowrap"><button onclick="openRecordModal('students', ${s.id})" title="Edit record" class="row-delete-btn fast-transition text-sm leading-none mr-3">✎</button><button onclick="deleteRecord('students', ${s.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
                     </tr>`;
             });
             tbody.innerHTML = rows;
@@ -1717,14 +2267,50 @@ HTML_CONTENT = """<!DOCTYPE html>
                 const safeName = (s.name || '').replace(/'/g, "\\'");
                 return `
                 <div class="flex items-center justify-between py-3">
-                    <span class="text-sm font-medium text-gray-200">${s.name ?? ''}</span>
+                    <span class="text-sm font-medium text-gray-200">${esc(s.name)}</span>
                     <div class="flex items-center space-x-2">
+                        <button onclick="openAttendanceHistory('${safeName}')" title="View past attendance" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition bg-[#141414] text-gray-400 border gold-border hover:text-yellow-500">History</button>
                         <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Present')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Present' ? 'bg-green-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-green-400'}">Present</button>
                         <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Absent')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Absent' ? 'bg-red-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-red-400'}">Absent</button>
                     </div>
                 </div>`;
             }).join('');
         }
+
+        async function openAttendanceHistory(studentName) {
+            const modal = document.getElementById('attendanceHistoryModal');
+            const body = document.getElementById('attendanceHistoryBody');
+            document.getElementById('attendanceHistoryTitle').textContent = `Attendance History · ${studentName}`;
+            body.innerHTML = '<p class="text-xs text-gray-500 p-4">Loading…</p>';
+            modal.classList.remove('hidden');
+            try {
+                const res = await authFetch(`/api/attendance/history/${currentBranchId}?student_name=${encodeURIComponent(studentName)}`);
+                const data = await res.json();
+                if (!data.history.length) {
+                    body.innerHTML = '<p class="text-xs text-gray-500 p-4">No attendance marked yet for this student.</p>';
+                    return;
+                }
+                body.innerHTML = `
+                    <div class="flex justify-between text-xs text-gray-400 px-1 pb-3 border-b gold-border mb-3">
+                        <span>${data.total_marked} days marked</span>
+                        <span class="text-green-400">${data.present_count} present</span>
+                        <span class="text-red-400">${data.absent_count} absent</span>
+                    </div>
+                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-900">
+                        ${data.history.map(h => `
+                            <div class="flex justify-between items-center py-2 text-sm">
+                                <span class="text-gray-300">${esc(h.date)}</span>
+                                <span class="font-semibold ${h.status === 'Present' ? 'text-green-400' : 'text-red-400'}">${esc(h.status)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (e) {
+                body.innerHTML = '<p class="text-xs text-red-400 p-4">Failed to load history.</p>';
+            }
+        }
+
+        function closeAttendanceHistory() { document.getElementById('attendanceHistoryModal').classList.add('hidden'); }
 
         async function markAttendance(studentName, status) {
             const res = await authFetch('/api/attendance/mark', {
@@ -1824,6 +2410,13 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         // ---- Manage Users ----
 
+        const MODULE_LABELS = {
+            students: 'Students', teachers: 'Teachers', classrooms: 'Classrooms', syllabus: 'Syllabus',
+            attendance: 'Attendance', timetables: 'Timetable', invigilation: 'Invigilator Duty', fees: 'Fees',
+        };
+
+        let usersCache = [];
+
         async function renderUsersModule(container) {
             container.innerHTML = `
                 <div class="space-y-6">
@@ -1837,7 +2430,7 @@ HTML_CONTENT = """<!DOCTYPE html>
                     <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
                         <table class="w-full text-left text-sm text-gray-300">
                             <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
-                                <tr><th class="p-4">Full Name</th><th class="p-4">Email</th><th class="p-4">Permission</th><th class="p-4"></th></tr>
+                                <tr><th class="p-4">Full Name</th><th class="p-4">Email</th><th class="p-4">Designation</th><th class="p-4">Module Access</th><th class="p-4">Permission</th><th class="p-4"></th></tr>
                             </thead>
                             <tbody id="usersTableBody"></tbody>
                         </table>
@@ -1849,49 +2442,94 @@ HTML_CONTENT = """<!DOCTYPE html>
 
         async function loadUsers() {
             const res = await authFetch('/api/users');
-            const users = await res.json();
+            usersCache = await res.json();
             const tbody = document.getElementById('usersTableBody');
-            if (users.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
+            if (usersCache.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
                 return;
             }
-            tbody.innerHTML = users.map(u => `
+            tbody.innerHTML = usersCache.map(u => `
                 <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
-                    <td class="p-4 font-medium text-white">${u.full_name}</td>
-                    <td class="p-4 text-gray-400">${u.email}</td>
+                    <td class="p-4 font-medium text-white">${esc(u.full_name)}</td>
+                    <td class="p-4 text-gray-400">${esc(u.email)}</td>
+                    <td class="p-4"><span class="perm-badge perm-readonly">${esc(u.designation || 'Staff')}</span></td>
+                    <td class="p-4 text-xs text-gray-400">${(u.modules || []).length ? u.modules.map(m => esc(MODULE_LABELS[m] || m)).join(', ') : '<span class="text-gray-600">None</span>'}</td>
                     <td class="p-4">
                         <select onchange="changeUserPermission(${u.id}, this.value)" class="bg-[#0c0c0c] border gold-border rounded-lg px-2 py-1 text-xs text-gray-200 focus:outline-none">
                             <option value="edit" ${u.permission === 'edit' ? 'selected' : ''}>Edit Access</option>
                             <option value="read_only" ${u.permission === 'read_only' ? 'selected' : ''}>Read Only</option>
                         </select>
                     </td>
-                    <td class="p-4 text-right"><button onclick="removeUser(${u.id})" title="Revoke access" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>
+                    <td class="p-4 text-right whitespace-nowrap">
+                        <button onclick="openUserModal(${u.id})" title="Edit designation & module access" class="row-delete-btn fast-transition text-sm leading-none mr-3">✎</button>
+                        <button onclick="removeUser(${u.id})" title="Revoke access" class="row-delete-btn fast-transition text-lg leading-none">🗑</button>
+                    </td>
                 </tr>
             `).join('');
         }
 
-        function openUserModal() {
-            document.getElementById('newUserName').value = '';
-            document.getElementById('newUserEmail').value = '';
+        function renderModuleCheckboxGrid(checkedModules) {
+            const grid = document.getElementById('newUserModuleGrid');
+            const checked = new Set(checkedModules || []);
+            grid.innerHTML = ALL_MODULES.map(m => `
+                <label class="flex items-center space-x-2 text-xs text-gray-300 bg-[#0c0c0c] border gold-border rounded-lg px-3 py-2 cursor-pointer">
+                    <input type="checkbox" class="module-check newUserModuleCheckbox" value="${m}" ${checked.has(m) ? 'checked' : ''}>
+                    <span>${MODULE_LABELS[m]}</span>
+                </label>
+            `).join('');
+        }
+
+        function openUserModal(userId) {
+            const isEdit = userId !== undefined && userId !== null;
+            const existing = isEdit ? usersCache.find(u => u.id === userId) : null;
+            document.getElementById('userModalTitle').textContent = isEdit ? 'Edit User Access' : 'Add User';
+            document.getElementById('userModalSubmitBtn').textContent = isEdit ? 'Save Changes' : 'Create User';
+            document.getElementById('newUserName').value = existing ? existing.full_name : '';
+            document.getElementById('newUserName').disabled = isEdit;
+            document.getElementById('newUserEmail').value = existing ? existing.email : '';
+            document.getElementById('newUserEmail').disabled = isEdit;
             document.getElementById('newUserPassword').value = '';
-            document.getElementById('newUserPermission').value = 'edit';
+            document.getElementById('newUserPassword').placeholder = isEdit ? 'Password cannot be changed here' : 'Password (min 8 characters)';
+            document.getElementById('newUserPassword').disabled = isEdit;
+            document.getElementById('newUserDesignation').value = existing ? (existing.designation || '') : '';
+            document.getElementById('newUserPermission').value = existing ? existing.permission : 'edit';
+            renderModuleCheckboxGrid(existing ? existing.modules : []);
             document.getElementById('userModalError').textContent = '';
             document.getElementById('userModal').classList.remove('hidden');
+            window.activeUserModalId = isEdit ? userId : null;
         }
+
         function closeUserModal() { document.getElementById('userModal').classList.add('hidden'); }
 
-        async function submitNewUser() {
+        async function submitUserForm() {
             const errorEl = document.getElementById('userModalError');
+            const userId = window.activeUserModalId;
+            const designation = document.getElementById('newUserDesignation').value.trim();
+            const permission = document.getElementById('newUserPermission').value;
+            const modules = Array.from(document.querySelectorAll('.newUserModuleCheckbox:checked')).map(el => el.value);
+            if (!designation) { errorEl.textContent = 'Designation is required.'; return; }
+
+            if (userId) {
+                const res = await authFetch(`/api/users/${userId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ designation, permission, modules }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) { closeUserModal(); await loadUsers(); }
+                else { errorEl.textContent = data.detail || 'Failed to update user.'; }
+                return;
+            }
+
             const full_name = document.getElementById('newUserName').value.trim();
             const email = document.getElementById('newUserEmail').value.trim();
             const password = document.getElementById('newUserPassword').value;
-            const permission = document.getElementById('newUserPermission').value;
             if (!full_name || !email || !password) { errorEl.textContent = 'All fields are required.'; return; }
 
             const res = await authFetch('/api/users', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ full_name, email, password, permission })
+                body: JSON.stringify({ full_name, email, password, permission, designation, modules }),
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
@@ -1917,18 +2555,35 @@ HTML_CONTENT = """<!DOCTYPE html>
             if (res.ok) { await loadUsers(); } else { alert('Failed to remove user.'); }
         }
 
+        let ttTeachersData = [];
+        let ttSavedConfigs = [];
+
+        const TT_DEFAULT_TIMINGS = [
+            { lecture_number: 1, time_slot: '09:00 AM - 10:00 AM' },
+            { lecture_number: 2, time_slot: '10:00 AM - 11:00 AM' },
+            { lecture_number: 3, time_slot: '11:15 AM - 12:15 PM' },
+            { lecture_number: 4, time_slot: '01:15 PM - 02:15 PM' },
+        ];
+
         async function renderTimetableModule(container) {
-            const tRes = await authFetch(`/api/records/teachers/${currentBranchId}`);
-            const teachers = await tRes.json();
-            const sRes = await authFetch(`/api/timetable/slots/${currentBranchId}`);
-            const savedSlots = await sRes.json();
+            const canWrite = myPermission !== 'read_only';
+            const [tRes, sRes, cRes] = await Promise.all([
+                authFetch(`/api/records/teachers/${currentBranchId}`),
+                authFetch(`/api/timetable/slots/${currentBranchId}`),
+                authFetch(`/api/timetable/configs/${currentBranchId}`),
+            ]);
+            ttTeachersData = await tRes.json();
+            window.ttSavedSlots = await sRes.json();
+            ttSavedConfigs = await cRes.json();
+
+            const batchNamesInSlots = [...new Set(window.ttSavedSlots.map(s => s.batch_name))].sort((a, b) => (a || '').localeCompare(b || ''));
 
             container.innerHTML = `
                 <div class="space-y-8">
-                    <div class="flex justify-between items-center">
+                    <div class="flex justify-between items-center flex-wrap gap-3">
                         <div>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Timetable Generation & Batch Scheduler</h2>
-                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Conflict-checked scheduler (teacher & room aware)</p>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Conflict-checked · one batch at a time · never stacked</p>
                         </div>
                         <button onclick="window.print()" class="bg-[#141414] hover:bg-[#202020] gold-gradient-text border gold-border px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Download PDF / Print Timetable</button>
                     </div>
@@ -1936,21 +2591,30 @@ HTML_CONTENT = """<!DOCTYPE html>
                         <div class="glass-panel border gold-border p-6 rounded-2xl space-y-6">
                             <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Configure Batch & Teacher Load</h3>
                             <div class="space-y-4">
+                                ${ttSavedConfigs.length > 0 ? `
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Load Existing Batch <span class="text-gray-600 normal-case font-normal">(to edit & regenerate exactly)</span></label>
+                                    <select id="ttLoadBatchSelect" onchange="loadTimetableConfig(this.value)" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-xs text-gray-200 focus:outline-none">
+                                        <option value="">— New Batch —</option>
+                                        ${ttSavedConfigs.map(c => `<option value="${esc(c.batch_name)}">${esc(c.batch_name)}</option>`).join('')}
+                                    </select>
+                                </div>` : ''}
                                 <div>
                                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Batch Name</label>
                                     <input type="text" id="ttBatchName" placeholder="e.g. B.Tech CSE Batch A" value="B.Tech CSE Batch A" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Lecture Timings (Comma separated)</label>
-                                    <input type="text" id="ttTimings" value="09:00 AM - 10:00 AM, 10:00 AM - 11:00 AM, 11:15 AM - 12:15 PM, 01:15 PM - 02:15 PM" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-xs text-gray-200 gold-border-glow focus:outline-none">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Lecture Timings</label>
+                                    <div id="ttTimingRows" class="space-y-2"></div>
+                                    <button type="button" onclick="addTimingRow()" class="mt-2 text-xs font-bold gold-gradient-text hover:opacity-80">+ Add Lecture Timing</button>
                                 </div>
                                 <div class="pt-2">
                                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Assigned Teachers & Constraints</label>
                                     <div id="teacherConfigList" class="space-y-3 max-h-60 overflow-y-auto pr-2">
-                                        ${teachers.length === 0 ? '<p class="text-xs text-gray-500">No teachers found. Please add teachers first.</p>' :
-                                          teachers.map((t, idx) => `
-                                            <div class="p-3 bg-[#0f0f0f] border gold-border rounded-xl space-y-2" data-teacher="${t.name}" data-subject="${t.subject}">
-                                                <div class="flex justify-between items-center text-xs font-bold text-gray-200"><span>${t.name} (${t.subject})</span></div>
+                                        ${ttTeachersData.length === 0 ? '<p class="text-xs text-gray-500">No teachers found. Please add teachers first.</p>' :
+                                          ttTeachersData.map((t, idx) => `
+                                            <div class="p-3 bg-[#0f0f0f] border gold-border rounded-xl space-y-2" data-teacher="${esc(t.name)}" data-subject="${esc(t.subject)}">
+                                                <div class="flex justify-between items-center text-xs font-bold text-gray-200"><span>${esc(t.name)} (${esc(t.subject)})</span></div>
                                                 <div class="grid grid-cols-2 gap-2">
                                                     <div><label class="text-[10px] text-gray-400 uppercase">Lectures/Week</label><input type="number" id="lec_${idx}" value="3" min="1" max="5" class="w-full bg-[#070707] border gold-border rounded p-1.5 text-xs text-white"></div>
                                                     <div><label class="text-[10px] text-gray-400 uppercase">Unavailable Days</label><input type="text" id="unav_${idx}" placeholder="e.g. Monday" class="w-full bg-[#070707] border gold-border rounded p-1.5 text-xs text-white" title="Comma separated days"></div>
@@ -1959,67 +2623,197 @@ HTML_CONTENT = """<!DOCTYPE html>
                                           `).join('')}
                                     </div>
                                 </div>
-                                <button onclick="generateTimetableSchedule()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate Weekly Timetable</button>
+                                ${canWrite
+                                    ? `<button onclick="generateTimetableSchedule()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate / Regenerate Weekly Timetable</button>`
+                                    : `<p class="text-xs text-gray-500">You have read-only access and cannot generate timetables.</p>`}
                             </div>
                         </div>
                         <div class="lg:col-span-2 glass-panel border gold-border p-6 rounded-2xl overflow-x-auto">
-                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Generated Weekly Schedule</h3>
+                            <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+                                <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Generated Weekly Schedule</h3>
+                                ${batchNamesInSlots.length > 0 ? `
+                                <select id="ttViewBatchFilter" onchange="renderTimetableGrid()" class="bg-[#0c0c0c] border gold-border rounded-lg p-2 text-xs text-gray-200 focus:outline-none">
+                                    <option value="">All Batches</option>
+                                    ${batchNamesInSlots.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join('')}
+                                </select>` : ''}
+                            </div>
                             <table class="w-full text-left text-sm text-gray-300">
-                                <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border"><tr><th class="p-3">Day</th><th class="p-3">Time Slot</th><th class="p-3">Subject</th><th class="p-3">Teacher</th><th class="p-3">Room</th></tr></thead>
-                                <tbody id="timetableSlotsBody">
-                                    ${savedSlots.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-gray-500">No timetable generated yet. Configure and click generate.</td></tr>' :
-                                      savedSlots.map(s => `
-                                        <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
-                                            <td class="p-3 font-semibold text-yellow-500">${s.day}</td><td class="p-3">${s.time_slot}</td><td class="p-3 font-medium">${s.subject}</td><td class="p-3">${s.teacher}</td><td class="p-3 text-xs text-gray-400">${s.room}</td>
-                                        </tr>
-                                      `).join('')}
-                                </tbody>
+                                <thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border">
+                                    <tr><th class="p-3">Batch</th><th class="p-3">Day</th><th class="p-3">Lecture #</th><th class="p-3">Time Slot</th><th class="p-3">Subject</th><th class="p-3">Teacher</th><th class="p-3">Room</th>${canWrite ? '<th class="p-3"></th>' : ''}</tr>
+                                </thead>
+                                <tbody id="timetableSlotsBody"></tbody>
                             </table>
                         </div>
                     </div>
                 </div>
             `;
+            setTimingRows(TT_DEFAULT_TIMINGS);
+            renderTimetableGrid();
+        }
+
+        function timingRowHtml(lectureNumber, timeSlot) {
+            return `
+                <div class="flex gap-2 items-center" data-timing-row>
+                    <input type="number" min="1" value="${lectureNumber}" title="Lecture Number" class="w-16 bg-[#070707] border gold-border rounded p-2 text-xs text-white tt-lecture-num">
+                    <input type="text" value="${esc(timeSlot)}" placeholder="09:00 AM - 10:00 AM" title="Time Slot" class="flex-1 bg-[#070707] border gold-border rounded p-2 text-xs text-white tt-time-slot">
+                    <button type="button" onclick="this.closest('[data-timing-row]').remove()" class="text-gray-500 hover:text-red-400 text-sm px-1">✕</button>
+                </div>`;
+        }
+
+        function setTimingRows(timings) {
+            const container = document.getElementById('ttTimingRows');
+            container.innerHTML = timings.map(t => timingRowHtml(t.lecture_number, t.time_slot)).join('');
+        }
+
+        function addTimingRow() {
+            const container = document.getElementById('ttTimingRows');
+            const nextNum = container.children.length + 1;
+            container.insertAdjacentHTML('beforeend', timingRowHtml(nextNum, ''));
+        }
+
+        function loadTimetableConfig(batchName) {
+            if (!batchName) {
+                document.getElementById('ttBatchName').value = '';
+                setTimingRows(TT_DEFAULT_TIMINGS);
+                document.querySelectorAll('#teacherConfigList > div').forEach((el, idx) => {
+                    document.getElementById(`lec_${idx}`).value = 3;
+                    document.getElementById(`unav_${idx}`).value = '';
+                });
+                return;
+            }
+            const config = ttSavedConfigs.find(c => c.batch_name === batchName);
+            if (!config) return;
+            document.getElementById('ttBatchName').value = config.batch_name;
+            setTimingRows(config.timings.slice().sort((a, b) => a.lecture_number - b.lecture_number));
+            document.querySelectorAll('#teacherConfigList > div').forEach((el, idx) => {
+                const name = el.getAttribute('data-teacher');
+                const match = config.teachers_config.find(t => t.name === name);
+                document.getElementById(`lec_${idx}`).value = match ? match.lectures_per_week : 3;
+                document.getElementById(`unav_${idx}`).value = (match && match.unavailable_days) ? match.unavailable_days.join(', ') : '';
+            });
+        }
+
+        function renderTimetableGrid() {
+            const tbody = document.getElementById('timetableSlotsBody');
+            const canWrite = myPermission !== 'read_only';
+            const filterEl = document.getElementById('ttViewBatchFilter');
+            const filterBatch = filterEl ? filterEl.value : '';
+            let slots = window.ttSavedSlots || [];
+            if (filterBatch) slots = slots.filter(s => s.batch_name === filterBatch);
+
+            const dayOrder = { Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3, Friday: 4, Saturday: 5, Sunday: 6 };
+            slots = slots.slice().sort((a, b) => {
+                if (a.batch_name !== b.batch_name) return (a.batch_name || '').localeCompare(b.batch_name || '');
+                const da = dayOrder[a.day] ?? 99, db = dayOrder[b.day] ?? 99;
+                if (da !== db) return da - db;
+                return (a.lecture_number || 0) - (b.lecture_number || 0);
+            });
+
+            if (!slots.length) {
+                tbody.innerHTML = `<tr><td colspan="${canWrite ? 8 : 7}" class="p-6 text-center text-gray-500">No timetable generated yet. Configure and click generate.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = slots.map(s => `
+                <tr class="border-b border-gray-900 hover:bg-[#121212] fast-transition">
+                    <td class="p-3 text-xs text-gray-400">${esc(s.batch_name)}</td>
+                    <td class="p-3 font-semibold text-yellow-500">${esc(s.day)}</td>
+                    <td class="p-3 text-xs text-gray-400">${s.lecture_number ?? '—'}</td>
+                    <td class="p-3">${esc(s.time_slot)}</td>
+                    <td class="p-3 font-medium">${esc(s.subject)}</td>
+                    <td class="p-3">${esc(s.teacher)}</td>
+                    <td class="p-3 text-xs text-gray-400">${esc(s.room)}</td>
+                    ${canWrite ? `<td class="p-3 text-right"><button onclick="openTimetableSlotEdit(${s.id})" title="Edit slot" class="row-delete-btn fast-transition text-sm leading-none">✎</button></td>` : ''}
+                </tr>
+            `).join('');
         }
 
         async function generateTimetableSchedule() {
-            const batchName = document.getElementById('ttBatchName').value;
-            const timingsRaw = document.getElementById('ttTimings').value;
-            const timings = timingsRaw.split(',').map(s => s.trim()).filter(Boolean);
-            const teacherElements = document.querySelectorAll('#teacherConfigList > div');
+            const batchName = document.getElementById('ttBatchName').value.trim();
+            if (!batchName) { alert('Enter a batch name.'); return; }
+
+            const timings = [];
+            document.querySelectorAll('#ttTimingRows [data-timing-row]').forEach(row => {
+                const lecture_number = parseInt(row.querySelector('.tt-lecture-num').value, 10) || 0;
+                const time_slot = row.querySelector('.tt-time-slot').value.trim();
+                if (time_slot) timings.push({ lecture_number, time_slot });
+            });
+            if (!timings.length) { alert('Add at least one lecture timing.'); return; }
+
             const teachers_config = [];
-            teacherElements.forEach((el, idx) => {
+            document.querySelectorAll('#teacherConfigList > div').forEach((el, idx) => {
                 const name = el.getAttribute('data-teacher');
                 const subject = el.getAttribute('data-subject');
                 const lectures_per_week = document.getElementById(`lec_${idx}`).value;
-                const unavRaw = document.getElementById(`unav_${idx}`).value;
-                const unavailable_days = unavRaw.split(',').map(s => s.trim()).filter(Boolean);
+                const unavailable_days = document.getElementById(`unav_${idx}`).value.split(',').map(s => s.trim()).filter(Boolean);
                 teachers_config.push({ name, subject, lectures_per_week, unavailable_days });
             });
+
+            if (!confirm(`This erases any existing timetable for "${batchName}" and rebuilds it fresh from these settings - it never stacks on top of a prior run. Continue?`)) return;
 
             const res = await authFetch('/api/timetable/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ branch_id: currentBranchId, batch_name: batchName, teachers_config, timings })
+                body: JSON.stringify({ branch_id: currentBranchId, batch_name: batchName, teachers_config, timings }),
             });
 
             if (res.ok) {
                 const result = await res.json();
-                let msg = 'Timetable successfully generated and saved!';
-                if (result.warnings && result.warnings.length > 0) {
-                    msg += '\\n\\nHeads up:\\n' + result.warnings.join('\\n');
-                }
+                let msg = `Timetable for "${batchName}" generated and saved.`;
+                if (result.warnings && result.warnings.length > 0) msg += '\\n\\nHeads up:\\n' + result.warnings.join('\\n');
                 alert(msg);
                 refreshCurrentModule();
             } else {
-                alert('Failed to generate timetable.');
+                const err = await res.json().catch(() => ({}));
+                alert(err.detail || 'Failed to generate timetable.');
             }
         }
 
-        function openRecordModal(moduleName) {
+        function openTimetableSlotEdit(slotId) {
+            const slot = (window.ttSavedSlots || []).find(s => s.id === slotId);
+            if (!slot) return;
+            window.activeTimetableSlotId = slotId;
+            document.getElementById('ttSlotEditDay').value = slot.day || '';
+            document.getElementById('ttSlotEditTime').value = slot.time_slot || '';
+            document.getElementById('ttSlotEditSubject').value = slot.subject || '';
+            document.getElementById('ttSlotEditTeacher').value = slot.teacher || '';
+            document.getElementById('ttSlotEditRoom').value = slot.room || '';
+            document.getElementById('timetableSlotEditModal').classList.remove('hidden');
+        }
+
+        function closeTimetableSlotEdit() { document.getElementById('timetableSlotEditModal').classList.add('hidden'); }
+
+        async function submitTimetableSlotEdit(e) {
+            e.preventDefault();
+            const slotId = window.activeTimetableSlotId;
+            const payload = {
+                day: document.getElementById('ttSlotEditDay').value,
+                time_slot: document.getElementById('ttSlotEditTime').value,
+                subject: document.getElementById('ttSlotEditSubject').value,
+                teacher: document.getElementById('ttSlotEditTeacher').value,
+                room: document.getElementById('ttSlotEditRoom').value,
+            };
+            const res = await authFetch(`/api/timetable/slots/${slotId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+                closeTimetableSlotEdit();
+                refreshCurrentModule();
+            } else {
+                alert('Failed to update slot.');
+            }
+        }
+
+        function openRecordModal(moduleName, recordId) {
             document.getElementById('recordModal').classList.remove('hidden');
-            document.getElementById('modalTitle').textContent = `Add New ${moduleName} Record`;
+            const isEdit = recordId !== undefined && recordId !== null;
+            document.getElementById('modalTitle').textContent = isEdit ? `Edit ${moduleName} Record` : `Add New ${moduleName} Record`;
+            document.getElementById('recordSubmitBtn').textContent = isEdit ? 'Save Changes' : 'Save Record';
             document.getElementById('recordFormError').textContent = '';
             const fieldsContainer = document.getElementById('modalFields');
+
+            const existing = isEdit ? (moduleRecordsCache[moduleName] || []).find(r => r.id === recordId) : null;
 
             let fieldsConfig = [];
             if (moduleName === 'students') {
@@ -2072,11 +2866,12 @@ HTML_CONTENT = """<!DOCTYPE html>
             fieldsContainer.innerHTML = fieldsConfig.map(f => `
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">${f.label}</label>
-                    <input type="${f.type}" id="field_${f.id}" required placeholder="${f.placeholder}" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    <input type="${f.type}" id="field_${f.id}" required placeholder="${f.placeholder}" value="${existing && existing[f.id] !== undefined && existing[f.id] !== null ? esc(existing[f.id]) : ''}" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                 </div>
             `).join('');
 
             window.activeModalModule = moduleName;
+            window.activeModalRecordId = isEdit ? recordId : null;
         }
 
         function closeRecordModal() { document.getElementById('recordModal').classList.add('hidden'); }
@@ -2086,15 +2881,18 @@ HTML_CONTENT = """<!DOCTYPE html>
             const errorEl = document.getElementById('recordFormError');
             errorEl.textContent = '';
             const moduleName = window.activeModalModule;
+            const recordId = window.activeModalRecordId;
             const inputs = document.getElementById('modalFields').querySelectorAll('input');
             const data = {};
             inputs.forEach(input => { const key = input.id.replace('field_', ''); data[key] = input.type === 'number' ? parseFloat(input.value) : input.value; });
 
             const formData = new FormData();
-            formData.append('branch_id', currentBranchId);
+            if (!recordId) formData.append('branch_id', currentBranchId);
             formData.append('data_json', JSON.stringify(data));
 
-            const res = await authFetch(`/api/records/${moduleName}`, { method: 'POST', body: formData });
+            const url = recordId ? `/api/records/${moduleName}/${recordId}` : `/api/records/${moduleName}`;
+            const method = recordId ? 'PATCH' : 'POST';
+            const res = await authFetch(url, { method, body: formData });
 
             if (res.ok) {
                 closeRecordModal();
