@@ -1,4 +1,4 @@
-[README (3).md](https://github.com/user-attachments/files/31791129/README.3.md)
+[README (4).md](https://github.com/user-attachments/files/31792144/README.4.md)
 # Algorithmic — Multi-Branch Institutional Operations SaaS
 
 Push-ready FastAPI + PostgreSQL + Tailwind/HTML build.
