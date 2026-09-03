@@ -1,45 +1,29 @@
+from pathlib import Path
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.routing import APIRoute
+
 import main
-import exam_modules
-from fastapi.responses import HTMLResponse
+from exam_features import router as examination_router
 
-EXAM_JS = r'''
-<script>
-(function(){
-  if (window.HEAD_MODULES && window.HEAD_MODULES.examination) {
-    if (!window.HEAD_MODULES.examination.some(x=>x[0]==='results')) window.HEAD_MODULES.examination.push(['results','📊','Results'],['history','🗂️','History']);
-  }
-  if (window.MODULE_HEAD) { MODULE_HEAD.results='examination'; MODULE_HEAD.history='examination'; }
-  const oldRefresh = window.refreshCurrentModule;
-  window.refreshCurrentModule = async function(){
-    const c=document.getElementById('mainContent');
-    if(currentModule==='results') return renderResultsModule(c);
-    if(currentModule==='history') return renderExamHistoryModule(c);
-    return oldRefresh();
-  };
-  window.renderResultsModule=async function(container){
-    const canWrite=myPermission!=='read_only'&&!isGlobalView;
-    container.innerHTML=`<div class="space-y-6"><div><h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Results</h2><p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Create an examination paper and enter every student's marks</p></div><div class="glass-panel border gold-border p-6 rounded-2xl shadow-2xl"><div class="grid grid-cols-1 md:grid-cols-5 gap-4"><div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Batch Name</label><select id="resultBatch" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200"></select></div><div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Subject(s)</label><input id="resultSubjects" placeholder="Physics, Chemistry" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"></div><div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Topic(s)</label><input id="resultTopics" placeholder="Kinematics, Mole Concept" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"></div><div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Exam Date</label><input id="resultDate" type="date" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"></div><div><label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1.5">Overall Marks</label><input id="resultOverall" type="number" min="1" step="0.01" placeholder="100" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"></div></div>${canWrite?'<button onclick="generateExamResults()" class="mt-5 gold-bg text-black font-extrabold px-6 py-3 rounded-xl text-xs uppercase">Load Batch & Start Marks</button>':''}<div id="resultsError" class="auth-error mt-2"></div></div><div id="resultsPaper"></div></div>`;
-    const res=await authFetch(`/api/exams/result-batches/${currentBranchId}`);const batches=await res.json().catch(()=>[]);const sel=document.getElementById('resultBatch');sel.innerHTML=Array.isArray(batches)&&batches.length?batches.map(b=>`<option>${esc(b)}</option>`).join(''):'<option value="">No batches found</option>';await loadExistingResult();
-  };
-  window.generateExamResults=async function(){const payload={branch_id:currentBranchId,batch_name:document.getElementById('resultBatch').value,subjects:document.getElementById('resultSubjects').value,topics:document.getElementById('resultTopics').value,exam_date:document.getElementById('resultDate').value,overall_marks:parseFloat(document.getElementById('resultOverall').value)};const err=document.getElementById('resultsError');const res=await authFetch('/api/exams/results/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await res.json().catch(()=>({}));if(!res.ok){err.textContent=data.detail||'Could not create results sheet.';return;}renderResultsRows(data);};
-  async function loadExistingResult(){const sel=document.getElementById('resultBatch');if(!sel||!sel.value)return;const res=await authFetch(`/api/exams/results/${currentBranchId}?batch_name=${encodeURIComponent(sel.value)}`);const rows=await res.json().catch(()=>[]);if(Array.isArray(rows)&&rows.length)renderResultsRows(rows);}
-  function renderResultsRows(rows){const first=rows[0];document.getElementById('resultSubjects').value=first.subjects||'';document.getElementById('resultTopics').value=first.topics||'';document.getElementById('resultDate').value=first.exam_date||'';document.getElementById('resultOverall').value=first.overall_marks||'';const canWrite=myPermission!=='read_only'&&!isGlobalView;document.getElementById('resultsPaper').innerHTML=`<div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl overflow-x-auto"><div class="mb-5 flex flex-wrap justify-between gap-4"><div><div class="text-[10px] text-gray-500 uppercase tracking-widest">Batch</div><div class="text-lg font-black gold-gradient-text">${esc(first.batch_name)}</div><div class="text-xs text-gray-400 mt-2">${esc(first.subjects)} · ${esc(first.topics)} · ${esc(first.exam_date)}</div></div><div class="text-right"><div class="text-[10px] text-gray-500 uppercase tracking-widest">Overall Marks</div><div class="text-2xl font-black gold-gradient-text">${esc(first.overall_marks)}</div></div></div><table class="w-full text-left text-sm text-gray-300"><thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border"><tr><th class="p-4">Student Name</th><th class="p-4">Roll Number</th><th class="p-4">Marks / ${esc(first.overall_marks)}</th>${canWrite?'<th class="p-4">Actions</th>':''}</tr></thead><tbody>${rows.map(r=>`<tr class="border-b border-gray-900"><td class="p-4 font-semibold">${esc(r.student_name)}</td><td class="p-4 text-gray-500">${esc(r.roll_number||'')}</td><td class="p-4"><input ${canWrite?'':'disabled'} id="marks_${r.id}" type="number" min="0" max="${esc(r.overall_marks)}" step="0.01" value="${r.marks==null?'':esc(r.marks)}" placeholder="Enter marks" class="w-40 bg-[#0c0c0c] border gold-border rounded-lg p-2 text-sm text-white"></td>${canWrite?`<td class="p-4 whitespace-nowrap"><button onclick="saveResultMark(${r.id})" class="gold-gradient-text font-bold text-xs mr-4">Save</button><button onclick="editResultRecord(${r.id})" class="row-delete-btn mr-4">✎</button><button onclick="deleteResultRecord(${r.id})" class="row-delete-btn">🗑</button></td>`:''}</tr>`).join('')}</tbody></table></div>`;}
-  window.saveResultMark=async function(id){const v=document.getElementById('marks_'+id).value;const marks=v===''?null:parseFloat(v);const res=await authFetch(`/api/exams/results/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({subjects:document.getElementById('resultSubjects').value,topics:document.getElementById('resultTopics').value,exam_date:document.getElementById('resultDate').value,overall_marks:parseFloat(document.getElementById('resultOverall').value),marks})});const d=await res.json().catch(()=>({}));if(!res.ok)alert(d.detail||'Failed to save marks.');};
-  window.editResultRecord=async function(id){const subjects=prompt('Subject(s):',document.getElementById('resultSubjects').value);if(subjects===null)return;const topics=prompt('Topic(s):',document.getElementById('resultTopics').value);if(topics===null)return;const date=prompt('Exam date:',document.getElementById('resultDate').value);if(date===null)return;const overall=parseFloat(prompt('Overall marks:',document.getElementById('resultOverall').value));if(!overall)return;const markEl=document.getElementById('marks_'+id);const marks=markEl.value===''?null:parseFloat(markEl.value);const res=await authFetch(`/api/exams/results/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({subjects,topics,exam_date:date,overall_marks:overall,marks})});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Failed to edit result.');return;}await renderResultsModule(document.getElementById('mainContent'));};
-  window.deleteResultRecord=async function(id){if(!confirm('Delete this student result record?'))return;const res=await authFetch(`/api/exams/results/${id}`,{method:'DELETE'});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Failed to delete result.');return;}await loadExistingResult();};
-  window.renderExamHistoryModule=async function(container){const canWrite=myPermission!=='read_only'&&!isGlobalView;container.innerHTML=`<div class="space-y-6"><div><h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">History</h2><p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Exam history register</p></div>${canWrite?`<div class="glass-panel border gold-border p-6 rounded-2xl"><div class="grid grid-cols-1 md:grid-cols-4 gap-4"><input id="histSubject" placeholder="Subject" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"><input id="histTopic" placeholder="Topic" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"><input id="histBatch" placeholder="Batch Name" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"><input id="histDate" type="date" class="bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm"></div><button onclick="addExamHistory()" class="mt-4 gold-bg text-black font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase">Add Record</button><div id="historyError" class="auth-error"></div></div>`:''}<div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto"><table class="w-full text-left text-sm text-gray-300"><thead class="bg-[#121212] text-xs uppercase gold-gradient-text border-b gold-border"><tr><th class="p-4">Subject</th><th class="p-4">Topic</th><th class="p-4">Batch Name</th><th class="p-4">Date</th>${canWrite?'<th class="p-4">Actions</th>':''}</tr></thead><tbody id="examHistoryBody"></tbody></table></div></div>`;await loadExamHistory();};
-  window.addExamHistory=async function(){const body={branch_id:currentBranchId,subject:document.getElementById('histSubject').value,topic:document.getElementById('histTopic').value,batch_name:document.getElementById('histBatch').value,exam_date:document.getElementById('histDate').value};const res=await authFetch('/api/exams/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await res.json().catch(()=>({}));if(!res.ok){document.getElementById('historyError').textContent=d.detail||'Failed to add history record.';return;}await loadExamHistory();};
-  async function loadExamHistory(){const res=await authFetch(`/api/exams/history/${currentBranchId}`);const rows=await res.json().catch(()=>[]);const body=document.getElementById('examHistoryBody');if(!body)return;const canWrite=myPermission!=='read_only'&&!isGlobalView;body.innerHTML=!rows.length?'<tr><td colspan="5" class="p-8 text-center text-gray-500">No exam history records yet.</td></tr>':rows.map(r=>`<tr class="border-b border-gray-900"><td class="p-4">${esc(r.subject)}</td><td class="p-4">${esc(r.topic)}</td><td class="p-4">${esc(r.batch_name)}</td><td class="p-4">${esc(r.exam_date)}</td>${canWrite?`<td class="p-4"><button onclick="editExamHistory(${r.id})" class="row-delete-btn mr-4">✎</button><button onclick="deleteExamHistory(${r.id})" class="row-delete-btn">🗑</button></td>`:''}</tr>`).join('');}
-  window.editExamHistory=async function(id){const subject=prompt('Subject:');if(subject===null)return;const topic=prompt('Topic:');if(topic===null)return;const batch=prompt('Batch Name:');if(batch===null)return;const date=prompt('Exam Date:');if(date===null)return;const res=await authFetch(`/api/exams/history/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,topic,batch_name:batch,exam_date:date})});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Failed to edit history.');return;}await loadExamHistory();};
-  window.deleteExamHistory=async function(id){if(!confirm('Delete this exam history record?'))return;const res=await authFetch(`/api/exams/history/${id}`,{method:'DELETE'});if(!res.ok){const d=await res.json().catch(()=>({}));alert(d.detail||'Failed to delete history.');return;}await loadExamHistory();};
-})();
-</script>
-'''
+main.app.include_router(examination_router)
+BASE = Path(__file__).resolve().parent
+INDEX = BASE / 'index.html'
+JS = BASE / 'exam_frontend.js'
+INJECTION = '<script src="/exam_frontend.js?v=results-history-1"></script>'
 
-main.MODULE_HEAD.update({'results':'examination','history':'examination'})
-html=main.HTML_CONTENT
-html=html.replace("['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation']", "['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation'], ['results', '📊', 'Results'], ['history', '🗂️', 'History']")
-html=html.replace("} else if (currentModule === 'seating') {\n                    await renderSeatingModule(container);", "} else if (currentModule === 'seating') {\n                    await renderSeatingModule(container);\n                } else if (currentModule === 'results') {\n                    await renderResultsModule(container);\n                } else if (currentModule === 'history') {\n                    await renderExamHistoryModule(container);")
-html=html.replace('</body>',EXAM_JS+'</body>')
-main.HTML_CONTENT=html
-app=main.app
+def root():
+    html = INDEX.read_text(encoding='utf-8')
+    if '/exam_frontend.js' not in html:
+        html = html.replace('</body>', INJECTION + '</body>', 1)
+    return HTMLResponse(html, headers={'Cache-Control': 'no-store'})
+
+for route in list(main.app.router.routes):
+    if isinstance(route, APIRoute) and route.path == '/' and 'GET' in route.methods:
+        main.app.router.routes.remove(route)
+main.app.add_api_route('/', root, methods=['GET'], response_class=HTMLResponse)
+
+@main.app.get('/exam_frontend.js')
+def exam_frontend():
+    return FileResponse(JS, media_type='application/javascript', headers={'Cache-Control': 'no-store'})
+
+app = main.app
