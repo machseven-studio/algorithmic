@@ -35,7 +35,7 @@ SEATING_MODULE = 'seating'
 ALL_ACCESS_MODULES = VALID_MODULES + ['analytics', 'timetables', SEATING_MODULE, 'assistant']
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 DESIGNATION_PRESETS = ['Admin', 'Accountant', 'Teacher', 'Head', 'Clerk', 'Custom']
 
