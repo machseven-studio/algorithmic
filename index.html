@@ -198,7 +198,7 @@
                 <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
                 <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
                 <button onclick="switchModule('home')" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
-                <button id="navAnalytics" data-module="analytics" onclick="switchModule('analytics')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>◈</span><span>Analytics</span></button>
+                <button id="navAnalytics" data-module="analytics" onclick="switchModule('analytics')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3" style="display:flex !important;"><span>◈</span><span>Analytics</span></button>
                 <button id="navStudents" data-module="students" onclick="switchModule('students')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
                 <button id="navTeachers" data-module="teachers" onclick="switchModule('teachers')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
                 <button id="navClassrooms" data-module="classrooms" onclick="switchModule('classrooms')" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
@@ -420,8 +420,10 @@
             document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
             ALL_MODULES.forEach(m => {
                 const btn = document.querySelector(`[data-module="${m}"]`);
-                if (btn) btn.classList.toggle('hidden', !isOwner && !myAllowedModules.includes(m));
+                if (btn && m !== 'analytics') btn.classList.toggle('hidden', !isOwner && !myAllowedModules.includes(m));
             });
+            const analyticsBtn = document.getElementById('navAnalytics');
+            if (analyticsBtn) analyticsBtn.classList.remove('hidden');
             const badge = document.getElementById('headerPermBadge');
             if (isOwner) { badge.innerHTML = `<span class="perm-badge perm-edit">Owner</span>`; }
             else {
@@ -532,7 +534,7 @@
         }
 
         function switchModule(moduleName) {
-            if (moduleName !== 'home' && moduleName !== 'users' && !isOwner && !myAllowedModules.includes(moduleName)) {
+            if (moduleName !== 'home' && moduleName !== 'users' && moduleName !== 'analytics' && !isOwner && !myAllowedModules.includes(moduleName)) {
                 alert('Your account does not have access to that module.');
                 return;
             }
