@@ -32,7 +32,10 @@ SEATING_MODULE = 'seating'
 # 'timetables' isn't a generic /api/records table (it has its own dedicated
 # endpoints below) but it IS a sidebar module a staff designation can be
 # granted or denied access to, so it's included here for permission checks.
-ALL_ACCESS_MODULES = VALID_MODULES + ['analytics', 'timetables', SEATING_MODULE]
+ALL_ACCESS_MODULES = VALID_MODULES + ['analytics', 'timetables', SEATING_MODULE, 'assistant']
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 DESIGNATION_PRESETS = ['Admin', 'Accountant', 'Teacher', 'Head', 'Clerk', 'Custom']
 
@@ -1692,6 +1695,101 @@ def get_dashboard(branch_id: int, institute: CurrentInstitute = Depends(get_curr
         "ongoing_lectures": ongoing_lectures,
         "as_of": now_ist.isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Parallax — AI assistant over the institute's own data
+# ---------------------------------------------------------------------------
+
+PARALLAX_TABLES = {
+    "students": "SELECT name, email, batch, status, roll_number, parent_contact FROM students",
+    "teachers": "SELECT name, subject, department, contact_number FROM teachers",
+    "classrooms": "SELECT room_no, capacity, building FROM classrooms",
+    "syllabus": "SELECT subject, semester, units, topic, teacher_name, num_lectures, lecture_date FROM syllabus",
+    "attendance": "SELECT student_name, date, status FROM attendance",
+    "timetables_slots": "SELECT batch_name, day, time_slot, lecture_number, subject, teacher, room FROM timetables_slots",
+    "invigilation": "SELECT teacher_name, exam_date, room FROM invigilation",
+    "fees": "SELECT student_name, amount_inr, status, due_date FROM fees",
+    "exam_seatings": "SELECT exam_date, room_number, rows, columns FROM exam_seatings",
+}
+PARALLAX_MAX_ROWS_PER_TABLE = 400
+
+
+class AssistantQuery(BaseModel):
+    question: str
+
+
+def _parallax_gather_context(branch_id: int, institute: "CurrentInstitute") -> str:
+    """Pulls a compact, branch-scoped snapshot of every module's data so
+    Parallax can answer questions in any phrasing without needing the user
+    to name a module or table."""
+    conn = get_conn()
+    cursor = conn.cursor()
+    scope_hq = branch_id == 0
+    blocks = []
+    for table, base_sql in PARALLAX_TABLES.items():
+        module_name = "timetables" if table in ("timetables_slots",) else ("seating" if table == "exam_seatings" else table)
+        if not institute.is_owner and module_name not in institute.allowed_modules:
+            continue
+        if scope_hq:
+            sql = f"{base_sql} WHERE branch_id IN (SELECT id FROM branches WHERE tenant_id = %s) LIMIT {PARALLAX_MAX_ROWS_PER_TABLE}"
+            params = (institute.id,)
+        else:
+            sql = f"{base_sql} WHERE branch_id = %s LIMIT {PARALLAX_MAX_ROWS_PER_TABLE}"
+            params = (branch_id,)
+        try:
+            cursor.execute(sql, params)
+            rows = [dict(r) for r in cursor.fetchall()]
+        except Exception:
+            conn.rollback()
+            rows = []
+        if rows:
+            blocks.append(f"### {table} ({len(rows)} rows)\n{json.dumps(rows, default=str)}")
+    conn.close()
+    return "\n\n".join(blocks) if blocks else "(no data recorded yet for this branch)"
+
+
+def _parallax_call_gemini(context: str, question: str) -> str:
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="Parallax is not configured: GEMINI_API_KEY is missing on the server.")
+    import urllib.request
+    import urllib.error
+
+    prompt = (
+        "You are Parallax, an in-app data assistant for a school/institute management system. "
+        "Answer the user's question using ONLY the data given below. The question may be phrased "
+        "as a command, a fragment, casual text, or any other format — always answer it as a question "
+        "about the data. If the data doesn't contain the answer, say so plainly instead of guessing. "
+        "Be concise and factual; use short lists or numbers where that's clearer than prose.\n\n"
+        f"=== INSTITUTE DATA ===\n{context}\n\n=== QUESTION ===\n{question}"
+    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+    payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Parallax upstream error: {e.read().decode('utf-8', 'ignore')[:300]}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Parallax request failed: {e}")
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except (KeyError, IndexError):
+        return "Parallax couldn't produce an answer for that just now — try rephrasing."
+
+
+@app.post("/api/assistant/{branch_id}")
+def parallax_ask(branch_id: int, body: AssistantQuery, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "assistant")
+    verify_branch_read_access(branch_id, institute.id)
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Ask Parallax something first.")
+    context = _parallax_gather_context(branch_id, institute)
+    answer = _parallax_call_gemini(context, question)
+    audit_write(institute, branch_id if branch_id else None, "PARALLAX_QUERY", None, {"question": question})
+    return {"answer": answer}
 
 
 # ---------------------------------------------------------------------------
