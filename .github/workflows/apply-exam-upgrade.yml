@@ -3,7 +3,7 @@ name: Apply exam upgrade
 on:
   push:
     paths:
-      - 'tools/apply_exam_upgrade.py'
+      - 'tools/**'
 
 permissions:
   contents: write
