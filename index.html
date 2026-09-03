@@ -368,7 +368,7 @@
         let myDesignation = 'Owner';
         let myAllowedModules = [];
         let bulkImportModule = null;
-        const ALL_MODULES = ['analytics', 'students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'seating', 'invigilation', 'fees'];
+        const ALL_MODULES = ['analytics', 'students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'seating', 'invigilation', 'fees', 'assistant'];
 
         // ---- Auth ----
 
@@ -1315,7 +1315,17 @@
 
         async function loadUsers() {
             const res = await authFetch('/api/users');
-            usersCache = await res.json();
+            const text = await res.text();
+            let parsed = null;
+            try { parsed = text ? JSON.parse(text) : []; } catch (_) {
+                document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-400">Failed to load users: server returned an unexpected response (HTTP ${res.status}).</td></tr>`;
+                return;
+            }
+            if (!res.ok) {
+                document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-400">${esc(parsed.detail || 'Failed to load users.')}</td></tr>`;
+                return;
+            }
+            usersCache = parsed;
             const tbody = document.getElementById('usersTableBody');
             if (usersCache.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
