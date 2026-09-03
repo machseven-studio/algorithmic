@@ -1465,9 +1465,33 @@ def get_analytics(branch_id: int, institute: CurrentInstitute = Depends(get_curr
     cur.execute(f"SELECT day, COUNT(*) FROM timetables_slots WHERE {scope} GROUP BY day ORDER BY MIN(id)", (scope_param,)); by_day=[{"day":r[0],"count":r[1]} for r in cur.fetchall()]
     cur.execute(f"SELECT COUNT(*) FROM timetables_slots WHERE {scope}", (scope_param,)); scheduled=cur.fetchone()[0]
     cur.execute(f"SELECT COUNT(*) FROM syllabus WHERE {scope} AND lecture_date >= %s", (scope_param, week_start.isoformat())); logged=cur.fetchone()[0]
-    # Revenue graph is keyed to payment date when available, falling back to due date.
-    cur.execute(f"""SELECT COALESCE(TO_CHAR(COALESCE(paid_at, NULLIF(due_date,'' )::timestamptz),'YYYY-MM-DD'), due_date) AS day, COALESCE(SUM(amount_inr),0)
-                    FROM fees WHERE {scope} AND LOWER(COALESCE(status,''))='paid' GROUP BY day ORDER BY day DESC LIMIT 30""", (scope_param,)); revenue=[{"date":r[0],"amount":float(r[1] or 0)} for r in cur.fetchall()]
+    # Revenue graph: use actual payment timestamp when available. For legacy
+    # paid rows without paid_at, only accept ISO YYYY-MM-DD due dates. Never cast
+    # arbitrary legacy text directly to timestamptz because one malformed value
+    # would make the entire Analytics endpoint fail with HTTP 500.
+    cur.execute(f"""
+        SELECT COALESCE(
+            TO_CHAR(paid_at, 'YYYY-MM-DD'),
+            CASE
+                WHEN due_date ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}$' THEN due_date
+                ELSE NULL
+            END
+        ) AS day,
+        COALESCE(SUM(amount_inr),0)
+        FROM fees
+        WHERE {scope} AND LOWER(COALESCE(status,''))='paid'
+        GROUP BY day
+        HAVING COALESCE(
+            TO_CHAR(paid_at, 'YYYY-MM-DD'),
+            CASE
+                WHEN due_date ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}$' THEN due_date
+                ELSE NULL
+            END
+        ) IS NOT NULL
+        ORDER BY day DESC
+        LIMIT 30
+    """, (scope_param,))
+    revenue=[{"date":r[0],"amount":float(r[1] or 0)} for r in cur.fetchall()]
     cur.close(); conn.close()
     return {"students_total":students_total,"teachers_total":teachers_total,"classrooms_total":classrooms_total,"seating_plans":seating_plans,
             "attendance":{"present":present,"absent":absent,"marked":marked,"pct":round(100*present/marked) if marked else 0,"trend":trend,"by_batch":by_batch},
