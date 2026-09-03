@@ -1,1 +1,1 @@
-apply exam results/history upgrade
+apply exam results/history upgrade v2
