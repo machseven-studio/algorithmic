@@ -1853,3 +1853,222 @@ def read_root():
 
 
 HTML_CONTENT = Path(__file__).with_name("index.html").read_text(encoding="utf-8")
+
+# === EXAM RESULTS / HISTORY UPGRADE ===
+# Persistent exam result and exam-history records. This block is intentionally
+# additive so existing application code/data remains untouched.
+
+EXAM_RESULTS_TABLE = """
+CREATE TABLE IF NOT EXISTS exam_results (
+    id SERIAL PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    batch_name TEXT NOT NULL,
+    subjects TEXT NOT NULL,
+    topics TEXT NOT NULL,
+    exam_date TEXT NOT NULL,
+    overall_marks NUMERIC(12,2) NOT NULL,
+    student_id INTEGER REFERENCES students(id) ON DELETE SET NULL,
+    student_name TEXT NOT NULL,
+    roll_number TEXT,
+    marks NUMERIC(12,2),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+EXAM_HISTORY_TABLE = """
+CREATE TABLE IF NOT EXISTS exam_history (
+    id SERIAL PRIMARY KEY,
+    branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+    subject TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    batch_name TEXT NOT NULL,
+    exam_date TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
+def _init_exam_upgrade_db():
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(EXAM_RESULTS_TABLE)
+        cur.execute(EXAM_HISTORY_TABLE)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_exam_results_branch_batch ON exam_results(branch_id, batch_name)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_exam_history_branch_date ON exam_history(branch_id, exam_date)")
+        conn.commit()
+    finally:
+        conn.close()
+
+_init_exam_upgrade_db()
+
+class ExamResultPayload(BaseModel):
+    branch_id: int
+    batch_name: str
+    subjects: str
+    topics: str
+    exam_date: str
+    overall_marks: float
+    student_id: int | None = None
+    student_name: str
+    roll_number: str | None = None
+    marks: float | None = None
+
+class ExamHistoryPayload(BaseModel):
+    branch_id: int
+    subject: str
+    topic: str
+    batch_name: str
+    exam_date: str
+
+def _exam_branch_check(institute, branch_id: int):
+    check_module_access(institute, "examination")
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM branches WHERE id=%s AND institute_id=%s", (branch_id, institute.id))
+        if not cur.fetchone():
+            raise HTTPException(status_code=403, detail="Branch access denied")
+    finally:
+        conn.close()
+
+def _valid_marks(marks, overall):
+    if marks is None:
+        return None
+    if marks < 0 or marks > overall:
+        raise HTTPException(status_code=400, detail="Student marks must be between 0 and the overall marks.")
+    return marks
+
+@app.get("/api/exam/results/students/{branch_id}")
+def exam_result_students(branch_id: int, batch: str, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, branch_id)
+    if not batch.strip():
+        raise HTTPException(status_code=400, detail="Batch is required")
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, name, COALESCE(roll_number, '') AS roll_number
+            FROM students
+            WHERE branch_id=%s AND LOWER(TRIM(COALESCE(batch,'')))=LOWER(TRIM(%s))
+            ORDER BY LOWER(COALESCE(name,'')), LOWER(COALESCE(roll_number,''))
+        """, (branch_id, batch))
+        return {"students": [dict(r) for r in cur.fetchall()]}
+    finally:
+        conn.close()
+
+@app.get("/api/exam/results/{branch_id}")
+def list_exam_results(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, branch_id)
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, branch_id, batch_name, subjects, topics, exam_date,
+                   overall_marks, student_id, student_name, roll_number, marks,
+                   created_at, updated_at
+            FROM exam_results WHERE branch_id=%s
+            ORDER BY exam_date DESC, batch_name, student_name, id
+        """, (branch_id,))
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+@app.post("/api/exam/results")
+def create_exam_result(payload: ExamResultPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, payload.branch_id)
+    overall = float(payload.overall_marks)
+    if overall <= 0:
+        raise HTTPException(status_code=400, detail="Overall marks must be greater than zero.")
+    marks = _valid_marks(payload.marks, overall)
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO exam_results
+            (branch_id,batch_name,subjects,topics,exam_date,overall_marks,student_id,student_name,roll_number,marks)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
+        """, (payload.branch_id,payload.batch_name.strip(),payload.subjects.strip(),payload.topics.strip(),payload.exam_date,
+              overall,payload.student_id,payload.student_name.strip(),payload.roll_number,marks))
+        row = dict(cur.fetchone()); conn.commit(); return row
+    finally:
+        conn.close()
+
+@app.patch("/api/exam/results/{result_id}")
+def update_exam_result(result_id: int, payload: ExamResultPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, payload.branch_id)
+    marks = _valid_marks(payload.marks, float(payload.overall_marks))
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE exam_results SET batch_name=%s, subjects=%s, topics=%s, exam_date=%s,
+              overall_marks=%s, student_id=%s, student_name=%s, roll_number=%s, marks=%s, updated_at=NOW()
+            WHERE id=%s AND branch_id=%s RETURNING *
+        """, (payload.batch_name.strip(),payload.subjects.strip(),payload.topics.strip(),payload.exam_date,
+              payload.overall_marks,payload.student_id,payload.student_name.strip(),payload.roll_number,marks,result_id,payload.branch_id))
+        row = cur.fetchone()
+        if not row: raise HTTPException(status_code=404, detail="Result record not found")
+        result = dict(row); conn.commit(); return result
+    finally:
+        conn.close()
+
+@app.delete("/api/exam/results/{result_id}")
+def delete_exam_result(result_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "examination")
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM exam_results WHERE id=%s AND branch_id IN (SELECT id FROM branches WHERE institute_id=%s) RETURNING id", (result_id,institute.id))
+        if not cur.fetchone(): raise HTTPException(status_code=404, detail="Result record not found")
+        conn.commit(); return {"status":"success"}
+    finally:
+        conn.close()
+
+@app.get("/api/exam/history/{branch_id}")
+def list_exam_history(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, branch_id)
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, branch_id, subject, topic, batch_name, exam_date, created_at, updated_at FROM exam_history WHERE branch_id=%s ORDER BY exam_date DESC, id DESC", (branch_id,))
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+@app.post("/api/exam/history")
+def create_exam_history(payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, payload.branch_id)
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO exam_history (branch_id,subject,topic,batch_name,exam_date) VALUES (%s,%s,%s,%s,%s) RETURNING *", (payload.branch_id,payload.subject.strip(),payload.topic.strip(),payload.batch_name.strip(),payload.exam_date))
+        row=dict(cur.fetchone()); conn.commit(); return row
+    finally:
+        conn.close()
+
+@app.patch("/api/exam/history/{history_id}")
+def update_exam_history(history_id: int, payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+    _exam_branch_check(institute, payload.branch_id)
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE exam_history SET subject=%s, topic=%s, batch_name=%s, exam_date=%s, updated_at=NOW() WHERE id=%s AND branch_id=%s RETURNING *", (payload.subject.strip(),payload.topic.strip(),payload.batch_name.strip(),payload.exam_date,history_id,payload.branch_id))
+        row=cur.fetchone()
+        if not row: raise HTTPException(status_code=404, detail="History record not found")
+        result=dict(row); conn.commit(); return result
+    finally:
+        conn.close()
+
+@app.delete("/api/exam/history/{history_id}")
+def delete_exam_history(history_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "examination")
+    conn = get_conn()
+    try:
+        cur=conn.cursor()
+        cur.execute("DELETE FROM exam_history WHERE id=%s AND branch_id IN (SELECT id FROM branches WHERE institute_id=%s) RETURNING id", (history_id,institute.id))
+        if not cur.fetchone(): raise HTTPException(status_code=404, detail="History record not found")
+        conn.commit(); return {"status":"success"}
+    finally:
+        conn.close()
+
