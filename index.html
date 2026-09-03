@@ -106,6 +106,7 @@
         .global-readonly #branchSelector { color: #cbd5e1; }
         .global-readonly .gold-bg { opacity: .45; pointer-events: none; }
         @media (min-width: 1024px) { #mainContent { padding: 2.5rem 3rem; } }
+    .head-chevron { transition: transform .15s ease; } .rotate-180 { transform: rotate(180deg); }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -196,28 +197,15 @@
         </header>
 
         <div class="flex flex-1 overflow-hidden">
-            <nav class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
-                <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
-                <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
-                <button onclick="switchModule('home', this)" class="sidebar-item active w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>⚡</span><span>Home Dashboard</span></button>
-                <button id="navAssistant" data-module="assistant" onclick="switchModule('assistant', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>✦</span><span>Parallax</span></button>
-                <button id="navAnalytics" data-module="analytics" onclick="switchModule('analytics', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3" style="display:flex !important;"><span>◈</span><span>Analytics</span></button>
-                <button id="navStudents" data-module="students" onclick="switchModule('students', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🎓</span><span>Students</span></button>
-                <button id="navTeachers" data-module="teachers" onclick="switchModule('teachers', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>👨‍🏫</span><span>Teachers</span></button>
-                <button id="navClassrooms" data-module="classrooms" onclick="switchModule('classrooms', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🏛️</span><span>Classrooms</span></button>
-                <button id="navSyllabus" data-module="syllabus" onclick="switchModule('syllabus', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📚</span><span>Syllabus</span></button>
-                <button id="navAttendance" data-module="attendance" onclick="switchModule('attendance', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>📋</span><span>Attendance</span></button>
-                <button id="navTimetables" data-module="timetables" onclick="switchModule('timetables', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🕒</span><span>Timetable</span></button>
-                <button id="navSeating" data-module="seating" onclick="switchModule('seating', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🪑</span><span>Exam Seating</span></button>
-                <button id="navInvigilation" data-module="invigilation" onclick="switchModule('invigilation', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🛡️</span><span>Invigilator Duty</span></button>
-                <button id="navFees" data-module="fees" onclick="switchModule('fees', this)" class="sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>💳</span><span>Fees (INR ₹)</span></button>
-                <button id="navManageUsers" onclick="switchModule('users', this)" class="sidebar-item hidden w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>🔐</span><span>Manage Users</span></button>
-
-                <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
-                    <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
-                    <p class="text-[10px] text-yellow-600 font-bold uppercase tracking-widest pt-1">Powered by Metasys<sup>®</sup></p>
-                </div>
-            </nav>
+            <nav id="moduleSidebar" class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
+    <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
+    <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
+    <div class="px-3 space-y-1" id="moduleGroups"></div>
+    <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
+        <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
+        <p class="text-[10px] text-yellow-600 font-bold uppercase tracking-widest pt-1">Powered by Metasys<sup>®</sup></p>
+    </div>
+</nav>
 
             <main class="flex-1 p-10 overflow-y-auto bg-[#070707]" id="mainContent"></main>
         </div>
@@ -368,7 +356,13 @@
         let myDesignation = 'Owner';
         let myAllowedModules = [];
         let bulkImportModule = null;
-        const ALL_MODULES = ['analytics', 'students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'seating', 'invigilation', 'fees', 'assistant'];
+        const ACCESS_HEADS = ['homepage', 'administrations', 'examination'];
+const HEAD_MODULES = {
+    homepage: [['analytics', '◈', 'Analytics'], ['assistant', '✦', 'Parallax'], ['students', '🎓', 'Student Department'], ['teachers', '👨‍🏫', 'Teacher Department'], ['classrooms', '🏛️', 'Classroom Department'], ['users', '🔐', 'Manage Users']],
+    administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees']],
+    examination: [['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation']]
+};
+const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h, ms]) => ms.map(([m]) => [m, h])));
 
         // ---- Auth ----
 
@@ -418,23 +412,15 @@
             myPermission = data.permission || 'owner';
             myFullName = data.full_name || data.institute_name || '';
             myDesignation = data.designation || (isOwner ? 'Owner' : 'Staff');
-            myAllowedModules = isOwner ? ALL_MODULES.slice() : (data.allowed_modules || []);
+            myAllowedModules = isOwner ? ACCESS_HEADS.slice() : (Array.isArray(data.allowed_modules) ? data.allowed_modules.filter(x => ACCESS_HEADS.includes(x)) : []);
             document.getElementById('headerInstituteName').textContent = data.institute_name;
             document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
-            document.getElementById('navManageUsers').classList.toggle('hidden', !isOwner);
-            ALL_MODULES.forEach(m => {
-                const btn = document.querySelector(`[data-module="${m}"]`);
-                if (btn && m !== 'analytics') btn.classList.toggle('hidden', !isOwner && !myAllowedModules.includes(m));
-            });
-            const analyticsBtn = document.getElementById('navAnalytics');
-            if (analyticsBtn) analyticsBtn.classList.remove('hidden');
+            renderModuleGroups();
             const badge = document.getElementById('headerPermBadge');
-            if (isOwner) { badge.innerHTML = `<span class="perm-badge perm-edit">Owner</span>`; }
+            if (isOwner) badge.innerHTML = '<span class="perm-badge perm-edit">Owner</span>';
             else {
-                const accessBadge = myPermission === 'read_only'
-                    ? '<span class="perm-badge perm-readonly">Read Only</span>'
-                    : '<span class="perm-badge perm-edit">Edit Access</span>';
-                badge.innerHTML = `<span class="perm-badge perm-readonly">${myDesignation}</span> ${accessBadge}`;
+                const accessBadge = myPermission === 'read_only' ? '<span class="perm-badge perm-readonly">Read Only</span>' : '<span class="perm-badge perm-edit">Edit Access</span>';
+                badge.innerHTML = `<span class="perm-badge perm-readonly">${esc(myDesignation)}</span> ${accessBadge}`;
             }
         }
 
@@ -548,7 +534,8 @@
         }
 
         async function switchModule(moduleName, clickedButton = null) {
-            if (moduleName !== 'home' && moduleName !== 'users' && moduleName !== 'analytics' && !isOwner && !myAllowedModules.includes(moduleName)) {
+            const head = MODULE_HEAD[moduleName] || moduleName;
+            if (!isOwner && !myAllowedModules.includes(head)) {
                 alert('Your account does not have access to that module.');
                 return;
             }
@@ -560,6 +547,31 @@
                 if (fallback) fallback.classList.add('active');
             }
             await refreshCurrentModule();
+        }
+
+        function toggleModuleHead(head) {
+            const panel = document.getElementById(`head-${head}`);
+            const button = document.getElementById(`head-btn-${head}`);
+            if (!panel || !button) return;
+            panel.classList.toggle('hidden');
+            button.querySelector('.head-chevron').classList.toggle('rotate-180');
+        }
+
+        function renderModuleGroups() {
+            const groups = document.getElementById('moduleGroups');
+            if (!groups) return;
+            groups.innerHTML = ACCESS_HEADS.filter(h => isOwner || myAllowedModules.includes(h)).map(head => {
+                const open = head === 'homepage' && isOwner;
+                const children = HEAD_MODULES[head].filter(([m]) => m !== 'users' || isOwner);
+                return `<div class="mb-1">
+                    <button id="head-btn-${head}" onclick="toggleModuleHead('${head}')" class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
+                        <span>${head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administrations' : 'Examination'}</span><span class="head-chevron transition-transform ${open ? 'rotate-180' : ''}">⌄</span>
+                    </button>
+                    <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">
+                        ${children.map(([m, icon, label]) => `<button data-module="${m}" onclick="switchModule('${m}', this)" class="sidebar-item w-full text-left px-6 py-2.5 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>${icon}</span><span>${label}</span></button>`).join('')}
+                    </div>
+                </div>`;
+            }).join('');
         }
 
         async function initApp() {
@@ -1170,12 +1182,16 @@
                         <span class="text-red-400">${data.absent_count} absent</span>
                     </div>
                     <div class="max-h-72 overflow-y-auto divide-y divide-gray-900">
-                        ${data.history.map(h => `
+                        ${data.history.map(h => {
+                            const date = typeof h.date === 'object' ? JSON.stringify(h.date) : String(h.date ?? '');
+                            const status = typeof h.status === 'object' ? (h.status?.status || h.status?.value || JSON.stringify(h.status)) : String(h.status ?? '');
+                            return `
                             <div class="flex justify-between items-center py-2 text-sm">
-                                <span class="text-gray-300">${esc(h.date)}</span>
-                                <span class="font-semibold ${h.status === 'Present' ? 'text-green-400' : 'text-red-400'}">${esc(h.status)}</span>
+                                <span class="text-gray-300">${esc(date)}</span>
+                                <span class="font-semibold ${status === 'Present' ? 'text-green-400' : 'text-red-400'}">${esc(status)}</span>
                             </div>
-                        `).join('')}
+                        `;
+                    }).join('')}
                     </div>
                 `;
             } catch (e) {
@@ -1325,7 +1341,7 @@
                 document.getElementById('usersTableBody').innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-400">${esc(parsed.detail || 'Failed to load users.')}</td></tr>`;
                 return;
             }
-            usersCache = parsed;
+            usersCache = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.users) ? parsed.users : []);
             const tbody = document.getElementById('usersTableBody');
             if (usersCache.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-gray-500">No staff users yet. Click '+ Add User' to grant access.</td></tr>`;
@@ -1353,11 +1369,11 @@
 
         function renderModuleCheckboxGrid(checkedModules) {
             const grid = document.getElementById('newUserModuleGrid');
-            const checked = new Set(checkedModules || []);
-            grid.innerHTML = ALL_MODULES.map(m => `
-                <label class="flex items-center space-x-2 text-xs text-gray-300 bg-[#0c0c0c] border gold-border rounded-lg px-3 py-2 cursor-pointer">
-                    <input type="checkbox" class="module-check newUserModuleCheckbox" value="${m}" ${checked.has(m) ? 'checked' : ''}>
-                    <span>${MODULE_LABELS[m]}</span>
+            const checked = new Set(Array.isArray(checkedModules) ? checkedModules : []);
+            grid.innerHTML = ACCESS_HEADS.map(m => `
+                <label class="flex items-center space-x-2 text-xs text-gray-300 bg-[#0c0c0c] border gold-border rounded-lg px-3 py-2 ${m === 'homepage' ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}">
+                    <input type="checkbox" class="module-check newUserModuleCheckbox" value="${m}" ${m === 'homepage' ? 'disabled' : ''} ${checked.has(m) ? 'checked' : ''}>
+                    <span>${m === 'homepage' ? 'Homepage (Boss Only)' : m === 'administrations' ? 'Administrations' : 'Examination'}</span>
                 </label>
             `).join('');
         }

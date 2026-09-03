@@ -32,7 +32,15 @@ SEATING_MODULE = 'seating'
 # 'timetables' isn't a generic /api/records table (it has its own dedicated
 # endpoints below) but it IS a sidebar module a staff designation can be
 # granted or denied access to, so it's included here for permission checks.
-ALL_ACCESS_MODULES = VALID_MODULES + ['analytics', 'timetables', SEATING_MODULE, 'assistant']
+ACCESS_HEADS = ['homepage', 'administrations', 'examination']
+MODULE_HEAD = {
+    'analytics': 'homepage', 'assistant': 'homepage', 'students': 'homepage',
+    'teachers': 'homepage', 'classrooms': 'homepage', 'users': 'homepage',
+    'attendance': 'administrations', 'syllabus': 'administrations',
+    'timetables': 'administrations', 'fees': 'administrations',
+    'seating': 'examination', 'invigilation': 'examination',
+}
+ALL_ACCESS_MODULES = ACCESS_HEADS
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
@@ -118,6 +126,17 @@ def init_db():
         "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS timings_json TEXT",
         "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS teachers_config_json TEXT",
         "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",
+        """DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'timetable_configs'
+                  AND column_name = 'config'
+            ) THEN
+                EXECUTE 'ALTER TABLE timetable_configs ALTER COLUMN config DROP NOT NULL';
+            END IF;
+        END $$;""",
         "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS exam_date TEXT",
         "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS room_number TEXT",
         "ALTER TABLE exam_seatings ADD COLUMN IF NOT EXISTS rows INTEGER",
@@ -193,11 +212,11 @@ class CurrentInstitute(BaseModel):
 
 
 def check_module_access(institute: "CurrentInstitute", module: str):
-    """Owners always pass. Staff logins are blocked from any module their
-    designation wasn't explicitly granted."""
+    # Owners can use everything. Staff receive only category privileges.
     if institute.is_owner:
         return
-    if module not in institute.allowed_modules:
+    head = MODULE_HEAD.get(module, module)
+    if head not in institute.allowed_modules:
         raise HTTPException(status_code=403, detail=f"Your account does not have access to the {module.title()} module")
 
 
@@ -502,9 +521,11 @@ class StaffPermissionUpdate(BaseModel):
 
 
 def _validate_modules(modules: list):
-    bad = [m for m in modules if m not in ALL_ACCESS_MODULES]
+    if not isinstance(modules, list):
+        raise HTTPException(status_code=400, detail="Module privileges must be a list")
+    bad = [m for m in modules if m not in ACCESS_HEADS]
     if bad:
-        raise HTTPException(status_code=400, detail=f"Unknown module(s): {', '.join(bad)}")
+        raise HTTPException(status_code=400, detail="Module privileges must be Homepage, Administrations, or Examination")
 
 
 @app.get("/api/users")
@@ -1458,12 +1479,13 @@ def _generate_seating_impl(req: "SeatingGenerateRequest", institute: "CurrentIns
         conn.close()
         raise HTTPException(status_code=400, detail=f"Grid capacity ({requested_capacity}) exceeds room capacity ({room_capacity}).")
 
-    students = conn.cursor(); students.execute(
+    students_cur = conn.cursor()
+    students_cur.execute(
         """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
            FROM students WHERE branch_id = %s ORDER BY LOWER(COALESCE(batch, '')), LOWER(COALESCE(name, ''))""",
         (req.branch_id,),
-    ).fetchall()
-    student_rows = [dict(r) for r in students]
+    )
+    student_rows = [dict(r) for r in students_cur.fetchall()]
     assignments = _build_seating_layout(student_rows, req.rows, req.columns)
 
     cursor = conn.cursor()
