@@ -1,0 +1,245 @@
+name: Apply Algorithmic production fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch application files
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          main = Path('main.py').read_text(encoding='utf-8')
+          index = Path('index.html').read_text(encoding='utf-8')
+
+          # ---------------- main.py ----------------
+          main = main.replace(
+              "ALL_ACCESS_MODULES = VALID_MODULES + ['analytics', 'timetables', SEATING_MODULE, 'assistant']",
+              """ACCESS_HEADS = ['homepage', 'administrations', 'examination']
+          MODULE_HEAD = {
+              'analytics': 'homepage', 'assistant': 'homepage', 'students': 'homepage',
+              'teachers': 'homepage', 'classrooms': 'homepage', 'users': 'homepage',
+              'attendance': 'administrations', 'syllabus': 'administrations',
+              'timetables': 'administrations', 'fees': 'administrations',
+              'seating': 'examination', 'invigilation': 'examination',
+          }
+          ALL_ACCESS_MODULES = ACCESS_HEADS"""
+          )
+
+          old_check = '''def check_module_access(institute: "CurrentInstitute", module: str):
+              """Owners always pass. Staff logins are blocked from any module their
+              designation wasn't explicitly granted."""
+              if institute.is_owner:
+                  return
+              if module not in institute.allowed_modules:
+                  raise HTTPException(status_code=403, detail=f"Your account does not have access to the {module.title()} module")'''
+          new_check = '''def check_module_access(institute: "CurrentInstitute", module: str):
+              """Owners can use everything. Staff receive only category privileges.
+              Leaf modules inherit access from Homepage, Administrations, or Examination."""
+              if institute.is_owner:
+                  return
+              head = MODULE_HEAD.get(module, module)
+              if head not in institute.allowed_modules:
+                  raise HTTPException(status_code=403, detail=f"Your account does not have access to the {module.title()} module")'''
+          if old_check in main:
+              main = main.replace(old_check, new_check)
+
+          # Retire the old per-module privilege vocabulary and normalize staff rows.
+          main = main.replace(
+              'def _validate_modules(modules: list):\n    bad = [m for m in modules if m not in ALL_ACCESS_MODULES]\n    if bad:\n        raise HTTPException(status_code=400, detail=f"Unknown module(s): {\', \'.join(bad)}")',
+              '''def _validate_modules(modules: list):
+              if not isinstance(modules, list):
+                  raise HTTPException(status_code=400, detail="Module privileges must be a list")
+              bad = [m for m in modules if m not in ACCESS_HEADS]
+              if bad:
+                  raise HTTPException(status_code=400, detail="Module privileges must be Homepage, Administrations, or Examination")'''
+          )
+
+          # Existing timetable databases may have an older mandatory config column.
+          marker = '        "ALTER TABLE timetable_configs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",'
+          if marker in main and 'ALTER TABLE timetable_configs ALTER COLUMN config DROP NOT NULL' not in main:
+              main = main.replace(marker, marker + '\n        "ALTER TABLE timetable_configs ALTER COLUMN config DROP NOT NULL",')
+
+          # Fix psycopg2 execute(...).fetchall() in seating generation.
+          bad_seating = '''    students = conn.cursor(); students.execute(
+          """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
+             FROM students WHERE branch_id = %s ORDER BY LOWER(COALESCE(batch, '')), LOWER(COALESCE(name, ''))""",
+          (req.branch_id,),
+      ).fetchall()
+      student_rows = [dict(r) for r in students]'''
+          good_seating = '''    students_cur = conn.cursor()
+      students_cur.execute(
+          """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
+             FROM students WHERE branch_id = %s ORDER BY LOWER(COALESCE(batch, '')), LOWER(COALESCE(name, ''))""",
+          (req.branch_id,),
+      )
+      student_rows = [dict(r) for r in students_cur.fetchall()]'''
+          if bad_seating in main:
+              main = main.replace(bad_seating, good_seating)
+
+          # Owner-only Homepage and category privileges are returned by auth/me/login.
+          main = main.replace('myAllowedModules = isOwner ? ALL_MODULES.slice() : (data.allowed_modules || []);', 'myAllowedModules = isOwner ? ACCESS_HEADS.slice() : (Array.isArray(data.allowed_modules) ? data.allowed_modules.filter(x => ACCESS_HEADS.includes(x)) : []);')
+
+          Path('main.py').write_text(main, encoding='utf-8')
+
+          # ---------------- index.html ----------------
+          # Replace the old flat sidebar with three collapsible heads.
+          nav_pattern = re.compile(r'<nav class="w-72 border-r gold-border bg-\[#0b0b0b\] flex flex-col py-6 space-y-1\.5 shrink-0">.*?</nav>', re.S)
+          nav_replacement = '''<nav id="moduleSidebar" class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
+                  <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
+                  <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
+                  <div class="px-3 space-y-1" id="moduleGroups"></div>
+                  <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
+                      <p class="text-gray-300">Founded by <a href="https://machsevenstudios-website.onrender.com" target="_blank" class="gold-gradient-text hover:underline">MachSevenStudios</a></p>
+                      <p class="text-[10px] text-yellow-600 font-bold uppercase tracking-widest pt-1">Powered by Metasys<sup>®</sup></p>
+                  </div>
+              </nav>'''
+          index, n = nav_pattern.subn(nav_replacement, index, count=1)
+          if n != 1:
+              raise SystemExit('Could not locate the original sidebar in index.html')
+
+          # Category privilege model in the browser.
+          index = index.replace(
+              "const ALL_MODULES = ['analytics', 'students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'timetables', 'seating', 'invigilation', 'fees', 'assistant'];",
+              """const ACCESS_HEADS = ['homepage', 'administrations', 'examination'];
+          const HEAD_MODULES = {
+              homepage: [['analytics', '◈', 'Analytics'], ['assistant', '✦', 'Parallax'], ['students', '🎓', 'Student Department'], ['teachers', '👨‍🏫', 'Teacher Department'], ['classrooms', '🏛️', 'Classroom Department'], ['users', '🔐', 'Manage Users']],
+              administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees']],
+              examination: [['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation']]
+          };
+          const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h, ms]) => ms.map(([m]) => [m, h])));"""
+          )
+
+          # Replace applyIdentity so sidebar visibility is controlled only by heads.
+          apply_pattern = re.compile(r'        function applyIdentity\(data\) \{.*?\n        \}\n\n        function completeAuth', re.S)
+          apply_replacement = '''        function applyIdentity(data) {
+              isOwner = !!data.is_owner;
+              myPermission = data.permission || 'owner';
+              myFullName = data.full_name || data.institute_name || '';
+              myDesignation = data.designation || (isOwner ? 'Owner' : 'Staff');
+              myAllowedModules = isOwner ? ACCESS_HEADS.slice() : (Array.isArray(data.allowed_modules) ? data.allowed_modules.filter(x => ACCESS_HEADS.includes(x)) : []);
+              document.getElementById('headerInstituteName').textContent = data.institute_name;
+              document.getElementById('headerFullName').textContent = data.full_name || data.institute_name;
+              renderModuleGroups();
+              const badge = document.getElementById('headerPermBadge');
+              if (isOwner) badge.innerHTML = `<span class="perm-badge perm-edit">Owner</span>`;
+              else {
+                  const accessBadge = myPermission === 'read_only' ? '<span class="perm-badge perm-readonly">Read Only</span>' : '<span class="perm-badge perm-edit">Edit Access</span>';
+                  badge.innerHTML = `<span class="perm-badge perm-readonly">${esc(myDesignation)}</span> ${accessBadge}`;
+              }
+          }
+
+          function completeAuth'''
+          index, n = apply_pattern.subn(apply_replacement, index, count=1)
+          if n != 1:
+              raise SystemExit('Could not locate applyIdentity in index.html')
+
+          # Replace switchModule with head-aware access control.
+          switch_pattern = re.compile(r'        async function switchModule\(moduleName, clickedButton = null\) \{.*?\n        \}\n\n        async function initApp', re.S)
+          switch_replacement = '''        async function switchModule(moduleName, clickedButton = null) {
+              const head = MODULE_HEAD[moduleName] || moduleName;
+              if (!isOwner && !myAllowedModules.includes(head)) {
+                  alert('Your account does not have access to that module.');
+                  return;
+              }
+              currentModule = moduleName;
+              document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+              if (clickedButton) clickedButton.classList.add('active');
+              else {
+                  const fallback = document.querySelector(`[data-module="${moduleName}"]`);
+                  if (fallback) fallback.classList.add('active');
+              }
+              await refreshCurrentModule();
+          }
+
+          function toggleModuleHead(head) {
+              const panel = document.getElementById(`head-${head}`);
+              const button = document.getElementById(`head-btn-${head}`);
+              if (!panel || !button) return;
+              panel.classList.toggle('hidden');
+              button.querySelector('.head-chevron').classList.toggle('rotate-180');
+          }
+
+          function renderModuleGroups() {
+              const groups = document.getElementById('moduleGroups');
+              if (!groups) return;
+              groups.innerHTML = ACCESS_HEADS.filter(h => isOwner || myAllowedModules.includes(h)).map(head => {
+                  const open = head === 'homepage' && isOwner;
+                  const children = HEAD_MODULES[head].filter(([m]) => m !== 'users' || isOwner);
+                  return `<div class="mb-1">
+                      <button id="head-btn-${head}" onclick="toggleModuleHead('${head}')" class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
+                          <span>${head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administrations' : 'Examination'}</span><span class="head-chevron transition-transform ${open ? 'rotate-180' : ''}">⌄</span>
+                      </button>
+                      <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">
+                          ${children.map(([m, icon, label]) => `<button data-module="${m}" onclick="switchModule('${m}', this)" class="sidebar-item w-full text-left px-6 py-2.5 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>${icon}</span><span>${label}</span></button>`).join('')}
+                      </div>
+                  </div>`;
+              }).join('');
+              const homeButton = document.getElementById('head-btn-homepage');
+              if (homeButton && isOwner) homeButton.onclick = () => { currentModule = 'home'; toggleModuleHead('homepage'); refreshCurrentModule(); };
+          }
+
+          async function initApp'''
+          index, n = switch_pattern.subn(switch_replacement, index, count=1)
+          if n != 1:
+              raise SystemExit('Could not locate switchModule in index.html')
+
+          # usersCache must always be an array, including legacy {users:[...]} responses.
+          index = index.replace('            usersCache = parsed;\n            const tbody = document.getElementById(\'usersTableBody\');', "            usersCache = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.users) ? parsed.users : []);\n            const tbody = document.getElementById('usersTableBody');")
+          index = index.replace("function renderModuleCheckboxGrid(checkedModules) {\n            const grid = document.getElementById('newUserModuleGrid');\n            const checked = new Set(checkedModules || []);\n            grid.innerHTML = ALL_MODULES.map(m => `", "function renderModuleCheckboxGrid(checkedModules) {\n            const grid = document.getElementById('newUserModuleGrid');\n            const checked = new Set(Array.isArray(checkedModules) ? checkedModules : []);\n            grid.innerHTML = ACCESS_HEADS.map(m => `")
+          index = index.replace("<span>${MODULE_LABELS[m]}</span>", "<span>${m === 'homepage' ? 'Homepage (Boss Only)' : m === 'administrations' ? 'Administrations' : 'Examination'}</span>")
+
+          # Normalize history status/date before inserting into HTML, preventing [object Object].
+          index = index.replace(
+              "${data.history.map(h => `",
+              "${data.history.map(h => { const date = typeof h.date === 'object' ? JSON.stringify(h.date) : String(h.date ?? ''); const status = typeof h.status === 'object' ? (h.status?.status || h.status?.value || JSON.stringify(h.status)) : String(h.status ?? ''); return `"
+          )
+          index = index.replace(
+              "${esc(h.date)}</span>\n                                <span class=\"font-semibold ${h.status === 'Present' ? 'text-green-400' : 'text-red-400'}\">${esc(h.status)}</span>\n                            </div>\n                        `).join('')}",
+              "${esc(date)}</span>\n                                <span class=\"font-semibold ${status === 'Present' ? 'text-green-400' : 'text-red-400'}\">${esc(status)}</span>\n                            </div>\n                        `; }).join('')}"
+          )
+
+          # Add a small visible style for the grouped heads.
+          index = index.replace('</style>', '.head-chevron { transition: transform .15s ease; }\n        .rotate-180 { transform: rotate(180deg); }\n    </style>', 1)
+
+          Path('index.html').write_text(index, encoding='utf-8')
+      - name: Validate Python syntax
+        run: python -m py_compile main.py
+      - name: Commit direct file changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py index.html
+          git diff --cached --quiet || git commit -m "Fix production modules and grouped navigation"
+          git push
+      - name: Switch Render back to main.py and remove wrapper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('render.yaml')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT', 'startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT')
+          p.write_text(s, encoding='utf-8')
+          Path('server.py').unlink(missing_ok=True)
+          PY
+          git add render.yaml server.py
+          git diff --cached --quiet || git commit -m "Run production directly from main.py"
+          git push
+      - name: Remove one-shot workflow
+        run: |
+          git rm .github/workflows/direct-fix.yml
+          git commit -m "Remove one-shot repair workflow"
+          git push
