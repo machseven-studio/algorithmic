@@ -509,23 +509,27 @@ def _validate_modules(modules: list):
 
 @app.get("/api/users")
 def list_staff_users(institute: CurrentInstitute = Depends(require_owner)):
-    conn = get_conn()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id, full_name, email, permission, designation, module_access, created_at FROM staff_users WHERE institute_id = %s",
-        (institute.id,),
-    )
-    users = []
-    for row in cursor.fetchall():
-        u = dict(row)
-        try:
-            u["modules"] = json.loads(u.pop("module_access") or "[]")
-        except ValueError:
-            u["modules"] = []
-        u["designation"] = u.get("designation") or "Staff"
-        users.append(u)
-    conn.close()
-    return users
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, full_name, email, permission, designation, module_access, created_at FROM staff_users WHERE institute_id = %s",
+            (institute.id,),
+        )
+        users = []
+        for row in cursor.fetchall():
+            u = dict(row)
+            raw_access = u.pop("module_access", None)
+            try:
+                u["modules"] = json.loads(raw_access) if raw_access else []
+            except (TypeError, ValueError):
+                u["modules"] = []
+            u["designation"] = u.get("designation") or "Staff"
+            users.append(u)
+        conn.close()
+        return users
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load users: {e}")
 
 
 @app.post("/api/users")
@@ -1067,6 +1071,15 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
     Preferred weekdays are evenly spaced (for example Mon/Wed/Fri for three
     lectures), then batch, teacher and room conflicts are checked.
     """
+    try:
+        return _generate_timetable_impl(req, institute)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Timetable generation failed: {e}")
+
+
+def _generate_timetable_impl(req: "TimetableGenerateRequest", institute: "CurrentInstitute"):
     check_module_access(institute, "timetables")
     verify_branch_ownership(req.branch_id, institute.id)
     if not req.timings:
@@ -1201,17 +1214,24 @@ def generate_timetable(req: TimetableGenerateRequest, institute: CurrentInstitut
             )
 
     cursor.execute(
-        """INSERT INTO timetable_configs
-           (branch_id, batch_name, timings_json, teachers_config_json, updated_at)
-           VALUES (%s, %s, %s, %s, %s)
-           ON CONFLICT(branch_id, batch_name) DO UPDATE SET
-               timings_json = excluded.timings_json,
-               teachers_config_json = excluded.teachers_config_json,
-               updated_at = excluded.updated_at""",
-        (req.branch_id, req.batch_name,
-         json.dumps([t.dict() for t in req.timings]),
-         json.dumps(req.teachers_config), datetime.utcnow().isoformat()),
+        "SELECT id FROM timetable_configs WHERE branch_id = %s AND batch_name = %s",
+        (req.branch_id, req.batch_name),
     )
+    existing_config = cursor.fetchone()
+    timings_json = json.dumps([t.dict() for t in req.timings])
+    teachers_config_json = json.dumps(req.teachers_config)
+    now_iso = datetime.utcnow().isoformat()
+    if existing_config:
+        cursor.execute(
+            "UPDATE timetable_configs SET timings_json = %s, teachers_config_json = %s, updated_at = %s WHERE id = %s",
+            (timings_json, teachers_config_json, now_iso, existing_config[0]),
+        )
+    else:
+        cursor.execute(
+            """INSERT INTO timetable_configs (branch_id, batch_name, timings_json, teachers_config_json, updated_at)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (req.branch_id, req.batch_name, timings_json, teachers_config_json, now_iso),
+        )
 
     conn.commit()
     conn.close()
@@ -1407,6 +1427,15 @@ def get_seating_layouts(branch_id: int, institute: CurrentInstitute = Depends(ge
 
 @app.post("/api/seating/generate")
 def generate_seating(req: SeatingGenerateRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    try:
+        return _generate_seating_impl(req, institute)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Seating generation failed: {e}")
+
+
+def _generate_seating_impl(req: "SeatingGenerateRequest", institute: "CurrentInstitute"):
     check_module_access(institute, SEATING_MODULE)
     verify_branch_ownership(req.branch_id, institute.id)
     if req.rows < 1 or req.columns < 1:
