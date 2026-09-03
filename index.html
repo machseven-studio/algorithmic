@@ -598,6 +598,17 @@
             }
         }
 
+        async function readApiJson(res, context = 'Request') {
+            const text = await res.text();
+            let data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (_) {
+                const preview = text.replace(/\s+/g, ' ').trim().slice(0, 180);
+                throw new Error(`${context} returned HTTP ${res.status}: ${preview || 'empty response'}`);
+            }
+            if (!res.ok) throw new Error((data && data.detail) || `${context} failed (HTTP ${res.status}).`);
+            return data;
+        }
+
         async function renderAnalyticsModule(container) {
             const renderToken = Symbol('analytics-render');
             window.__analyticsRenderToken = renderToken;
@@ -617,8 +628,7 @@
             try {
                 if (!currentBranchId) throw new Error('No branch selected.');
                 const res = await authFetch(`/api/analytics/${currentBranchId}`);
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.detail || `Analytics request failed (HTTP ${res.status}).`);
+                const data = await readApiJson(res, 'Analytics request');
                 if (window.__analyticsRenderToken === renderToken && currentModule === 'analytics') renderAnalyticsContent(data);
             } catch (err) {
                 const error = document.getElementById('analyticsError');
@@ -1522,9 +1532,12 @@
                 authFetch(`/api/timetable/slots/${currentBranchId}`),
                 authFetch(`/api/timetable/configs/${currentBranchId}`),
             ]);
-            ttTeachersData = await tRes.json();
-            window.ttSavedSlots = await sRes.json();
-            ttSavedConfigs = await cRes.json();
+            ttTeachersData = await readApiJson(tRes, 'Teachers data');
+            window.ttSavedSlots = await readApiJson(sRes, 'Timetable slots');
+            ttSavedConfigs = await readApiJson(cRes, 'Timetable configurations');
+            if (!Array.isArray(ttTeachersData) || !Array.isArray(window.ttSavedSlots) || !Array.isArray(ttSavedConfigs)) {
+                throw new Error('Timetable API returned an invalid data shape.');
+            }
 
             const batchNamesInSlots = [...new Set(window.ttSavedSlots.map(s => s.batch_name))].sort((a, b) => (a || '').localeCompare(b || ''));
 
