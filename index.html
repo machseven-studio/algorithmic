@@ -103,6 +103,9 @@
         .welcome-animate { animation: welcomeFadeSlide 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
 
         .batch-group-row td { background: rgba(212, 175, 55, 0.06); }
+        .global-readonly #branchSelector { color: #cbd5e1; }
+        .global-readonly .gold-bg { opacity: .45; pointer-events: none; }
+        @media (min-width: 1024px) { #mainContent { padding: 2.5rem 3rem; } }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -180,8 +183,7 @@
             </div>
             <div class="flex items-center space-x-6 text-sm">
                 <div class="flex items-center space-x-2 bg-[#121212] px-3 py-1.5 rounded-lg border gold-border">
-                    <span class="text-xs text-gray-400">Active Branch:</span>
-                    <select id="branchSelector" class="bg-transparent text-sm font-semibold gold-gradient-text focus:outline-none cursor-pointer"></select>
+                    <select id="branchSelector" aria-label="Branch selector" class="bg-transparent text-sm font-semibold gold-gradient-text focus:outline-none cursor-pointer"></select>
                     <button onclick="openAddBranchModal()" class="ml-2 text-xs bg-[#1a1a1a] hover:bg-[#252525] gold-gradient-text border gold-border px-2 py-0.5 rounded fast-transition">+ Branch</button>
                 </div>
                 <div class="text-xs text-right border-l pl-6 gold-border">
@@ -356,6 +358,7 @@
     <script>
         let branches = [];
         let currentBranchId = null;
+        let isGlobalView = false;
         let currentModule = 'home';
         let authToken = localStorage.getItem('algorithmic_token');
         let isOwner = false;
@@ -492,6 +495,10 @@
             branches = await res.json();
             const selector = document.getElementById('branchSelector');
             selector.innerHTML = '';
+            const hq = document.createElement('option');
+            hq.value = '0';
+            hq.textContent = '🏢 Centralized HQ (Read-Only)';
+            selector.appendChild(hq);
             branches.forEach(b => {
                 const opt = document.createElement('option');
                 opt.value = b.id;
@@ -499,18 +506,24 @@
                 if (currentBranchId === b.id) opt.selected = true;
                 selector.appendChild(opt);
             });
-            if (!currentBranchId && branches.length > 0) {
+            if (currentBranchId === null && branches.length > 0) {
                 currentBranchId = branches[0].id;
                 selector.value = currentBranchId;
             }
+            isGlobalView = Number(currentBranchId) === 0;
+            document.body.classList.toggle('global-readonly', isGlobalView);
+            const branchButton = document.querySelector('button[onclick="openAddBranchModal()"]');
+            if (branchButton) { branchButton.disabled = isGlobalView; branchButton.classList.toggle('opacity-40', isGlobalView); }
         }
 
         document.getElementById('branchSelector').addEventListener('change', (e) => {
-            currentBranchId = parseInt(e.target.value);
+            currentBranchId = parseInt(e.target.value, 10);
+            isGlobalView = currentBranchId === 0;
+            document.body.classList.toggle('global-readonly', isGlobalView);
             refreshCurrentModule();
         });
 
-        function openAddBranchModal() { document.getElementById('branchModal').classList.remove('hidden'); }
+        function openAddBranchModal() { if (isGlobalView) return; document.getElementById('branchModal').classList.remove('hidden'); }
         function closeAddBranchModal() { document.getElementById('branchModal').classList.add('hidden'); document.getElementById('newBranchName').value = ''; }
 
         async function createNewBranch() {
@@ -576,7 +589,7 @@
                     <div class="flex justify-between items-end flex-wrap gap-3">
                         <div>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Analytics</h2>
-                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Live operational intelligence · current branch</p>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Live operational intelligence · selected scope</p>
                         </div>
                         <button onclick="renderAnalyticsModule(document.getElementById('mainContent'))" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider fast-transition">Refresh</button>
                     </div>
@@ -644,6 +657,22 @@
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="glass-panel border gold-border p-6 rounded-2xl">
+                        <div class="flex justify-between items-center mb-5"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Revenue · Recent Payments</h3><span class="text-xs text-gray-500">${(f.revenue || []).length} points</span></div>
+                        <div class="space-y-3">${(f.revenue || []).length ? f.revenue.map(x => `<div class="flex items-center gap-3"><span class="text-[10px] text-gray-500 w-24">${esc(x.date || 'Unknown')}</span><div class="mini-bar-track flex-1"><div class="mini-bar-fill" style="width:${Math.min(100, feeTotal ? (x.amount / feeTotal) * 100 : 0)}%"></div></div><span class="text-xs text-gray-300 w-28 text-right">₹${Number(x.amount || 0).toLocaleString('en-IN')}</span></div>`).join('') : '<p class="text-xs text-gray-500">No paid fee records yet.</p>'}</div>
+                    </div>
+                    <div class="glass-panel border gold-border p-6 rounded-2xl">
+                        <div class="flex justify-between items-center mb-5"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Performance Metrics</h3><span class="text-xs text-gray-500">current scope</span></div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-[#0c0c0c] rounded-xl p-4 border gold-border"><div class="text-[10px] text-gray-500 uppercase tracking-widest">Attendance Rate</div><div class="text-2xl font-black gold-gradient-text mt-1">${a.pct || 0}%</div></div>
+                            <div class="bg-[#0c0c0c] rounded-xl p-4 border gold-border"><div class="text-[10px] text-gray-500 uppercase tracking-widest">Lecture Coverage</div><div class="text-2xl font-black gold-gradient-text mt-1">${l.scheduled_this_week || 0}</div></div>
+                            <div class="bg-[#0c0c0c] rounded-xl p-4 border gold-border"><div class="text-[10px] text-gray-500 uppercase tracking-widest">Students / Faculty</div><div class="text-2xl font-black gold-gradient-text mt-1">${d.teachers_total ? (d.students_total / d.teachers_total).toFixed(1) : '—'}</div></div>
+                            <div class="bg-[#0c0c0c] rounded-xl p-4 border gold-border"><div class="text-[10px] text-gray-500 uppercase tracking-widest">Collection Rate</div><div class="text-2xl font-black gold-gradient-text mt-1">${paidPct}%</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="glass-panel border gold-border p-6 rounded-2xl">
                         <div class="flex justify-between items-center mb-5"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Lectures · This Week</h3><div class="text-xs text-gray-500">${l.scheduled_this_week || 0} scheduled · ${l.logged_last_7_days || 0} logged</div></div>
                         <div class="space-y-4">${days.map(x => analyticsBar(x.count || 0, maxDay, x.day, `${x.count || 0} lectures`)).join('')}</div>
                         <p class="text-[10px] text-gray-600 mt-5">“Logged” counts syllabus lecture entries recorded in the last seven days; “scheduled” counts generated timetable slots.</p>
@@ -660,6 +689,7 @@
             const can = (m) => isOwner || myAllowedModules.includes(m);
             container.innerHTML = `
                 <div class="space-y-8">
+                    ${isGlobalView ? '<div class="border border-slate-700/60 bg-slate-950/60 rounded-xl px-5 py-3 text-xs text-slate-300">🏢 Centralized HQ mode · consolidated read-only view across every branch.</div>' : ''}
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
                         <div class="max-w-3xl relative z-10 space-y-4">
                             <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
@@ -731,7 +761,7 @@
                 if (can('timetables')) {
                     const el = document.getElementById('dashOngoingLectures');
                     if (!dash.ongoing_lectures.length) {
-                        el.innerHTML = '<p class="text-xs text-gray-500">No lecture is currently in session.</p>';
+                        el.innerHTML = `<p class="text-sm font-serif italic text-gold-400/80 text-yellow-400/70 leading-relaxed">Zero active lectures. The silence is golden, and so is the electricity bill you're saving.</p>`;
                     } else {
                         el.innerHTML = dash.ongoing_lectures.map(l => `
                             <div class="flex items-center justify-between text-xs bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3">
@@ -795,13 +825,13 @@
         }
 
         async function renderDataModule(container, moduleName) {
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             container.innerHTML = `
                 <div class="space-y-6">
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${moduleName} Department</h2>
-                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Branch Synchronized</p>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Scope Synchronized</p>
                         </div>
                         ${canWrite ? `
                         <div class="flex items-center space-x-3">
@@ -859,6 +889,7 @@
                 { key: 'amount_inr', label: 'Amount (INR)' },
                 { key: 'status', label: 'Status' },
                 { key: 'due_date', label: 'Due Date' },
+                { key: 'utr_reference', label: 'UTR / Reference' },
             ],
         };
 
@@ -866,7 +897,7 @@
 
         async function loadModuleRecords(moduleName) {
             if (!currentBranchId) return;
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const res = await authFetch(`/api/records/${moduleName}/${currentBranchId}`);
             const records = await res.json();
             moduleRecordsCache[moduleName] = records;
@@ -892,9 +923,20 @@
                         else if (c.key === 'document' && !val) { val = `<span class="text-gray-600 text-xs">No File</span>`; }
                         return `<td class="p-4 font-medium">${val ?? ''}</td>`;
                     }).join('')}
-                    ${canWrite ? `<td class="p-4 text-right whitespace-nowrap"><button onclick="openRecordModal('${moduleName}', ${r.id})" title="Edit record" class="row-delete-btn fast-transition text-sm leading-none mr-3">✎</button><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
+                    ${canWrite ? `<td class="p-4 text-right whitespace-nowrap">${moduleName === 'fees' && String(r.status || '').toLowerCase() !== 'paid' ? `<button onclick="markFeePaid(${r.id})" title="Mark paid" class="gold-gradient-text font-bold text-xs mr-3">Mark Paid</button>` : ''}<button onclick="openRecordModal('${moduleName}', ${r.id})" title="Edit record" class="row-delete-btn fast-transition text-sm leading-none mr-3">✎</button><button onclick="deleteRecord('${moduleName}', ${r.id})" title="Delete record" class="row-delete-btn fast-transition text-lg leading-none">🗑</button></td>` : ''}
                 </tr>
             `).join('');
+        }
+
+        async function markFeePaid(feeId) {
+            if (isGlobalView) return;
+            const utr = prompt('Enter UTR / Reference No. (mandatory):');
+            if (utr === null) return;
+            if (!utr.trim()) { alert('UTR / Reference No. is mandatory.'); return; }
+            const res = await authFetch(`/api/fees/${feeId}/mark-paid`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ utr_reference: utr.trim() }) });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) { alert(data.detail || 'Failed to mark fee as paid.'); return; }
+            await loadModuleRecords('fees');
         }
 
         // ---- Student Department (batchwise segregation + search) ----
@@ -902,7 +944,7 @@
         let allStudentRecords = [];
 
         async function renderStudentsModule(container) {
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             container.innerHTML = `
                 <div class="space-y-6">
                     <div class="flex justify-between items-center flex-wrap gap-4">
@@ -939,25 +981,27 @@
                     </div>
                 </div>
             `;
-            document.getElementById('studentSearchInput').addEventListener('input', renderStudentTable);
+            document.getElementById('studentSearchInput').addEventListener('input', debounce(loadStudentRecords, 250));
             await loadStudentRecords();
         }
 
+        function debounce(fn, wait) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); }; }
+
         async function loadStudentRecords() {
-            if (!currentBranchId) return;
-            const res = await authFetch(`/api/records/students/${currentBranchId}`);
+            if (currentBranchId === null) return;
+            const q = encodeURIComponent((document.getElementById('studentSearchInput')?.value || '').trim());
+            const res = await authFetch(`/api/records/students/${currentBranchId}?search=${q}&sort=name&direction=asc&page=1&page_size=500`);
             allStudentRecords = await res.json();
             moduleRecordsCache['students'] = allStudentRecords;
             renderStudentTable();
         }
 
         function renderStudentTable() {
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const tbody = document.getElementById('studentTableBody');
             const query = (document.getElementById('studentSearchInput')?.value || '').trim().toLowerCase();
 
             let students = allStudentRecords.slice();
-            if (query) students = students.filter(s => (s.name || '').toLowerCase().includes(query));
 
             // Segregate batchwise: alphabetical by batch name, then alphabetical by student name within each batch.
             students.sort((a, b) => {
@@ -1044,7 +1088,7 @@
 
         function renderAttendanceStudentList() {
             const listEl = document.getElementById('attendanceStudentList');
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const selectedBatch = document.getElementById('attendanceBatchSelect').value;
             const query = document.getElementById('attendanceSearchInput').value.trim().toLowerCase();
 
@@ -1365,7 +1409,7 @@
         ];
 
         async function renderSeatingModule(container) {
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const res = await authFetch(`/api/seating/${currentBranchId}`);
             const layouts = await res.json().catch(() => []);
             if (!res.ok) {
@@ -1399,6 +1443,7 @@
         }
 
         async function generateSeatingPlan() {
+            if (isGlobalView) return;
             const exam_date = document.getElementById('seatExamDate').value;
             const room_number = document.getElementById('seatRoom').value.trim();
             const rows = parseInt(document.getElementById('seatRows').value, 10);
@@ -1424,7 +1469,7 @@
                 container.innerHTML = '<div class="glass-panel border gold-border p-8 rounded-2xl text-center text-gray-500">No exam seating plans yet.</div>';
                 return;
             }
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             container.innerHTML = layouts.map(layout => {
                 const assignments = layout.assignments || [];
                 const byCell = new Map(assignments.map(a => [`${a.row}-${a.column}`, a]));
@@ -1454,7 +1499,7 @@
         }
 
         async function renderTimetableModule(container) {
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const [tRes, sRes, cRes] = await Promise.all([
                 authFetch(`/api/records/teachers/${currentBranchId}`),
                 authFetch(`/api/timetable/slots/${currentBranchId}`),
@@ -1474,7 +1519,7 @@
                             <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Conflict-checked · one batch at a time · never stacked</p>
                         </div>
                         <div class="flex items-center gap-3">
-                            <button onclick="deleteAllTimetables()" class="bg-[#171010] hover:bg-[#241313] text-red-400 border border-red-900/40 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition">Delete All Timetables</button>
+                            ${canWrite ? '<button onclick="deleteAllTimetables()" class="bg-[#171010] hover:bg-[#241313] text-red-400 border border-red-900/40 px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition">Delete All Timetables</button>' : ''}
                             <button onclick="window.print()" class="bg-[#141414] hover:bg-[#202020] gold-gradient-text border gold-border px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Download PDF / Print Timetable</button>
                         </div>
                     </div>
@@ -1586,7 +1631,7 @@
 
         function renderTimetableGrid() {
             const tbody = document.getElementById('timetableSlotsBody');
-            const canWrite = myPermission !== 'read_only';
+            const canWrite = myPermission !== 'read_only' && !isGlobalView;
             const filterEl = document.getElementById('ttViewBatchFilter');
             const filterBatch = filterEl ? filterEl.value : '';
             let slots = window.ttSavedSlots || [];
@@ -1619,6 +1664,7 @@
         }
 
         async function deleteAllTimetables() {
+            if (isGlobalView) return;
             if (!confirm('Delete EVERY timetable and saved timetable configuration for this branch? This cannot be undone.')) return;
             const res = await authFetch(`/api/timetable/all/${currentBranchId}`, { method: 'DELETE' });
             const data = await res.json().catch(() => ({}));
@@ -1631,6 +1677,7 @@
         }
 
         async function generateTimetableSchedule() {
+            if (isGlobalView) return;
             const batchName = document.getElementById('ttBatchName').value.trim();
             if (!batchName) { alert('Enter a batch name.'); return; }
 
