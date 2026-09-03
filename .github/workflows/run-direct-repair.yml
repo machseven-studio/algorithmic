@@ -1,0 +1,43 @@
+name: Run direct repair script
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply and validate
+        run: |
+          python repair_direct.py
+          python -m py_compile main.py
+      - name: Commit repaired application
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py index.html
+          git diff --cached --quiet || git commit -m "Fix main backend and index frontend"
+          git push
+      - name: Restore Render entrypoint and remove temporary files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('render.yaml')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT', 'startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT')
+          p.write_text(s, encoding='utf-8')
+          Path('server.py').unlink(missing_ok=True)
+          Path('repair_direct.py').unlink(missing_ok=True)
+          Path('.github/workflows/direct-fix.yml').unlink(missing_ok=True)
+          Path('.github/workflows/repair-production.yml').unlink(missing_ok=True)
+          Path('.github/workflows/run-direct-repair.yml').unlink(missing_ok=True)
+          PY
+          git add render.yaml server.py repair_direct.py .github/workflows/direct-fix.yml .github/workflows/repair-production.yml .github/workflows/run-direct-repair.yml
+          git diff --cached --quiet || git commit -m "Deploy direct main.py application"
+          git push
