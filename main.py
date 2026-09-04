@@ -150,6 +150,17 @@ def init_db():
     for stmt in [
         "ALTER TABLE branches ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
         "UPDATE branches SET tenant_id = institute_id WHERE tenant_id IS NULL",
+        "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS permission TEXT NOT NULL DEFAULT 'read_only'",
+        """DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'staff_users' AND column_name = 'permissions') THEN
+                EXECUTE $sql$UPDATE staff_users SET permission = CASE
+                    WHEN lower(COALESCE(permissions::text, '')) LIKE '%read_only%' THEN 'read_only'
+                    WHEN lower(COALESCE(permissions::text, '')) LIKE '%edit%' THEN 'edit'
+                    ELSE permission
+                END WHERE permission IS NULL OR permission = 'read_only'$sql$;
+            END IF;
+        END $$;""",
         "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS designation TEXT",
         "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS module_access TEXT",
         "ALTER TABLE students ADD COLUMN IF NOT EXISTS email TEXT",
@@ -2201,7 +2212,7 @@ def _parallax_call_gemini(context: str, question: str) -> str:
     payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         raise HTTPException(status_code=502, detail=f"Parallax upstream error: {e.read().decode('utf-8', 'ignore')[:300]}")
@@ -2672,3 +2683,8 @@ def final_delete_exam_history(history_id:int,institute:CurrentInstitute=Depends(
         if not cur.fetchone(): raise HTTPException(status_code=404,detail='History record not found')
         conn.commit(); return {'status':'deleted'}
     finally: conn.close()
+
+
+@app.get("/algorithmic_fixes.js")
+def algorithmic_fixes():
+    return FileResponse(Path(__file__).with_name("algorithmic_fixes.js"), media_type="application/javascript")
