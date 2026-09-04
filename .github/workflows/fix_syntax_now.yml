@@ -1,0 +1,31 @@
+name: Repair malformed Python source
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove malformed escaped backend patch
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path("main.py")
+          s = p.read_text(encoding="utf-8")
+          marker = r"\\n\\n# ALGORITHMIC_BACKEND_NAV_REPAIR_V2"
+          if marker in s:
+              s = s.split(marker, 1)[0].rstrip() + "\n"
+              p.write_text(s, encoding="utf-8")
+          compile(p.read_text(encoding="utf-8"), str(p), "exec")
+      - name: Commit valid Python
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py
+          git diff --cached --quiet || (git commit -m "Fix Python syntax error from malformed repair block" && git push)
