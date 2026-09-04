@@ -796,6 +796,34 @@ def add_branch(branch: BranchCreate, institute: CurrentInstitute = Depends(requi
 # Generic records (students / teachers / classrooms / syllabus / attendance / invigilation / fees)
 # ---------------------------------------------------------------------------
 
+@app.patch("/api/branches/{branch_id}")
+def edit_branch(branch_id: int, branch: BranchCreate, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(branch_id, institute.id)
+    name=branch.name.strip()
+    if not name: raise HTTPException(status_code=400, detail="Branch name cannot be empty")
+    conn=get_conn()
+    try:
+        cur=conn.cursor(); cur.execute("SELECT id,name FROM branches WHERE id=%s AND tenant_id=%s",(branch_id,institute.id))
+        if not cur.fetchone(): raise HTTPException(status_code=404, detail="Branch not found")
+        cur.execute("UPDATE branches SET name=%s WHERE id=%s AND tenant_id=%s RETURNING id,name",(name,branch_id,institute.id)); row=cur.fetchone(); conn.commit(); return {"id":row[0],"name":row[1]}
+    except psycopg2.IntegrityError:
+        conn.rollback(); raise HTTPException(status_code=400, detail="A branch with that name already exists")
+    finally: conn.close()
+
+@app.delete("/api/branches/{branch_id}")
+def delete_branch(branch_id: int, institute: CurrentInstitute = Depends(require_write_access)):
+    verify_branch_ownership(branch_id, institute.id)
+    conn=get_conn()
+    try:
+        cur=conn.cursor(); cur.execute("SELECT id,name FROM branches WHERE id=%s AND tenant_id=%s",(branch_id,institute.id)); row=cur.fetchone()
+        if not row: raise HTTPException(status_code=404, detail="Branch not found")
+        name=row["name"]; cur.execute("DELETE FROM branches WHERE id=%s AND tenant_id=%s",(branch_id,institute.id))
+        if cur.rowcount!=1: raise HTTPException(status_code=404, detail="Branch not found")
+        conn.commit(); return {"status":"deleted","id":branch_id,"name":name,"data_wiped":True}
+    except Exception:
+        conn.rollback(); raise
+    finally: conn.close()
+
 @app.get("/api/records/{module}/{branch_id}")
 def get_records(module: str, branch_id: int, search: str = "", sort: str = "id", direction: str = "desc", page: int = 1, page_size: int = 200, institute: CurrentInstitute = Depends(get_current_institute)):
     if module not in VALID_MODULES:
@@ -1522,20 +1550,33 @@ class SeatingGenerateRequest(BaseModel):
 
 
 def _build_seating_layout(students, rows, columns):
-    """Map an already-randomized student pool onto a rows x columns grid."""
-    capacity = rows * columns
-    selected = students[:capacity]
-    return [
-        {
-            "row": (index // columns) + 1,
-            "column": (index % columns) + 1,
-            "student_id": student["id"],
-            "name": student["name"],
-            "batch": student["batch"],
-            "roll_number": student["roll_number"],
-        }
-        for index, student in enumerate(selected)
-    ]
+    capacity=rows*columns; selected=list(students[:capacity])
+    if not selected: return []
+    buckets=defaultdict(list)
+    for st in selected: buckets[str(st.get("batch") or "").strip()].append(st)
+    for v in buckets.values(): random.shuffle(v)
+    if max(map(len,buckets.values()))>(capacity+1)//2:
+        raise HTTPException(status_code=400,detail="The seating constraints cannot be satisfied: one batch has too many students for this grid.")
+    grid=[[None]*columns for _ in range(rows)]; pos=[(r,c) for r in range(rows) for c in range(columns)]
+    def ok(st,r,c):
+        batch=str(st.get("batch") or "").strip()
+        left=c and grid[r][c-1] is not None and str(grid[r][c-1].get("batch") or "").strip()==batch
+        front=r and grid[r-1][c] is not None and str(grid[r-1][c].get("batch") or "").strip()==batch
+        return not (left or front)
+    def solve(i=0):
+        if i==len(pos): return True
+        r,c=pos[i]; choices=[v for v in buckets.values() if v]; random.shuffle(choices); choices.sort(key=len,reverse=True)
+        for v in choices:
+            st=v.pop()
+            if ok(st,r,c):
+                grid[r][c]=st
+                if solve(i+1): return True
+                grid[r][c]=None
+            v.append(st)
+        return False
+    if not solve():
+        raise HTTPException(status_code=400,detail="The seating constraints cannot be satisfied with the selected students and grid size. Increase the grid size or use more than one batch.")
+    return [{"row":r+1,"column":c+1,"student_id":grid[r][c]["id"],"name":grid[r][c]["name"],"batch":grid[r][c]["batch"],"roll_number":grid[r][c]["roll_number"]} for r in range(rows) for c in range(columns) if grid[r][c] is not None]
 
 
 
@@ -2225,6 +2266,12 @@ def parallax_ask(branch_id: int, body: AssistantQuery, institute: CurrentInstitu
     audit_write(institute, branch_id if branch_id else None, "PARALLAX_QUERY", None, {"question": question})
     return {"answer": answer}
 
+
+@app.delete("/api/assistant/history/{branch_id}")
+def clear_parallax_history(branch_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute,"assistant")
+    verify_branch_read_access(branch_id,institute.id)
+    return {"status":"cleared","persistent_history":False}
 
 # ---------------------------------------------------------------------------
 # Frontend
