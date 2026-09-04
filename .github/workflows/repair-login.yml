@@ -1,9 +1,11 @@
-name: Repair login
+name: Algorithmic safe refactor
 
 on:
   push:
+    branches: [main]
     paths:
       - 'index.html'
+      - 'main.py'
       - '.github/workflows/repair-login.yml'
   workflow_dispatch:
 
@@ -11,72 +13,118 @@ permissions:
   contents: write
 
 jobs:
-  repair:
+  refactor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Patch login handler
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      - name: Apply in-place refactor
+        shell: python
         run: |
-          python3 - <<'PY'
           from pathlib import Path
-          p = Path('index.html')
-          s = p.read_text(encoding='utf-8')
-          start = s.index('        async function handleLogin(e) {')
-          end = s.index('\n        async function handleSignup(e) {', start)
-          replacement = '''        async function handleLogin(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('loginError');
-            const button = document.querySelector('#loginForm button[type="submit"]');
-            const emailEl = document.getElementById('loginEmail');
-            const passwordEl = document.getElementById('loginPassword');
-            if (!errorEl || !emailEl || !passwordEl) return;
-            errorEl.textContent = '';
-            const email = emailEl.value.trim().toLowerCase();
-            const password = passwordEl.value;
-            if (!email || !password) { errorEl.textContent = 'Please enter your email and password.'; return; }
-            if (button) { button.disabled = true; button.dataset.originalText = button.textContent.trim(); button.textContent = 'Logging in...'; }
-            try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const contentType = res.headers.get('content-type') || '';
-                const data = contentType.includes('application/json') ? await res.json().catch(() => ({})) : {};
-                if (!res.ok) {
-                    let detail = data.detail;
-                    if (Array.isArray(detail)) detail = detail.map(x => x && x.msg ? x.msg : String(x)).join(', ');
-                    errorEl.textContent = detail || `Login failed (HTTP ${res.status}).`;
-                    return;
-                }
-                if (!data || typeof data !== 'object' || !data.institute_name) {
-                    errorEl.textContent = 'The server returned an invalid login response. Please refresh and try again.';
-                    return;
-                }
-                completeAuth(data);
-            } catch (err) {
-                console.error('Algorithmic login request failed:', err);
-                errorEl.textContent = 'Unable to reach the login server. Please refresh the page and try again.';
-            } finally {
-                if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Log In'; }
-            }
-        }'''
-          p.write_text(s[:start] + replacement + s[end:], encoding='utf-8')
-          PY
-      - name: Validate
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          s = Path('index.html').read_text(encoding='utf-8')
-          assert "credentials: 'same-origin'" in s
-          assert s.count("async function handleLogin(e)") == 1
-          PY
-      - name: Commit patch and remove workflow
+          import re
+
+          index = Path('index.html')
+          main = Path('main.py')
+          html = index.read_text(encoding='utf-8')
+          py = main.read_text(encoding='utf-8')
+
+          original_html = html
+          original_py = py
+
+          # 1) No external Algorithmic fix JS: all frontend logic stays in index.html.
+          html = re.sub(r'\s*<script\b[^>]*src=["\'][^"\']*algorithmic_fixes\.js[^"\']*["\'][^>]*>\s*</script>\s*', '\n', html, flags=re.I)
+          html = re.sub(r'\s*<script\b[^>]*src=["\']/?algorithmic_fixes\.js[^"\']*["\'][^>]*>\s*', '\n', html, flags=re.I)
+
+          # 2) Remove any legacy /algorithmic_fixes.js FastAPI route and its handler,
+          #    without touching the rest of main.py.
+          route = re.compile(
+              r'(?ms)^@app\.(?:get|api_route)\(\s*["\']/??algorithmic_fixes\.js["\'][^\n]*\)\s*\n.*?(?=^@app\.|\Z)'
+          )
+          py = route.sub('', py)
+          py = re.sub(r'(?ms)^@app\.get\(\s*["\']/algorithmic_fixes\.js["\'][^\n]*\)\s*\n.*?(?=^@app\.|\Z)', '', py)
+
+          # 3) Attendance history must render primitive fields, never an object coercion.
+          #    Only rewrite ${item} occurrences whose nearby code is clearly attendance/history code.
+          matches = list(re.finditer(r'\$\{item\}', html))
+          for m in reversed(matches):
+              lo = max(0, m.start() - 1400)
+              hi = min(len(html), m.end() + 1400)
+              ctx = html[lo:hi].lower()
+              if 'attendance' in ctx or 'history' in ctx:
+                  html = html[:m.start()] + '${item?.date ?? ""} · ${item?.status ?? ""}' + html[m.end():]
+
+          # 4) Keep Chart.js available before inline code and make chart creation tolerant
+          #    of missing/detached canvas targets. Existing pages that don't use charts are unaffected.
+          chart_src = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>'
+          if 'cdn.jsdelivr.net/npm/chart.js' not in html:
+              marker = '<script src="https://cdn.tailwindcss.com"></script>'
+              if marker in html:
+                  html = html.replace(marker, marker + '\n    ' + chart_src, 1)
+              else:
+                  html = html.replace('<head>', '<head>\n    ' + chart_src, 1)
+          guard = '''\n<script id="algorithmic-chart-guard">\n(function(){\n  if (window.__algorithmicChartGuardInstalled) return;\n  window.__algorithmicChartGuardInstalled = true;\n  window.AlgorithmicChart = function(target, config){\n    if (!window.Chart) return { destroy:function(){}, update:function(){}, resize:function(){} };\n    var el = typeof target === 'string' ? document.getElementById(target) : target;\n    if (!el || !document.documentElement.contains(el)) return { destroy:function(){}, update:function(){}, resize:function(){} };\n    return new window.Chart(el, config);\n  };\n})();\n</script>\n'''
+          if 'id="algorithmic-chart-guard"' not in html:
+              insert_at = html.find('<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>')
+              if insert_at >= 0:
+                  end = html.find('</script>', insert_at)
+                  end = html.find('>', end) + 1
+                  html = html[:end] + guard + html[end:]
+
+          # Route chart construction through the safe wrapper, while preserving all configs.
+          html = html.replace('new Chart(', 'new window.AlgorithmicChart(')
+
+          # 5) Timetable teacher configuration: large modal/list with responsive grids and scrolling.
+          timetable_css = '''\n<style id="algorithmic-timetable-final">\n#teacherConfigList{width:100%!important;min-height:180px;max-height:52vh;overflow-y:auto;overflow-x:hidden;padding-right:4px}\n.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;margin-left:auto;margin-right:auto}\n#teacherConfigList>div{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}\n@media(max-width:900px){#teacherConfigList>div{grid-template-columns:1fr 1fr}}\n@media(max-width:600px){#teacherConfigList>div{grid-template-columns:1fr}}\n</style>\n'''
+          if 'id="algorithmic-timetable-final"' not in html:
+              html = html.replace('</head>', timetable_css + '</head>', 1)
+
+          # 6) Sidebar: strict alignment and dedicated arrow semantics. The CSS is additive,
+          #    so existing module functionality remains the source of truth.
+          sidebar_css = '''\n<style id="algorithmic-sidebar-final">\n#moduleSidebar{display:flex;flex-direction:column;align-items:stretch}\n#moduleSidebar .module-head-group{width:100%;box-sizing:border-box}\n#moduleSidebar .module-head-group>div:first-child{display:flex;align-items:center;width:100%;min-height:44px}\n#moduleSidebar .module-head-title{flex:1;min-width:0;display:flex;align-items:center;text-align:left;cursor:pointer}\n#moduleSidebar .module-head-arrow{width:36px;min-width:36px;height:36px;display:grid;place-items:center;cursor:pointer}\n#moduleSidebar.sidebar-collapsed .module-head-items{display:none!important}\n</style>\n'''
+          if 'id="algorithmic-sidebar-final"' not in html:
+              html = html.replace('</head>', sidebar_css + '</head>', 1)
+
+          # 7) Examination UI: use the same panel/table language as Students and Attendance.
+          exam_css = '''\n<style id="algorithmic-examination-final">\n#examV2Root,#examUpgradeRoot{font-family:'Plus Jakarta Sans',sans-serif}\n#examV2Root .examv2-card,#examUpgradeRoot>div{border-color:rgba(212,175,55,.18);background:rgba(10,10,10,.92);border-radius:16px}\n#examV2Root table,#examUpgradeRoot table{border-collapse:collapse;width:100%}\n#examV2Root th,#examUpgradeRoot th{color:#6b7280;text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:800}\n#examV2Root td,#examUpgradeRoot td{font-size:12px;color:#d1d5db;border-bottom:1px solid #181818}\n</style>\n'''
+          if 'id="algorithmic-examination-final"' not in html:
+              html = html.replace('</head>', exam_css + '</head>', 1)
+
+          # 8) Fix the known login parser/handler regression if the old broken duplicate remains.
+          html = html.replace('function function centralStatCard(', 'function centralStatCard(')
+
+          # Validation: fail closed rather than committing a damaged application.
+          assert '<script' in html and '</html>' in html, 'index.html became invalid'
+          assert 'algorithmic_fixes.js' not in html, 'legacy external fix script remains'
+          assert 'cdn.jsdelivr.net/npm/chart.js' in html, 'Chart.js CDN import missing'
+          assert 'function function centralStatCard(' not in html, 'duplicate function keyword remains'
+          assert "async function handleLogin(e)" in html, 'login handler missing'
+          assert "credentials: 'same-origin'" in html, 'login session request guard missing'
+          assert '@app.get(\'/algorithmic_fixes.js\'' not in py and '@app.get("/algorithmic_fixes.js"' not in py, 'legacy JS route remains'
+
+          index.write_text(html, encoding='utf-8')
+          main.write_text(py, encoding='utf-8')
+
+          print('index.html changed:', html != original_html)
+          print('main.py changed:', py != original_py)
+          print('attendance object coercions found:', len(matches))
+
+      - name: Validate Python syntax
+        run: python -m py_compile main.py
+
+      - name: Commit and clean up
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html
+          git add index.html main.py
+          if git diff --cached --quiet; then
+            echo 'No source changes were necessary.'
+          else
+            git commit -m 'Refactor frontend and backend in place'
+            git push
+          fi
           git rm .github/workflows/repair-login.yml
-          git commit -m 'Fix login request and session handling'
+          git commit -m 'Remove one-shot refactor workflow'
           git push
