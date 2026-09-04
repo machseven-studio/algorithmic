@@ -1,8 +1,5 @@
-name: Patch login flow
-on:
-  push:
-  workflow_dispatch:
-
+name: Login patch
+on: push
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -10,7 +7,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Patch login handling
+      - name: Patch login handler
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -40,11 +37,7 @@ jobs:
             if (!email || !password) { errorEl.textContent = 'Please enter your email and password.'; return; }
             if (button) { button.disabled = true; button.textContent = 'Logging in…'; button.style.opacity = '0.7'; }
             try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
+                const res = await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ email, password }) });
                 const contentType = res.headers.get('content-type') || '';
                 const data = contentType.includes('application/json') ? await res.json().catch(() => ({})) : {};
                 if (!res.ok) {
@@ -52,10 +45,7 @@ jobs:
                     errorEl.textContent = detail;
                     return;
                 }
-                if (!data || typeof data !== 'object' || !data.institute_name) {
-                    errorEl.textContent = 'Login succeeded but the server returned an invalid session response. Please refresh and try again.';
-                    return;
-                }
+                if (!data || typeof data !== 'object' || !data.institute_name) { errorEl.textContent = 'Login succeeded but the server returned an invalid session response. Please refresh and try again.'; return; }
                 completeAuth(data);
             } catch (err) {
                 console.error('Algorithmic login request failed:', err);
@@ -64,20 +54,14 @@ jobs:
                 if (button) { button.disabled = false; button.textContent = 'Log In'; button.style.opacity = ''; }
             }
         }'''
-          s = s[:start] + new + s[end:]
-          p.write_text(s, encoding='utf-8')
+          p.write_text(s[:start] + new + s[end:], encoding='utf-8')
           PY
       - name: Validate
-        run: |
-          python -m py_compile main.py
-          git diff --check
-      - name: Commit patch and remove workflow
+        run: python -m py_compile main.py && git diff --check
+      - name: Commit patch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
           git commit -m 'Fix login request handling and session flow' || true
-          git push || true
-          git rm -f .github/workflows/login-patch.yml || true
-          git commit -m 'Remove temporary login patch workflow' || true
           git push || true
