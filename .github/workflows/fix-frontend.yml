@@ -1,8 +1,8 @@
 name: Fix frontend authentication
 on:
-  workflow_dispatch:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -10,144 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Repair authentication JavaScript
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          s=s.replace('function function centralStatCard', 'function centralStatCard', 1)
-          old_login='''        async function handleLogin(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('loginError');
-            errorEl.textContent = '';
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const data = await res.json();
-                if (!res.ok) { errorEl.textContent = data.detail || 'Login failed.'; return; }
-                completeAuth(data);
-            } catch (err) { errorEl.textContent = 'Network error. Please try again.'; }
-        }'''
-          new_login='''        async function handleLogin(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('loginError');
-            const button = document.querySelector('#loginForm button[type="submit"]');
-            const emailEl = document.getElementById('loginEmail');
-            const passwordEl = document.getElementById('loginPassword');
-            if (!errorEl || !emailEl || !passwordEl) return;
-            errorEl.textContent = '';
-            const email = emailEl.value.trim().toLowerCase();
-            const password = passwordEl.value;
-            if (!email || !password) { errorEl.textContent = 'Please enter your email and password.'; return; }
-            if (button) { button.disabled = true; button.dataset.originalText = button.textContent.trim(); button.textContent = 'Logging in...'; }
-            try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                const contentType = res.headers.get('content-type') || '';
-                const data = contentType.includes('application/json') ? await res.json().catch(() => ({})) : {};
-                if (!res.ok) {
-                    let detail = data.detail;
-                    if (Array.isArray(detail)) detail = detail.map(x => x && x.msg ? x.msg : String(x)).join(', ');
-                    errorEl.textContent = detail || `Login failed (HTTP ${res.status}).`;
-                    return;
-                }
-                if (!data || typeof data !== 'object' || !data.institute_name) {
-                    errorEl.textContent = 'The server returned an invalid login response. Please refresh and try again.';
-                    return;
-                }
-                completeAuth(data);
-            } catch (err) {
-                console.error('Algorithmic login request failed:', err);
-                errorEl.textContent = 'Unable to reach the login server. Please refresh the page and try again.';
-            } finally {
-                if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Log In'; }
-            }
-        }'''
-          if old_login in s:
-              s=s.replace(old_login,new_login,1)
-          old_signup='''        async function handleSignup(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('signupError');
-            errorEl.textContent = '';
-            const institute_name = document.getElementById('signupInstitute').value;
-            const full_name = document.getElementById('signupName').value;
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
-            try {
-                const res = await fetch('/api/auth/signup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ institute_name, full_name, email, password })
-                });
-                const data = await res.json();
-                if (!res.ok) { errorEl.textContent = data.detail || 'Signup failed.'; return; }
-                completeAuth(data);
-            } catch (err) { errorEl.textContent = 'Network error. Please try again.'; }
-        }'''
-          new_signup='''        async function handleSignup(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('signupError');
-            const button = document.querySelector('#signupForm button[type="submit"]');
-            errorEl.textContent = '';
-            const institute_name = document.getElementById('signupInstitute').value.trim();
-            const full_name = document.getElementById('signupName').value.trim();
-            const email = document.getElementById('signupEmail').value.trim().toLowerCase();
-            const password = document.getElementById('signupPassword').value;
-            if (!institute_name || !full_name || !email || !password) { errorEl.textContent = 'Please complete all fields.'; return; }
-            if (password.length < 8) { errorEl.textContent = 'Password must be at least 8 characters.'; return; }
-            if (button) { button.disabled = true; button.dataset.originalText = button.textContent.trim(); button.textContent = 'Creating account...'; }
-            try {
-                const res = await fetch('/api/auth/signup', {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ institute_name, full_name, email, password })
-                });
-                const contentType = res.headers.get('content-type') || '';
-                const data = contentType.includes('application/json') ? await res.json().catch(() => ({})) : {};
-                if (!res.ok) {
-                    let detail = data.detail;
-                    if (Array.isArray(detail)) detail = detail.map(x => x && x.msg ? x.msg : String(x)).join(', ');
-                    errorEl.textContent = detail || `Signup failed (HTTP ${res.status}).`;
-                    return;
-                }
-                if (!data || typeof data !== 'object' || !data.institute_name) {
-                    errorEl.textContent = 'The server returned an invalid signup response. Please refresh and try again.';
-                    return;
-                }
-                completeAuth(data);
-            } catch (err) {
-                console.error('Algorithmic signup request failed:', err);
-                errorEl.textContent = 'Unable to reach the signup server. Please refresh the page and try again.';
-            } finally {
-                if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Create Account'; }
-            }
-        }'''
-          if old_signup in s:
-              s=s.replace(old_signup,new_signup,1)
-          p.write_text(s, encoding='utf-8')
-          PY
-      - name: Validate
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          s=Path('index.html').read_text(encoding='utf-8')
-          assert 'function function centralStatCard' not in s
-          assert s.count('async function handleLogin(e)') == 1
-          assert s.count('async function handleSignup(e)') == 1
-          assert "credentials: 'same-origin'" in s
-          PY
-      - name: Commit repair
+      - name: Repair authentication code
+        run: python3 repair_auth.py
+      - name: Commit repaired frontend
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
