@@ -1,1 +1,0 @@
-Temporary trigger for the frontend authentication repair workflow. This file can be removed after the repair completes.
