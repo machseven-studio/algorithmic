@@ -9,6 +9,19 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="algorithmic-chart-guard">
+(function(){
+  if (window.__algorithmicChartGuardInstalled) return;
+  window.__algorithmicChartGuardInstalled = true;
+  window.AlgorithmicChart = function(target, config){
+    if (!window.Chart) return { destroy:function(){}, update:function(){}, resize:function(){} };
+    var el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el || !document.documentElement.contains(el)) return { destroy:function(){}, update:function(){}, resize:function(){} };
+    return new window.Chart(el, config);
+  };
+})();
+</script>
+
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700&display=swap');
@@ -150,6 +163,31 @@
 #examV2Root .examv2-input{border-radius:10px;padding:11px 13px}
 </style>
 
+
+<style id="algorithmic-timetable-final">
+#teacherConfigList{width:100%!important;min-height:180px;max-height:52vh;overflow-y:auto;overflow-x:hidden;padding-right:4px}
+.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;margin-left:auto;margin-right:auto}
+#teacherConfigList>div{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}
+@media(max-width:900px){#teacherConfigList>div{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){#teacherConfigList>div{grid-template-columns:1fr}}
+</style>
+
+<style id="algorithmic-sidebar-final">
+#moduleSidebar{display:flex;flex-direction:column;align-items:stretch}
+#moduleSidebar .module-head-group{width:100%;box-sizing:border-box}
+#moduleSidebar .module-head-group>div:first-child{display:flex;align-items:center;width:100%;min-height:44px}
+#moduleSidebar .module-head-title{flex:1;min-width:0;display:flex;align-items:center;text-align:left;cursor:pointer}
+#moduleSidebar .module-head-arrow{width:36px;min-width:36px;height:36px;display:grid;place-items:center;cursor:pointer}
+#moduleSidebar.sidebar-collapsed .module-head-items{display:none!important}
+</style>
+
+<style id="algorithmic-examination-final">
+#examV2Root,#examUpgradeRoot{font-family:'Plus Jakarta Sans',sans-serif}
+#examV2Root .examv2-card,#examUpgradeRoot>div{border-color:rgba(212,175,55,.18);background:rgba(10,10,10,.92);border-radius:16px}
+#examV2Root table,#examUpgradeRoot table{border-collapse:collapse;width:100%}
+#examV2Root th,#examUpgradeRoot th{color:#6b7280;text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:800}
+#examV2Root td,#examUpgradeRoot td{font-size:12px;color:#d1d5db;border-bottom:1px solid #181818}
+</style>
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -731,7 +769,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const attendanceCtx = document.getElementById('centralAttendanceChart');
             if (attendanceCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new Chart(attendanceCtx, {
+                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(attendanceCtx, {
                     type: 'line',
                     data: {
                         labels: trend.map(t => t.label),
@@ -746,7 +784,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const batchCtx = document.getElementById('centralBatchChart');
             if (batchCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new Chart(batchCtx, {
+                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(batchCtx, {
                     type: 'bar',
                     data: {
                         labels: batches.map(b => b.batch),
@@ -761,7 +799,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const revenueCtx = document.getElementById('centralRevenueChart');
             if (revenueCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new Chart(revenueCtx, {
+                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(revenueCtx, {
                     type: 'bar',
                     data: {
                         labels: revenue.map(r => r.date),
