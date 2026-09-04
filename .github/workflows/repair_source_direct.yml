@@ -1,0 +1,63 @@
+name: Repair source directly
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch index and main
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # FRONTEND: guarantee the final repair layer is actually loaded by the
+          # application source, not merely present in the repository.
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          tag = '<script src="/final_frontend_repairs.js"></script>'
+          if tag not in s:
+              if '</body>' not in s:
+                  raise SystemExit('index.html has no closing body tag; refusing unsafe rewrite')
+              s = s.replace('</body>', tag + '\n</body>', 1)
+          # Ensure the institute name has enough room and sidebar can collapse to zero width.
+          css = '''\n<style id="algorithmic-final-layout">\n#headerInstituteName{font-size:clamp(2.4rem,4.2vw,4.8rem)!important;max-width:min(70vw,1100px)!important}\n#moduleSidebar{position:relative!important;transition:width .18s ease,min-width .18s ease!important}\n#moduleSidebar.sidebar-collapsed{width:0!important;min-width:0!important;padding:0!important;border-width:0!important}\n#moduleSidebar.sidebar-collapsed>*:not(#sidebarCollapseButton):not(#algorithmicSidebarToggle){display:none!important}\n#moduleSidebar.sidebar-collapsed #sidebarCollapseButton,#moduleSidebar.sidebar-collapsed #algorithmicSidebarToggle{display:block!important;visibility:visible!important;opacity:1!important;right:-30px!important}\n.module-head-group{width:100%!important}.module-head-group>div:first-child{width:100%!important}.module-head-arrow{pointer-events:auto!important}\n</style>\n'''
+          if 'id="algorithmic-final-layout"' not in s:
+              s = s.replace('</head>', css + '</head>', 1)
+          p.write_text(s, encoding='utf-8')
+
+          # BACKEND: the production schema uses staff_users.permissions (plural).
+          p = Path('main.py')
+          s = p.read_text(encoding='utf-8')
+          original = s
+          s = s.replace('SELECT id, full_name, email, permission, designation, module',
+                        'SELECT id, full_name, email, permissions, designation, module')
+          s = s.replace('SELECT id, full_name, email, permission, designation',
+                        'SELECT id, full_name, email, permissions, designation')
+          # Keep returned API field stable as permission while reading the real column.
+          s = re.sub(r'\bSELECT (id, full_name, email, )permissions(, designation, module)\b',
+                     r'SELECT \1permissions AS permission\2', s)
+          marker = '# ALGORITHMIC_BACKEND_NAV_REPAIR_V2'
+          if marker not in s:
+              s += r'''\n\n# ALGORITHMIC_BACKEND_NAV_REPAIR_V2\n# Defensive JSON normalization helper used by attendance-facing endpoints.\ndef _alg_scalar(value):\n    if value is None:\n        return ""\n    if isinstance(value, (str, int, float, bool)):\n        return str(value)\n    if isinstance(value, dict):\n        for key in ("full_name", "name", "student_name", "label", "value", "id"):\n            if key in value and value[key] is not None:\n                return _alg_scalar(value[key])\n        return ""\n    if isinstance(value, (list, tuple)):\n        return ", ".join(_alg_scalar(x) for x in value)\n    return str(value)\n'''
+          p.write_text(s, encoding='utf-8')
+
+          if s != original or Path('index.html').read_text(encoding='utf-8') != s:
+              pass
+      - name: Commit source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html main.py
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Repair source sidebar navigation and backend schema compatibility"
+          git push
