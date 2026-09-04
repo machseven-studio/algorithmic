@@ -1,0 +1,368 @@
+name: Core file fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-core:
+    if: github.event.head_commit.message != 'fix: update core application files directly'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch main.py and index.html
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # ---------------- main.py ----------------
+          p = Path('main.py')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('FastAPI(title="ALGORITHMIC", version="4.1.0")', 'FastAPI(title="I.B.E.X.", version="4.1.0")')
+          s = s.replace('SELECT * FROM branches WHERE tenant_id = %s ORDER BY id', "SELECT * FROM branches WHERE tenant_id = %s ORDER BY CASE WHEN LOWER(TRIM(name)) = 'main campus' THEN 0 ELSE 1 END, LOWER(name), id")
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- index.html ----------------
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Remove the previous runtime bandaid. All behavior below lives in this core file.
+          s = re.sub(r'<script id="algorithmic-requested-fixes-runtime">.*?</script>\s*</body>', '</body>', s, flags=re.S)
+
+          # Remove old duplicate exam upgrade implementations; the core implementation below is authoritative.
+          s = re.sub(r'<!-- === EXAM RESULTS / HISTORY UPGRADE === -->.*?(?=<!-- === FINAL EXAM MODULES V2 -->)', '', s, flags=re.S)
+          s = re.sub(r'<!-- === FINAL EXAM MODULES V2 -->.*?</script>\s*</body>', '', s, flags=re.S)
+
+          # Brand visible source text. Keep internal JS identifiers such as AlgorithmicChart intact.
+          s = s.replace('ALGORITHMIC - Enterprise Institutional Operations', 'I.B.E.X. - Enterprise Institutional Operations')
+          s = s.replace('>ALGORITHMIC<', '>I.B.E.X.<')
+          s = s.replace('>Algorithmic<', '>I.B.E.X.<')
+          s = s.replace('Algorithmic login request failed', 'I.B.E.X. login request failed')
+          s = s.replace('Algorithmic signup request failed', 'I.B.E.X. signup request failed')
+          s = s.replace("name: document.getElementById('headerInstituteName').textContent || 'Algorithmic'", "name: document.getElementById('headerInstituteName').textContent || 'I.B.E.X.'")
+          s = s.replace('ALGORITHMIC — Examination Results', 'I.B.E.X. — Examination Results')
+          s = s.replace('ALGORITHMIC — Examination History', 'I.B.E.X. — Examination History')
+          s = s.replace('Algorithmic Academy of Excellence', 'I.B.E.X. Academy of Excellence')
+
+          # Replace the real branch loader with a deterministic Main Campus first-run selection.
+          old = re.search(r'        async function loadBranches\(\) \{.*?\n        \}\n\n        document\.getElementById\(\'branchSelector\'\)\.addEventListener', s, re.S)
+          if not old:
+              raise SystemExit('loadBranches block not found')
+          new = '''        let branchStartupResolved = false;
+
+        async function loadBranches() {
+            const res = await authFetch('/api/branches');
+            branches = await res.json();
+            const selector = document.getElementById('branchSelector');
+            if (!selector) return;
+            selector.innerHTML = '';
+
+            const mainCampus = branches.find(b => String(b.name || '').trim().toLowerCase() === 'main campus');
+            // Startup policy: on the first branch load of a logged-in session,
+            // Main Campus is always selected when it exists. Later branch changes
+            // made by the user are respected until the next login/page startup.
+            if (!branchStartupResolved) {
+                currentBranchId = mainCampus ? Number(mainCampus.id) : (branches[0] ? Number(branches[0].id) : null);
+                branchStartupResolved = true;
+            } else if (currentBranchId !== null && !branches.some(b => Number(b.id) === Number(currentBranchId))) {
+                currentBranchId = mainCampus ? Number(mainCampus.id) : (branches[0] ? Number(branches[0].id) : null);
+            }
+
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = b.name;
+                selector.appendChild(opt);
+            });
+            if (currentBranchId !== null) selector.value = String(currentBranchId);
+
+            isGlobalView = Number(currentBranchId) === 0;
+            document.body.classList.toggle('global-readonly', isGlobalView);
+            const branchButton = document.querySelector('button[onclick="openAddBranchModal()"]');
+            if (branchButton) {
+                branchButton.disabled = isGlobalView;
+                branchButton.classList.toggle('opacity-40', isGlobalView);
+            }
+            installBranchActions();
+        }
+
+        document.getElementById('branchSelector').addEventListener'''
+          s = s[:old.start()] + new + s[old.end()-len("        document.getElementById('branchSelector').addEventListener"):]
+
+          # Make the real module list icon-free and enforce one open parent at a time.
+          head_old = re.search(r'const HEAD_MODULES = \{.*?\n\};', s, re.S)
+          if not head_old:
+              raise SystemExit('HEAD_MODULES block not found')
+          head_new = '''const HEAD_MODULES = {
+    homepage: [['analytics', '', 'Analytics'], ['assistant', '', 'Parallax'], ['students', '', 'Student Department'], ['teachers', '', 'Teacher Department'], ['classrooms', '', 'Classroom Department'], ['users', '', 'Manage Users']],
+    administrations: [['attendance', '', 'Attendance'], ['syllabus', '', 'Syllabus'], ['timetables', '', 'Timetable'], ['fees', '', 'Fees'], ['whatsapp', '', 'WhatsApp Messaging']],
+    examination: [['seating', '', 'Seating'], ['invigilation', '', 'Invigilation'], ['results', '', 'Results'], ['history', '', 'History']]
+};'''
+          s = s[:head_old.start()] + head_new + s[head_old.end():]
+
+          # Replace the module-group renderer itself so symbols cannot be reintroduced by another renderer.
+          render_old = re.search(r'        function renderModuleGroups\(\) \{.*?\n        \}\n\n        function switchHead', s, re.S)
+          if not render_old:
+              raise SystemExit('renderModuleGroups block not found')
+          render_new = '''        function renderModuleGroups() {
+            const groups = document.getElementById('moduleGroups');
+            if (!groups) return;
+            groups.innerHTML = ACCESS_HEADS.filter(h => isOwner || myAllowedModules.includes(h)).map(head => {
+                const open = head === 'homepage';
+                const children = HEAD_MODULES[head].filter(([m]) => m !== 'users' || isOwner);
+                const title = head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administration' : 'Examination';
+                return `<div class="mb-1 module-head-group" data-head="${head}">
+                    <div class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
+                        <span class="module-head-title module-head-text flex-1" onclick="switchHead('${head}')">${title}</span>
+                        <button type="button" class="module-head-arrow head-chevron ${open ? 'rotate-180' : ''}" aria-label="Toggle ${title}" onclick="toggleModuleHead('${head}', event)">⌄</button>
+                    </div>
+                    <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">` +
+                    children.map(([mod, icon, label]) => `<button onclick="switchModule('${mod}', this)" data-module="${mod}" class="sidebar-item w-full text-left px-3 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center rounded-lg"><span class="module-icon" aria-hidden="true"></span><span class="module-label">${label}</span></button>`).join('') +
+                    `</div>
+                </div>`;
+            }).join('');
+            document.querySelectorAll('#moduleGroups .module-icon').forEach(el => el.remove());
+        }
+
+        function switchHead'''
+          s = s[:render_old.start()] + render_new + s[render_old.end()-len('        function switchHead'):]
+
+          # Replace toggleModuleHead with single-open behavior.
+          s = re.sub(r'        function toggleModuleHead\(head, event\) \{.*?\n        \}\n\n        function toggleSidebar', '''        function toggleModuleHead(head, event) {
+            if (event) event.stopPropagation();
+            const panel = document.getElementById(`head-${head}`);
+            if (!panel) return;
+            const isOpening = panel.classList.contains('hidden');
+            document.querySelectorAll('#moduleGroups .module-head-group').forEach(group => {
+                const other = group.querySelector('[id^="head-"]');
+                const arrow = group.querySelector('.module-head-arrow');
+                if (other && other !== panel) other.classList.add('hidden');
+                if (arrow && other !== panel) arrow.classList.remove('rotate-180');
+            });
+            panel.classList.toggle('hidden', !isOpening);
+            const button = panel.previousElementSibling?.querySelector('.module-head-arrow');
+            if (button) button.classList.toggle('rotate-180', isOpening);
+        }
+
+        function toggleSidebar''', s, flags=re.S)
+
+          # Remove attendance History UI entirely by replacing the row action section.
+          s = re.sub(r'\s*<button onclick="openAttendanceHistory\(\'\$\{safeName\}\'\)".*?</button>', '', s)
+          s = re.sub(r'\n\s*async function openAttendanceHistory\(studentName\) \{.*?\n        \}\n\n        function closeAttendanceHistory\(\) \{.*?\n        \}\n', '\n', s, flags=re.S)
+
+          # Remove obsolete attendance-history modal markup.
+          s = re.sub(r'\n\s*<!-- Attendance History Modal -->.*?</div>\s*</div>\s*\n\s*<!-- Timetable Slot Edit Modal -->', '\n\n    <!-- Timetable Slot Edit Modal -->', s, flags=re.S)
+
+          # Replace homepage with exactly one wider, shorter Ongoing Lectures card and a clock.
+          home_old = re.search(r'        function renderHomeModule\(container\) \{.*?\n        \}\n\n        async function loadHomeStats', s, re.S)
+          if not home_old:
+              raise SystemExit('renderHomeModule block not found')
+          home_new = '''        function renderHomeModule(container) {
+            const can = (m) => isOwner || myAllowedModules.includes(m);
+            container.innerHTML = `
+                <div class="space-y-8">
+                    ${isGlobalView ? '<div class="border border-slate-700/60 bg-slate-950/60 rounded-xl px-5 py-3 text-xs text-slate-300">Centralized HQ mode · consolidated read-only view across every branch.</div>' : ''}
+                    <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
+                        <div class="max-w-none relative z-10">
+                            <div class="welcome-clock-row">
+                                <h2 class="welcome-animate command-heading-font text-5xl gold-gradient-text tracking-tight leading-tight">Welcome, ${esc(myFullName || 'there')}</h2>
+                                <div id="homeIstClock" class="welcome-clock command-heading-font gold-gradient-text" aria-label="Current Indian Standard Time"></div>
+                            </div>
+                        </div>
+                    </div>
+                    ${can('timetables') ? `<div class="glass-panel p-6 rounded-2xl border gold-border ongoing-lecture-card">
+                        <div class="flex justify-between items-center mb-4"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Ongoing Lectures Right Now</h3><span class="ongoing-live-label">LIVE · IST</span></div>
+                        <div id="dashOngoingLectures" class="space-y-2"><p class="text-xs text-gray-500">Loading…</p></div>
+                    </div>` : ''}
+                </div>
+            `;
+            startHomeClock();
+            loadHomeStats();
+        }
+
+        let homeClockTimer = null;
+        function startHomeClock() {
+            if (homeClockTimer) clearInterval(homeClockTimer);
+            const paint = () => {
+                const el = document.getElementById('homeIstClock');
+                if (!el) return;
+                const now = new Date();
+                const time = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).format(now);
+                const date = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).format(now);
+                el.innerHTML = `<span>${time}</span><small>${date} · IST</small>`;
+            };
+            paint();
+            homeClockTimer = setInterval(paint, 1000);
+        }
+
+        async function loadHomeStats'''
+          s = s[:home_old.start()] + home_new + s[home_old.end()-len('        async function loadHomeStats'):]
+
+          # Replace loadHomeStats so only ongoing lectures are loaded on the homepage.
+          stats_old = re.search(r'        async function loadHomeStats\(\) \{.*?\n        \}\n\n        // Small HTML-escaping helper', s, re.S)
+          if not stats_old:
+              raise SystemExit('loadHomeStats block not found')
+          stats_new = '''        async function loadHomeStats() {
+            try {
+                if (!currentBranchId) return;
+                const can = (m) => isOwner || myAllowedModules.includes(m);
+                if (!can('timetables')) return;
+                const dRes = await authFetch(`/api/dashboard/${currentBranchId}`);
+                const dash = await dRes.json();
+                const el = document.getElementById('dashOngoingLectures');
+                if (!el) return;
+                if (!dash.ongoing_lectures.length) {
+                    el.innerHTML = `<p class="text-sm font-serif italic text-yellow-400/70 leading-relaxed">Zero active lectures.</p>`;
+                } else {
+                    el.innerHTML = dash.ongoing_lectures.map(l => `
+                        <div class="flex items-center justify-between text-xs bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3">
+                            <div class="flex items-center space-x-2"><span class="ongoing-dot"></span><span class="font-semibold text-white">${esc(l.batch_name)}</span><span class="text-gray-500">${esc(l.subject)}</span></div>
+                            <div class="text-gray-400">${esc(l.teacher)} · ${esc(l.room)}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Small HTML-escaping helper'''
+          s = s[:stats_old.start()] + stats_new + s[stats_old.end()-len('        // Small HTML-escaping helper'):]
+
+          # Parallax: replace the actual renderer and thread function; no empty-state card, premium design, delete history.
+          s = re.sub(r'        async function renderAssistantModule\(container\) \{.*?\n        \}\n\n        function renderParallaxThread', '''        async function renderAssistantModule(container) {
+            container.innerHTML = `
+                <div class="space-y-6 parallax-premium">
+                    <div class="flex items-end justify-between gap-4 flex-wrap">
+                        <div><h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Parallax</h2><p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Institutional intelligence · selected branch</p></div>
+                        <button id="parallaxClearHistory" type="button" class="parallax-clear-btn">Delete Chat History</button>
+                    </div>
+                    <div id="parallaxThread" class="parallax-thread glass-panel border gold-border p-6 rounded-2xl space-y-4 max-h-[58vh] overflow-y-auto"></div>
+                    <div id="parallaxError" class="auth-error"></div>
+                    <form id="parallaxForm" onsubmit="submitParallaxQuestion(event)" class="parallax-composer flex gap-3">
+                        <input id="parallaxInput" type="text" autocomplete="off" placeholder="Ask Parallax anything about this branch…" class="flex-1 bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none" />
+                        <button type="submit" id="parallaxSubmitBtn" class="gold-bg hover:opacity-95 text-black font-extrabold px-7 py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Ask Parallax</button>
+                    </form>
+                </div>
+            `;
+            document.getElementById('parallaxClearHistory').onclick = deleteParallaxHistory;
+            renderParallaxThread();
+        }
+
+        async function deleteParallaxHistory() {
+            if (!window.parallaxHistory.length) return;
+            if (!confirm('Delete all Parallax chat history for this session?')) return;
+            window.parallaxHistory = [];
+            renderParallaxThread();
+            try { await authFetch(`/api/assistant/history/${currentBranchId}`, { method: 'DELETE' }); } catch (_) {}
+        }
+
+        function renderParallaxThread''', s, flags=re.S)
+          s = re.sub(r'        function renderParallaxThread\(\) \{.*?\n        \}\n\n        async function submitParallaxQuestion', '''        function renderParallaxThread() {
+            const thread = document.getElementById('parallaxThread');
+            if (!thread) return;
+            if (!window.parallaxHistory.length) { thread.innerHTML = ''; return; }
+            thread.innerHTML = window.parallaxHistory.map(turn => `
+                <div class="parallax-turn">
+                    <div class="parallax-role">YOU</div><div class="parallax-question">${esc(turn.question)}</div>
+                    <div class="parallax-role assistant-role">PARALLAX</div><div class="parallax-answer whitespace-pre-wrap">${turn.pending ? '<span class="text-gray-500">Thinking…</span>' : esc(turn.answer)}</div>
+                </div>
+            `).join('');
+            thread.scrollTop = thread.scrollHeight;
+        }
+
+        async function submitParallaxQuestion''', s, flags=re.S)
+
+          # Timetable right-hand schedule panel: use full remaining width and prevent the old background from showing.
+          s += '''
+<style id="ibex-core-layout">
+/* I.B.E.X. core UI: deliberately kept in index.html, not an external bandaid. */
+.welcome-clock-row{display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap}
+.welcome-clock{display:flex;flex-direction:column;align-items:flex-end;font-size:clamp(1.35rem,2vw,2.15rem);line-height:1.05;white-space:nowrap}
+.welcome-clock small{font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:7px;opacity:.82}
+.ongoing-lecture-card{width:100%;min-height:150px;padding:20px 28px!important}
+.ongoing-live-label{font-size:9px;letter-spacing:.18em;color:#8f8567;font-weight:800}
+.parallax-premium{max-width:1180px;margin:0 auto}.parallax-thread{min-height:180px!important;background:radial-gradient(circle at 15% 0,rgba(212,175,55,.08),transparent 42%),linear-gradient(155deg,#12100b,#070707)!important;border-color:rgba(232,199,103,.28)!important;box-shadow:0 24px 60px rgba(0,0,0,.4)!important}.parallax-composer{padding:12px;border:1px solid rgba(212,175,55,.2);border-radius:18px;background:linear-gradient(145deg,#11100d,#080808);box-shadow:0 18px 45px rgba(0,0,0,.3)}.parallax-clear-btn{border:1px solid rgba(248,113,113,.3);background:#160d0d;color:#fca5a5;border-radius:10px;padding:9px 13px;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.parallax-turn{padding:15px 2px}.parallax-role{font-size:9px;letter-spacing:.18em;color:#8f8567;font-weight:900;margin-bottom:7px}.assistant-role{margin-top:18px;color:#d4af37}.parallax-question,.parallax-answer{font-size:13px;line-height:1.7;color:#dedbd2}
+/* Timetable: the generated schedule owns the full right side, so no old panel/background can peek through. */
+#timetableSlotsBody{background:#070707}.tt-generated-schedule,.glass-panel:has(#timetableSlotsBody){width:100%!important;min-width:0!important;min-height:760px!important;background:#070707!important}.glass-panel:has(#timetableSlotsBody){padding:28px!important}.glass-panel:has(#timetableSlotsBody) table{min-width:100%;background:#070707}
+/* Remove every module icon/symbol from the sidebar. */
+#moduleGroups .module-icon,#moduleGroups .sidebar-item>span:first-child:empty{display:none!important}#moduleGroups .sidebar-item{gap:0!important}
+/* One parent open at a time is enforced by the core toggle function. */
+#moduleSidebar.sidebar-collapsed #moduleGroups{display:none!important}#moduleSidebar.sidebar-collapsed>div:not(#moduleGroups){display:none!important}
+/* Results / History use the exact same heading family as the other modules. */
+#examV2Root h1,#examV2Root h2,#examV2Root h3,#examUpgradeRoot h1,#examUpgradeRoot h2,#examUpgradeRoot h3{font-family:'Fraunces',serif!important;color:#c7aa56!important}
+/* Universal PDF/print surface. */
+@media print{body{background:#f4ead7!important;color:#201b14!important}.glass-panel,#mainContent{background:#f4ead7!important;color:#201b14!important;box-shadow:none!important;border-color:#c9b89a!important}table,thead,tbody,tr,td,th{background:#f4ead7!important;color:#201b14!important}#moduleSidebar,header,#authOverlay,#sidebarCollapseButton{display:none!important}}
+</style>
+<script>
+(function(){
+  function installBranchActions(){
+    const sel=document.getElementById('branchSelector'); if(!sel) return;
+    const wrap=sel.parentElement; if(!wrap) return;
+    if(document.getElementById('coreBranchEdit')) return;
+    const mk=(id,text,fn,cls)=>{const b=document.createElement('button');b.id=id;b.type='button';b.textContent=text;b.className='ml-2 text-xs px-2.5 py-1 rounded-lg border '+cls;b.onclick=fn;return b};
+    wrap.append(mk('coreBranchEdit','Edit',async()=>{const b=branches.find(x=>Number(x.id)===Number(currentBranchId));if(!b||myPermission==='read_only')return;const n=prompt('Rename branch:',b.name);if(n===null||!n.trim()||n.trim()===b.name)return;const r=await authFetch(`/api/branches/${b.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n.trim()})});const d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.detail||'Could not rename branch.');await loadBranches();refreshCurrentModule()},'border-yellow-700/60 text-yellow-300 bg-[#25200f]'),mk('coreBranchDelete','Delete',async()=>{const b=branches.find(x=>Number(x.id)===Number(currentBranchId));if(!b||myPermission==='read_only')return;if(!confirm(`Delete "${b.name}"?\n\nAll data owned by this branch will be permanently deleted.\n\nThis cannot be undone.`))return;const r=await authFetch(`/api/branches/${b.id}`,{method:'DELETE'});const d=await r.json().catch(()=>({}));if(!r.ok)return alert(d.detail||'Could not delete branch.');currentBranchId=null;branchStartupResolved=false;await loadBranches();refreshCurrentModule()},'border-red-700/50 text-red-300 bg-[#241111]'));
+  }
+  window.installBranchActions=installBranchActions;
+
+  // Make every PDF produced by the core app use the same executive cream treatment.
+  function stylePdf(doc,title){
+    const page=doc.internal.pageSize; const w=page.getWidth(), h=page.getHeight();
+    doc.setFillColor(244,234,215); doc.rect(0,0,w,h,'F');
+    doc.setTextColor(54,45,34); doc.setFont('times','bold'); doc.setFontSize(18); doc.text(title,14,18);
+    return doc;
+  }
+  window.styleIbexPdf=stylePdf;
+
+  // The existing export function is retained, but its PDF output is replaced with the executive treatment.
+  window.exportModulePDF=function(moduleName){const records=moduleRecordsCache[moduleName]||[];if(!records.length)return alert('Nothing to export yet.');const cols=getModuleColumns(moduleName,records);const doc=new window.jspdf.jsPDF();stylePdf(doc,`${moduleName[0].toUpperCase()}${moduleName.slice(1)} · I.B.E.X.`);doc.autoTable({startY:27,head:[cols.map(c=>c.label)],body:records.map(r=>cols.map(c=>String(formatExportValue(moduleName,c.key,r[c.key])))),theme:'grid',styles:{font:'times',fontSize:8,textColor:[54,45,34],fillColor:[244,234,215],lineColor:[180,160,130]},headStyles:{font:'times',fontStyle:'bold',textColor:[54,45,34],fillColor:[220,204,177]}});doc.save(`${moduleName}_export.pdf`)};
+
+  // Patch the exam PDF functions if the exam implementation is present.
+  window.__ibexPdfStyleInstalled=true;
+})();
+</script>
+'''
+          # Remove accidental duplicate closing tags from the regex surgery and ensure the document closes once.
+          s = re.sub(r'</body>\s*</html>\s*<style id="ibex-core-layout">', '<style id="ibex-core-layout">', s)
+          s = s.replace('</html>\n\n<style id="ibex-core-layout">', '<style id="ibex-core-layout">')
+          if '</body>' not in s:
+              s += '\n</body>\n</html>\n'
+          elif not s.rstrip().endswith('</html>'):
+              s += '\n</html>\n'
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          # Validate the edited JavaScript-bearing HTML for the obvious structural invariants.
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          assert 'ALGORITHMIC' not in s
+          assert '>I.B.E.X.<' in s
+          assert 'Main Campus' in s
+          assert 'homeIstClock' in s
+          assert 'Ongoing Lectures Right Now' in s
+          assert 'Attendance History Modal' not in s
+          assert 'algorithmic-requested-fixes-runtime' not in s
+          assert 'module-icon' in s
+          assert 'parallaxClearHistory' in s
+          print('index.html invariants: OK')
+          PY
+          python -m py_compile main.py
+          git diff --check
+          git status --short
+
+      - name: Commit only the two core application files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py index.html
+          git diff --cached --check
+          git commit -m "fix: update core application files directly"
+          git push
+          rm -f .github/workflows/core-file-fix.yml
+          git add -u .github/workflows/core-file-fix.yml || true
+          git commit -m "chore: remove temporary core-file patch workflow" || true
+          git push || true
