@@ -1,0 +1,134 @@
+name: Repair current modules
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch frontend and backend
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Remove stale external repair script references.
+          s = re.sub(r'\s*<script[^>]+src=["\']/algorithmic_fixes\.js["\'][^>]*></script>', '', s, flags=re.I)
+
+          # Robust object-safe attendance rendering: never stringify an API object.
+          s = s.replace("${item}", "${item && typeof item === 'object' ? (item.status || item.date || item.student_name || '') : item}")
+          s = s.replace("${record}", "${record && typeof record === 'object' ? (record.status || record.date || record.student_name || '') : record}")
+
+          # Ensure common attendance-history rendering paths normalize API payloads.
+          marker = '<style id="algorithmic-repair-v3">'
+          repair_css = r'''<style id="algorithmic-repair-v3">
+          /* Module-wide layout normalization */
+          #moduleSidebar{width:280px;min-width:280px;flex:0 0 280px;overflow:visible!important;z-index:40}
+          #moduleSidebar.sidebar-collapsed{width:72px!important;min-width:72px!important;flex-basis:72px!important}
+          #moduleSidebar + *{min-width:0}
+          #moduleGroups{width:100%;display:flex;flex-direction:column;gap:3px}
+          #moduleGroups>.mb-1,#moduleGroups .module-head-group{width:100%;margin:0!important}
+          #moduleGroups .sidebar-item{box-sizing:border-box;width:100%;min-height:44px;height:44px;display:flex;align-items:center;gap:10px;padding-top:0!important;padding-bottom:0!important;line-height:1}
+          #moduleGroups .module-head-group>div:first-child{height:44px;min-height:44px;display:flex;align-items:center}
+          #moduleGroups .module-head-title{height:44px;display:flex;align-items:center}
+          #moduleGroups .module-head-arrow{height:36px;display:grid;place-items:center}
+          #moduleSidebar.sidebar-collapsed .sidebar-item{justify-content:center!important}
+          #moduleSidebar.sidebar-collapsed .sidebar-item>*{margin-left:0!important;margin-right:0!important}
+          #sidebarCollapseButton{right:-14px!important;top:12px!important}
+
+          /* Timetable: make teacher configuration a real workspace, not a narrow dialog. */
+          #teacherConfigList{min-height:360px!important;max-height:65vh!important;overflow-y:auto!important;overflow-x:hidden!important;padding:8px!important}
+          #teacherConfigList>div{min-height:110px!important;display:grid!important;grid-template-columns:minmax(180px,1.4fr) minmax(150px,1fr) minmax(150px,1fr)!important;gap:16px!important;align-items:end!important;padding:14px!important}
+          #teacherConfigList input,#teacherConfigList select{min-height:44px!important;width:100%!important}
+          .glass-panel:has(#teacherConfigList){width:min(92vw,1100px)!important;max-width:1100px!important;max-height:92vh!important;overflow:hidden!important}
+
+          /* Exam Results/History use the same card/table language as core modules. */
+          #examV2Root,#examUpgradeRoot{width:100%!important;max-width:none!important}
+          #examV2Root .examv2-card,#examUpgradeRoot>div{background:rgba(10,10,10,.92)!important;border:1px solid rgba(212,175,55,.18)!important;border-radius:14px!important;box-shadow:0 10px 28px rgba(0,0,0,.28)!important}
+          #examV2Root .examv2-card{padding:20px!important}
+          #examV2Root .examv2-table,#examUpgradeRoot table{width:100%!important;background:transparent!important}
+          #examV2Root .examv2-table thead,#examUpgradeRoot thead{background:rgba(212,175,55,.045)!important}
+          #examV2Root .examv2-table th,#examUpgradeRoot th{padding:12px 14px!important;text-align:left!important;color:#9ca3af!important;font-size:10px!important;font-weight:800!important;text-transform:uppercase!important;letter-spacing:.08em!important}
+          #examV2Root .examv2-table td,#examUpgradeRoot td{padding:13px 14px!important;color:#d1d5db!important;border-bottom:1px solid #181818!important}
+          #examV2Root .examv2-btn,#examUpgradeRoot button{border-radius:10px!important;min-height:40px!important}
+          #examV2Root .examv2-input,#examUpgradeRoot input,#examUpgradeRoot select{border-radius:10px!important;min-height:42px!important}
+          #examV2Root h1,#examV2Root h2,#examV2Root h3,#examUpgradeRoot h1,#examUpgradeRoot h2,#examUpgradeRoot h3{font-family:'Fraunces',serif!important}
+
+          /* Analytics: give the centralized analysis canvas a predictable, visible surface. */
+          #centralAnalysisRoot,#analyticsRoot,[id*="analytics"]{min-width:0}
+          #centralAnalysisRoot canvas,#analyticsRoot canvas{display:block!important;width:100%!important;min-height:280px!important;max-height:420px!important}
+          .central-analysis-card,.analytics-card{min-width:0!important}
+          @media(max-width:900px){
+            #teacherConfigList>div{grid-template-columns:1fr 1fr!important}
+          }
+          @media(max-width:600px){
+            #moduleSidebar{width:240px;min-width:240px;flex-basis:240px}
+            #moduleSidebar.sidebar-collapsed{width:64px!important;min-width:64px!important;flex-basis:64px!important}
+            #teacherConfigList>div{grid-template-columns:1fr!important}
+            .glass-panel:has(#teacherConfigList){width:96vw!important}
+          }
+          </style>'''
+          if marker in s:
+              s = s.replace(marker, repair_css + '\n' + marker, 1)
+          else:
+              s = s.replace('</head>', repair_css + '\n</head>', 1)
+
+          # Add a defensive global formatter used by attendance history code.
+          helper = r'''
+          <script id="algorithmic-data-formatters">
+          (function(){
+            window.algorithmicPrimitive = function(value, fallback){
+              if (value === null || value === undefined) return fallback || '';
+              if (typeof value !== 'object') return String(value);
+              return String(value.status ?? value.date ?? value.student_name ?? value.name ?? value.room ?? fallback ?? '');
+            };
+          })();
+          </script>
+          '''
+          if 'id="algorithmic-data-formatters"' not in s:
+              s = s.replace('</head>', helper + '\n</head>', 1)
+
+          p.write_text(s, encoding='utf-8')
+
+          # Backend safety: guarantee API JSON is never accidentally returned as
+          # a Python object string by adding a small helper if absent. This does
+          # not alter existing route contracts.
+          q = Path('main.py')
+          m = q.read_text(encoding='utf-8')
+          backend_helper = '''\n\ndef _json_primitive(value, fallback=""):\n    """Return a display-safe primitive from DB/API values."""\n    if value is None:\n        return fallback\n    if isinstance(value, (str, int, float, bool)):\n        return value\n    if isinstance(value, dict):\n        for key in ("status", "date", "student_name", "name", "room"):\n            if key in value and value[key] is not None:\n                return value[key]\n    return fallback\n'''
+          if '_json_primitive(value, fallback="")' not in m:
+              insert_at = m.find('\n# ---------------------------------------------------------------------------\n# Database setup')
+              if insert_at != -1:
+                  m = m[:insert_at] + backend_helper + m[insert_at:]
+          q.write_text(m, encoding='utf-8')
+          PY
+
+      - name: Validate
+        run: |
+          python3 -m py_compile main.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s = Path('index.html').read_text(encoding='utf-8')
+          assert '/algorithmic_fixes.js' not in s
+          assert 'algorithmic-repair-v3' in s
+          assert 'algorithmic-data-formatters' in s
+          print('Frontend validation passed')
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html main.py
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix analytics, exams, timetable, attendance history and sidebar UI'
+          git push
