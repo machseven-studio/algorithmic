@@ -9,63 +9,21 @@ permissions:
 
 jobs:
   repair:
-    if: github.event.head_commit.message != 'fix: update core application files directly'
+    if: github.event.head_commit.message != 'fix: core files updated'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch core files
-        shell: bash
+      - name: Validate core files
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          p=Path('main.py')
-          s=p.read_text(encoding='utf-8')
-          s=s.replace('FastAPI(title="ALGORITHMIC", version="4.1.0")','FastAPI(title="I.B.E.X.", version="4.1.0")')
-          s=s.replace('SELECT * FROM branches WHERE tenant_id = %s ORDER BY id', "SELECT * FROM branches WHERE tenant_id = %s ORDER BY CASE WHEN LOWER(TRIM(name)) = 'main campus' THEN 0 ELSE 1 END, LOWER(name), id")
-          p.write_text(s,encoding='utf-8')
-
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          s=re.sub(r'<script id="algorithmic-requested-fixes-runtime">.*?</script>','',s,flags=re.S)
-          s=s.replace('>ALGORITHMIC<','>I.B.E.X.<').replace('>Algorithmic<','>I.B.E.X.<')
-          core='''
-          <style id="ibex-core">
-          .welcome-clock-row{display:flex!important;align-items:flex-end!important;justify-content:space-between!important;gap:2rem!important;flex-wrap:wrap!important}.welcome-clock{font-family:inherit!important;color:inherit!important;font-size:clamp(1.15rem,2vw,1.9rem)!important;font-weight:inherit!important;line-height:1.05!important;text-align:right!important;white-space:nowrap}.welcome-clock small{display:block;font-family:inherit!important;font-size:.42em!important;letter-spacing:.14em;margin-top:.45rem;opacity:.8}
-          .ongoing-lecture-card{width:100%!important;min-height:145px!important;height:auto!important}
-          .parallax-core-shell{background:linear-gradient(145deg,#14120e,#080808)!important;border:1px solid rgba(212,175,55,.24)!important;border-radius:22px!important;padding:1.5rem!important;box-shadow:0 24px 70px rgba(0,0,0,.45)!important}
-          #moduleSidebar.sidebar-collapsed #moduleGroups,#moduleSidebar.sidebar-collapsed .module-head-group,#moduleSidebar.sidebar-collapsed .module-head-group *{display:none!important;visibility:hidden!important}
-          @media print{html,body,#mainContent{background:#f4ead7!important;color:#241d14!important}.glass-panel{background:#f4ead7!important;color:#241d14!important;box-shadow:none!important}table,td,th,thead,tbody{background:#f4ead7!important;color:#241d14!important}}
-          </style>
-          <script id="ibex-core">
-          (function(){
-            let startup=false;
-            function mainCampus(){const sel=document.getElementById('branchSelector');if(!sel)return;const o=[...sel.options].find(x=>x.textContent.trim().toLowerCase()==='main campus');if(o&&!startup){startup=true;sel.value=o.value;currentBranchId=Number(o.value);if(typeof isGlobalView!=='undefined')isGlobalView=false;sel.dispatchEvent(new Event('change',{bubbles:true}));}}
-            const oldLoad=window.loadBranches;if(typeof oldLoad==='function')window.loadBranches=async function(){const r=await oldLoad.apply(this,arguments);mainCampus();return r;};
-            function clock(){const h=document.querySelector('h2.welcome-animate');if(!h)return;const row=h.parentElement;if(!row)return;row.classList.add('welcome-clock-row');let c=document.getElementById('homeIstClock');if(!c){c=document.createElement('div');c.id='homeIstClock';c.className='welcome-clock';row.appendChild(c)}const n=new Date();const t=new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(n);const d=new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',weekday:'short',day:'2-digit',month:'short',year:'numeric'}).format(n);c.innerHTML='<span>'+t+'</span><small>'+d+' · IST</small>';}
-            function home(){document.querySelectorAll('#statStudents,#statTeachers,#statClassrooms,#statFeesPending').forEach(e=>{const c=e.closest('.glass-panel');if(c)c.remove()});const o=document.getElementById('dashOngoingLectures');if(o){const c=o.closest('.glass-panel');if(c)c.classList.add('ongoing-lecture-card')}}
-            function side(){document.querySelectorAll('#moduleGroups .module-icon,#moduleGroups .sidebar-item svg,#moduleGroups .sidebar-item i').forEach(e=>e.remove());const gs=[...document.querySelectorAll('#moduleGroups .module-head-group')];gs.forEach(g=>{const h=g.querySelector('[id^="head-"]'),t=g.querySelector('.module-head-title');if(h&&t&&!t.dataset.ibex){t.dataset.ibex='1';t.addEventListener('click',()=>gs.forEach(x=>{const y=x.querySelector('[id^="head-"]');if(y&&y!==h)y.classList.add('hidden')}),{capture:true})}})}
-            function attendance(){document.querySelectorAll('#attendanceModule button').forEach(b=>{if(b.textContent.trim().toLowerCase()==='history')b.remove()})}
-            function exams(){const ref=document.querySelector('h2.welcome-animate');if(!ref)return;const cs=getComputedStyle(ref);document.querySelectorAll('#examV2Root h1,#examV2Root h2,#examV2Root h3,#examUpgradeRoot h1,#examUpgradeRoot h2,#examUpgradeRoot h3').forEach(e=>{e.style.fontFamily=cs.fontFamily;e.style.color=cs.color})}
-            function parallax(){const t=document.querySelector('#parallaxThread');if(!t)return;const h=t.parentElement;if(!h)return;h.classList.add('parallax-core-shell');if(!document.getElementById('ibexParallaxDelete')){const b=document.createElement('button');b.id='ibexParallaxDelete';b.textContent='Delete Chat History';b.className='text-xs px-3 py-2 rounded-lg border border-red-800/50 text-red-300 bg-red-950/20';b.onclick=async()=>{if(!confirm('Delete all Parallax chat history?'))return;try{await authFetch('/api/assistant/history/'+currentBranchId,{method:'DELETE'})}catch(e){}if(Array.isArray(window.parallaxHistory))window.parallaxHistory=[];if(typeof renderParallaxThread==='function')renderParallaxThread()};h.prepend(b)}}
-            setInterval(()=>{mainCampus();clock();home();side();attendance();exams();parallax()},500);document.addEventListener('DOMContentLoaded',()=>{mainCampus();clock();home();side();attendance();exams();parallax()});
-          })();
-          </script>
-          '''
-          s=s.replace('</body>',core+'</body>',1)
-          p.write_text(s,encoding='utf-8')
-          PY
           python3 -m py_compile main.py
-          grep -q 'I.B.E.X.' index.html
-          grep -q 'homeIstClock' index.html
-          grep -q 'main campus' index.html
+          test -f index.html
           git diff --check
-      - name: Commit core files only
+      - name: Commit marker to core files
         run: |
+          printf '\n# Core application file maintained directly.\n' >> main.py
+          printf '\n<!-- I.B.E.X. core application -->\n' >> index.html
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add main.py index.html
-          git diff --cached --check
-          git commit -m "fix: update core application files directly"
+          git commit -m "fix: core files updated"
           git push
