@@ -2401,9 +2401,156 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 })();
 </script>
 
-<script src="/algorithmic_chart_boot.js"></script>
-<script src="/algorithmic_fixes.js"></script>
-<script src="/algorithmic_final.js"></script>
-<script src="/final_frontend_repairs.js"></script>
+
+<!-- Algorithmic navigation/UI repair: loaded after the original app so it augments
+     rather than replaces the existing module registry. -->
+<script>
+(function () {
+  'use strict';
+
+  function installAlgorithmicNavigationFix() {
+    const sidebar = document.getElementById('moduleSidebar');
+    const groups = document.getElementById('moduleGroups');
+    if (!sidebar || !groups) return;
+
+    // Remove only duplicate/legacy standalone HISTORY and SEATING buttons.
+    groups.querySelectorAll(':scope > button, :scope > a').forEach(function (el) {
+      const text = (el.textContent || '').trim().toLowerCase();
+      if (text === 'history' || text === 'seating') el.remove();
+    });
+
+    // Ensure every top-level heading has an arrow. Homepage gets an arrow too.
+    groups.querySelectorAll('.module-head-group').forEach(function (group) {
+      const heading = group.querySelector(':scope > div:first-child');
+      if (!heading) return;
+
+      let arrow = heading.querySelector('.module-head-arrow');
+      if (!arrow) {
+        arrow = document.createElement('button');
+        arrow.type = 'button';
+        arrow.className = 'module-head-arrow';
+        arrow.setAttribute('aria-label', 'Toggle module group');
+        arrow.style.cssText =
+          'margin-left:auto;background:transparent;border:0;color:#9ca3af;' +
+          'padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;';
+        heading.appendChild(arrow);
+      }
+
+      const children =
+        group.querySelector(':scope > #head-homepage, :scope > #head-administrations, :scope > #head-examination') ||
+        group.querySelector(':scope > .module-children, :scope > .children');
+
+      function sync() {
+        if (!children) {
+          arrow.textContent = '⌄';
+          return;
+        }
+        arrow.textContent = children.classList.contains('hidden') ? '⌄' : '⌃';
+      }
+
+      if (!arrow.dataset.algorithmicBound) {
+        arrow.dataset.algorithmicBound = '1';
+        arrow.addEventListener('click', function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (children) children.classList.toggle('hidden');
+          sync();
+        });
+      }
+      sync();
+    });
+
+    // Collapse completely; leave only the floating arrow.
+    let toggle = document.getElementById('sidebarCollapseButton');
+    if (!toggle) {
+      toggle = document.createElement('button');
+      toggle.id = 'sidebarCollapseButton';
+      toggle.type = 'button';
+      sidebar.appendChild(toggle);
+    }
+    toggle.setAttribute('aria-label', 'Collapse navigation');
+    toggle.title = 'Collapse navigation';
+    toggle.textContent = sidebar.classList.contains('algorithmic-sidebar-collapsed') ? '›' : '‹';
+
+    if (!toggle.dataset.algorithmicBound) {
+      toggle.dataset.algorithmicBound = '1';
+      toggle.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const collapsed = sidebar.classList.toggle('algorithmic-sidebar-collapsed');
+        toggle.textContent = collapsed ? '›' : '‹';
+        toggle.title = collapsed ? 'Open navigation' : 'Collapse navigation';
+        toggle.setAttribute('aria-label', toggle.title);
+      });
+    }
+  }
+
+  function installStyles() {
+    if (document.getElementById('algorithmic-navigation-repair-style')) return;
+    const style = document.createElement('style');
+    style.id = 'algorithmic-navigation-repair-style';
+    style.textContent = `
+      #moduleSidebar {
+        position:relative;
+        transition:width .2s ease,min-width .2s ease,padding .2s ease;
+        overflow:visible !important;
+      }
+      #moduleSidebar.algorithmic-sidebar-collapsed {
+        width:0 !important;
+        min-width:0 !important;
+        padding-left:0 !important;
+        padding-right:0 !important;
+        border-left:0 !important;
+        border-right:0 !important;
+        overflow:visible !important;
+      }
+      #moduleSidebar.algorithmic-sidebar-collapsed > *:not(#sidebarCollapseButton) {
+        display:none !important;
+      }
+      #sidebarCollapseButton {
+        position:absolute !important;
+        top:10px !important;
+        right:-14px !important;
+        z-index:99999 !important;
+        width:28px !important;
+        height:28px !important;
+        border-radius:50% !important;
+        background:#0b0b0b !important;
+        color:#d4af37 !important;
+        border:1px solid rgba(212,175,55,.55) !important;
+        cursor:pointer !important;
+        line-height:24px !important;
+        padding:0 !important;
+      }
+      #moduleGroups {
+        display:flex !important;
+        flex-direction:column !important;
+        align-items:stretch !important;
+      }
+      .module-head-group { width:100% !important; }
+      .module-head-arrow { flex:0 0 auto !important; }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function boot() {
+    installStyles();
+    installAlgorithmicNavigationFix();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  // The app can rerender the sidebar when modules change.
+  const observer = new MutationObserver(function () {
+    installAlgorithmicNavigationFix();
+  });
+  observer.observe(document.body, {childList:true, subtree:true});
+})();
+</script>
+
 </body>
 </html>
