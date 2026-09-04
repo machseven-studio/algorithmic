@@ -110,6 +110,15 @@
         @media (min-width: 1024px) { #mainContent { padding: 2.5rem 3rem; } }
     .head-chevron { transition: transform .15s ease; } .rotate-180 { transform: rotate(180deg); }
     </style>
+
+<style id="algorithmic-final-layout">
+#headerInstituteName{font-size:clamp(2.4rem,4.2vw,4.8rem)!important;max-width:min(70vw,1100px)!important}
+#moduleSidebar{position:relative!important;transition:width .18s ease,min-width .18s ease!important}
+#moduleSidebar.sidebar-collapsed{width:0!important;min-width:0!important;padding:0!important;border-width:0!important}
+#moduleSidebar.sidebar-collapsed>*:not(#sidebarCollapseButton):not(#algorithmicSidebarToggle){display:none!important}
+#moduleSidebar.sidebar-collapsed #sidebarCollapseButton,#moduleSidebar.sidebar-collapsed #algorithmicSidebarToggle{display:block!important;visibility:visible!important;opacity:1!important;right:-30px!important}
+.module-head-group{width:100%!important}.module-head-group>div:first-child{width:100%!important}.module-head-arrow{pointer-events:auto!important}
+</style>
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -2395,5 +2404,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 <script src="/algorithmic_chart_boot.js"></script>
 <script src="/algorithmic_fixes.js"></script>
 <script src="/algorithmic_final.js"></script>
+<script src="/final_frontend_repairs.js"></script>
 </body>
 </html>
