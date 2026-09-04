@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   repair:
-    if: github.event.head_commit.message != 'fix: apply requested changes directly to core files'
+    if: github.event.head_commit.message != 'fix: update core application files directly'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,8 +49,7 @@ jobs:
             function attendance(){document.querySelectorAll('#attendanceModule button').forEach(b=>{if(b.textContent.trim().toLowerCase()==='history')b.remove()})}
             function exams(){const ref=document.querySelector('h2.welcome-animate');if(!ref)return;const cs=getComputedStyle(ref);document.querySelectorAll('#examV2Root h1,#examV2Root h2,#examV2Root h3,#examUpgradeRoot h1,#examUpgradeRoot h2,#examUpgradeRoot h3').forEach(e=>{e.style.fontFamily=cs.fontFamily;e.style.color=cs.color})}
             function parallax(){const t=document.querySelector('#parallaxThread');if(!t)return;const h=t.parentElement;if(!h)return;h.classList.add('parallax-core-shell');if(!document.getElementById('ibexParallaxDelete')){const b=document.createElement('button');b.id='ibexParallaxDelete';b.textContent='Delete Chat History';b.className='text-xs px-3 py-2 rounded-lg border border-red-800/50 text-red-300 bg-red-950/20';b.onclick=async()=>{if(!confirm('Delete all Parallax chat history?'))return;try{await authFetch('/api/assistant/history/'+currentBranchId,{method:'DELETE'})}catch(e){}if(Array.isArray(window.parallaxHistory))window.parallaxHistory=[];if(typeof renderParallaxThread==='function')renderParallaxThread()};h.prepend(b)}}
-            setInterval(()=>{mainCampus();clock();home();side();attendance();exams();parallax()},500);
-            document.addEventListener('DOMContentLoaded',()=>{mainCampus();clock();home();side();attendance();exams();parallax()});
+            setInterval(()=>{mainCampus();clock();home();side();attendance();exams();parallax()},500);document.addEventListener('DOMContentLoaded',()=>{mainCampus();clock();home();side();attendance();exams();parallax()});
           })();
           </script>
           '''
@@ -62,7 +61,6 @@ jobs:
           grep -q 'homeIstClock' index.html
           grep -q 'main campus' index.html
           git diff --check
-          git status --short
       - name: Commit core files only
         run: |
           git config user.name "github-actions[bot]"
