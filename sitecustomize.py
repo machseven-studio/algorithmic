@@ -1,7 +1,5 @@
-# Render/Python startup safety net for the authentication frontend.
-# Python imports sitecustomize automatically when this repository is on sys.path.
-# The repair is idempotent and runs before uvicorn imports main.py.
+# I.B.E.X. startup patcher. Runs before uvicorn imports main.py.
 try:
-    import repair_auth  # noqa: F401
+    import ibex_patch  # noqa: F401
 except Exception as exc:
-    print(f"Algorithmic auth repair warning: {exc}")
+    print(f'I.B.E.X. startup patch warning: {exc}')
