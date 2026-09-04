@@ -1,0 +1,343 @@
+name: Algorithmic source refactor
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refactor source
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          # ---------------- main.py ----------------
+          p = Path('main.py')
+          s = p.read_text(encoding='utf-8')
+
+          if 'import random\n' not in s:
+              s = s.replace('import os\n', 'import os\nimport random\n', 1)
+
+          # Remove the obsolete external fixes route completely.
+          s = re.sub(r'\n@app\.get\("/algorithmic_fixes\.js"\)\ndef algorithmic_fixes\(\):\n    return FileResponse\(Path\(__file__\)\.with_name\("algorithmic_fixes\.js"\), media_type="application/javascript"\)\n?', '\n', s)
+
+          # Seating layout is intentionally just a grid mapper. Randomization and
+          # room-to-room pool management happen in _generate_seating_impl.
+          seating_fn = '''def _build_seating_layout(students, rows, columns):
+    """Map an already-randomized student pool onto a rows x columns grid."""
+    capacity = rows * columns
+    selected = students[:capacity]
+    assignments = []
+    for index, student in enumerate(selected):
+        assignments.append({
+            "row": (index // columns) + 1,
+            "column": (index % columns) + 1,
+            "student_id": student["id"],
+            "name": student["name"],
+            "batch": student["batch"],
+            "roll_number": student["roll_number"],
+        })
+    return assignments
+
+
+'''
+          s = re.sub(r'def _build_seating_layout\(students, rows, columns\):.*?(?=\n@app\.get\("/api/seating/\{branch_id\}"\))', seating_fn, s, flags=re.S)
+
+          # Replace the room/student portion of seating generation. Rooms are
+          # institute-scoped rather than branch/department-scoped, while students
+          # remain scoped to the selected branch. Existing rooms for the same exam
+          # consume the remaining student pool so repeated generation cannot duplicate
+          # a student across rooms.
+          old = re.search(r'    conn = get_conn\(\)\n    room_cur = conn\.cursor\(\); room_cur\.execute\("SELECT room_no, capacity FROM classrooms WHERE branch_id = %s AND room_no = %s", \(req\.branch_id, room_number\)\); room = room_cur\.fetchone\(\).*?    assignments = _build_seating_layout\(student_rows, req\.rows, req\.columns\)\n', s, flags=re.S)
+          if not old:
+              raise SystemExit('Could not locate seating room/student block')
+          new = '''    conn = get_conn()
+
+    # A classroom is a physical resource of the institute, not a department-
+    # locked resource. Permit any registered room belonging to this institute.
+    room_cur = conn.cursor()
+    room_cur.execute(
+        """SELECT c.room_no, c.capacity
+           FROM classrooms c
+           JOIN branches b ON b.id = c.branch_id
+           WHERE b.tenant_id = %s AND c.room_no = %s
+           LIMIT 1""",
+        (institute.id, room_number),
+    )
+    room = room_cur.fetchone()
+    if not room:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Selected exam room is not registered for this institute.")
+
+    requested_capacity = req.rows * req.columns
+    room_capacity = int(room[1] or 0)
+    if room_capacity <= 0:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Selected room has no valid seating capacity.")
+    if requested_capacity > room_capacity:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Grid capacity ({requested_capacity}) exceeds room capacity ({room_capacity}).")
+
+    # Regenerating an existing room should replace that room's allocation, so
+    # first remove its old assignment from the pool of occupied students.
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT assignments_json FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s",
+        (req.branch_id, req.exam_date, room_number),
+    )
+    old_room = cursor.fetchone()
+    old_student_ids = set()
+    if old_room:
+        try:
+            old_student_ids = {int(a["student_id"]) for a in json.loads(old_room["assignments_json"] or "[]") if a.get("student_id") is not None}
+        except (TypeError, ValueError, KeyError):
+            old_student_ids = set()
+    cursor.execute(
+        "DELETE FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s",
+        (req.branch_id, req.exam_date, room_number),
+    )
+
+    # Pull every student from the selected branch, remove students already
+    # assigned to other rooms for this exam, then randomize the remaining pool.
+    cursor.execute(
+        """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
+           FROM students WHERE branch_id = %s""",
+        (req.branch_id,),
+    )
+    student_rows = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute(
+        """SELECT assignments_json FROM exam_seatings
+           WHERE branch_id = %s AND exam_date = %s""",
+        (req.branch_id, req.exam_date),
+    )
+    assigned_elsewhere = set()
+    for row in cursor.fetchall():
+        try:
+            assigned_elsewhere.update(
+                int(a["student_id"])
+                for a in json.loads(row["assignments_json"] or "[]")
+                if a.get("student_id") is not None
+            )
+        except (TypeError, ValueError, KeyError):
+            continue
+    assigned_elsewhere.difference_update(old_student_ids)
+
+    remaining_students = [student for student in student_rows if int(student["id"]) not in assigned_elsewhere]
+    random.shuffle(remaining_students)
+    if len(remaining_students) < requested_capacity:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {len(remaining_students)} unassigned students remain for this exam; {requested_capacity} seats were requested.",
+        )
+    assignments = _build_seating_layout(remaining_students, req.rows, req.columns)
+'''
+          s = s[:old.start()] + new + s[old.end():]
+
+          # The old delete/insert block follows the replaced section. Keep it,
+          # but ensure it starts from the current cursor and does not duplicate
+          # the delete already performed above.
+          s = s.replace('    cursor = conn.cursor()\n    cursor.execute(\n        """DELETE FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s""",\n        (req.branch_id, req.exam_date, room_number),\n    )\n    cursor.execute(\n        """INSERT INTO exam_seatings', '    cursor.execute(\n        """INSERT INTO exam_seatings', 1)
+
+          # Normalize the attendance history API to explicit primitive fields.
+          hist = re.search(r'(@app\.get\("/api/attendance/history/\{branch_id\}"\).*?)(?=\n# -{3,}\n)', s, flags=re.S)
+          if hist:
+              block = hist.group(1)
+              block = re.sub(
+                  r'    history = \[dict\(r\) for r in cursor\.fetchall\(\)\]',
+                  '    history = [{"date": str(r["date"] or ""), "status": str(r["status"] or "")} for r in cursor.fetchall()]',
+                  block,
+              )
+              s = s[:hist.start(1)] + block + s[hist.end(1):]
+
+          p.write_text(s, encoding='utf-8')
+
+          # ---------------- index.html ----------------
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Single frontend file: no repair/patch JS files are loaded.
+          s = re.sub(r'\s*<script src="/(?:algorithmic_fixes|algorithmic_chart_boot|algorithmic_final|final_frontend_repairs|algorithmic_nav_repair)\.js"></script>', '', s)
+
+          # Canonical Chart.js CDN, loaded in <head> before the application script.
+          s = re.sub(r'<script src="https://cdnjs\.cloudflare\.com/ajax/libs/Chart\.js/4\.4\.4/chart\.umd\.min\.js"></script>', '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>', s, count=1)
+
+          # Keep all Chart creation behind one availability check. This is placed
+          # inside the central analytics renderer before any `new Chart(...)` call.
+          guard = """            if (!window.Chart) {\n                const error = document.getElementById('centralAnalyticsError');\n                if (error) error.textContent = 'Analytics charts are unavailable because Chart.js did not load.';\n                return;\n            }\n\n"""
+          marker = "            const gridColor = 'rgba(212,175,55,0.12)';"
+          if guard not in s and marker in s:
+              s = s.replace(marker, guard + marker, 1)
+
+          # Primitive attendance history rendering; never interpolate an object.
+          s = s.replace(
+              "const date = typeof h.date === 'object' ? JSON.stringify(h.date) : String(h.date ?? '');",
+              "const date = String(h?.date ?? '');",
+          )
+          s = s.replace(
+              "const status = typeof h.status === 'object' ? (h.status?.status || h.status?.value || JSON.stringify(h.status)) : String(h.status ?? '');",
+              "const status = String(h?.status ?? '');",
+          )
+
+          # Timetable teacher workspace: wider panel, larger scroll area, and a
+          # responsive grid for each teacher's controls.
+          timetable_css = r'''
+<style id="algorithmic-timetable-layout">
+#teacherConfigList{min-height:220px;max-height:55vh!important;overflow-y:auto;padding-right:.5rem}
+#teacherConfigList>div{min-height:84px}
+#teacherConfigList>div>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+#ttTimingRows{max-height:55vh;overflow-y:auto;padding-right:.5rem}
+.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;max-height:90vh;overflow:hidden}
+@media(max-width:768px){#teacherConfigList>div>div:last-child{grid-template-columns:1fr}.glass-panel:has(#teacherConfigList){width:95%!important}}
+</style>
+'''
+          if 'id="algorithmic-timetable-layout"' not in s:
+              s = s.replace('</head>', timetable_css + '\n</head>', 1)
+
+          # Strict vertical sidebar axis and a real collapse/expand control.
+          sidebar_css = r'''
+<style id="algorithmic-sidebar-layout">
+#moduleSidebar{display:flex;flex-direction:column;align-items:stretch;position:relative!important;transition:width .18s ease,min-width .18s ease,padding .18s ease!important}
+#moduleGroups{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%}
+#moduleGroups>.mb-1,#moduleGroups .module-head-group{width:100%}
+#moduleGroups .sidebar-item{width:100%;min-height:42px;display:flex;align-items:center}
+#moduleSidebar.sidebar-collapsed{width:72px!important;min-width:72px!important}
+#moduleSidebar.sidebar-collapsed .sidebar-label,#moduleSidebar.sidebar-collapsed .module-label,#moduleSidebar.sidebar-collapsed .module-head-title,#moduleSidebar.sidebar-collapsed .module-head-text{display:none!important}
+#moduleSidebar.sidebar-collapsed .sidebar-item{justify-content:center;padding-left:0!important;padding-right:0!important;border-left-width:0!important}
+#sidebarCollapseButton{position:absolute;top:10px;right:-14px;z-index:30;width:28px;height:28px;border:1px solid rgba(212,175,55,.38);border-radius:999px;background:#0b0b0b;color:#e8c767;font-size:18px;line-height:24px;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer}
+#sidebarCollapseButton:hover{border-color:#d4af37}
+#moduleSidebar.sidebar-collapsed #sidebarCollapseButton{right:-14px}
+.module-head-arrow{flex:0 0 auto;cursor:pointer}
+.module-head-title{cursor:pointer}
+</style>
+'''
+          if 'id="algorithmic-sidebar-layout"' not in s:
+              s = s.replace('</head>', sidebar_css + '\n</head>', 1)
+
+          # Add the collapse button directly to the canonical sidebar.
+          if 'id="sidebarCollapseButton"' not in s:
+              needle = '    <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>'
+              button = '    <button id="sidebarCollapseButton" type="button" aria-label="Collapse sidebar" title="Collapse sidebar" onclick="toggleSidebar()">‹</button>\n'
+              if needle not in s:
+                  raise SystemExit('Sidebar insertion point not found')
+              s = s.replace(needle, button + needle, 1)
+
+          # Replace head navigation with text-as-navigation + arrow-as-toggle.
+          old_head = re.search(r'function renderModuleGroups\(\) \{.*?\n        \}\n\n        function ', s, flags=re.S)
+          if not old_head:
+              raise SystemExit('renderModuleGroups block not found')
+          replacement = r'''function renderModuleGroups() {
+            const groups = document.getElementById('moduleGroups');
+            if (!groups) return;
+            groups.innerHTML = ACCESS_HEADS.filter(h => isOwner || myAllowedModules.includes(h)).map(head => {
+                const open = head === 'homepage' && isOwner;
+                const children = HEAD_MODULES[head].filter(([m]) => m !== 'users' || isOwner);
+                const title = head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administrations' : 'Examination';
+                return `<div class="mb-1 module-head-group" data-head="${head}">
+                    <div class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
+                        <span class="module-head-title module-head-text flex-1" onclick="switchHead('${head}')">${title}</span>
+                        <button type="button" class="module-head-arrow head-chevron ${open ? 'rotate-180' : ''}" aria-label="Toggle ${title}" onclick="toggleModuleHead('${head}', event)">⌄</button>
+                    </div>
+                    <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">` +
+                    children.map(([m, icon, label]) => `<button onclick="switchModule('${m}', this)" data-module="${m}" class="sidebar-item w-full text-left px-3 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3 rounded-lg"><span>${icon}</span><span class="module-label">${label}</span></button>`).join('') +
+                    `</div>
+                </div>`;
+            }).join('');
+        }
+
+        function switchHead(head) {
+            if (!isOwner && !myAllowedModules.includes(head)) return;
+            currentModule = 'home';
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            refreshCurrentModule();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('moduleSidebar');
+            const button = document.getElementById('sidebarCollapseButton');
+            if (!sidebar) return;
+            const collapsed = sidebar.classList.toggle('sidebar-collapsed');
+            if (button) {
+                button.textContent = collapsed ? '›' : '‹';
+                button.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+                button.setAttribute('aria-label', button.title);
+            }
+        }
+
+        function toggleModuleHead(head, event) {
+            if (event) event.stopPropagation();
+            const panel = document.getElementById(`head-${head}`);
+            const button = document.querySelector(`#head-btn-${head} .head-chevron`) || document.querySelector(`#head-${head}`)?.previousElementSibling?.querySelector('.head-chevron');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+            if (button) button.classList.toggle('rotate-180');
+        }
+
+        function '''
+          s = s[:old_head.start()] + replacement + s[old_head.end()-len('function '):]
+
+          # Make analytics initialization itself robust if a canvas disappears
+          # between rendering and Chart construction.
+          s = s.replace(
+              "if (attendanceCtx) {\n                window.__centralAnalyticsCharts.push(new Chart(attendanceCtx, {",
+              "if (attendanceCtx && window.Chart) {\n                window.__centralAnalyticsCharts.push(new Chart(attendanceCtx, {",
+              1,
+          )
+          s = s.replace(
+              "if (batchCtx) {\n                window.__centralAnalyticsCharts.push(new Chart(batchCtx, {",
+              "if (batchCtx && window.Chart) {\n                window.__centralAnalyticsCharts.push(new Chart(batchCtx, {",
+              1,
+          )
+          s = s.replace(
+              "if (revenueCtx) {\n                window.__centralAnalyticsCharts.push(new Chart(revenueCtx, {",
+              "if (revenueCtx && window.Chart) {\n                window.__centralAnalyticsCharts.push(new Chart(revenueCtx, {",
+              1,
+          )
+
+          # Examination V2 visual language aligned with standard module cards.
+          exam_css = r'''
+<style id="algorithmic-examination-layout">
+#examV2Root .examv2-card{background:linear-gradient(160deg,rgba(20,17,10,.55),rgba(8,8,8,.9));border:1px solid rgba(212,175,55,.18);border-radius:16px;padding:24px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+#examV2Root .examv2-table th{padding:12px 14px;color:#9ca3af;border-bottom:1px solid rgba(212,175,55,.18)}
+#examV2Root .examv2-table td{padding:11px 14px;border-bottom:1px solid #181818}
+#examV2Root .examv2-btn{border-radius:10px;padding:10px 14px}
+#examV2Root .examv2-input{border-radius:10px;padding:11px 13px}
+</style>
+'''
+          if 'id="algorithmic-examination-layout"' not in s:
+              s = s.replace('</head>', exam_css + '\n</head>', 1)
+
+          # Remove stale final-layout rules that collapse the sidebar to zero width.
+          s = s.replace('#moduleSidebar.sidebar-collapsed{width:0!important;min-width:0!important;padding:0!important;border-width:0!important}\n', '')
+          s = s.replace('#moduleSidebar.sidebar-collapsed>*:not(#sidebarCollapseButton):not(#algorithmicSidebarToggle){display:none!important}\n', '')
+          s = s.replace('#moduleSidebar.sidebar-collapsed #sidebarCollapseButton,#moduleSidebar.sidebar-collapsed #algorithmicSidebarToggle{display:block!important;visibility:visible!important;opacity:1!important;right:-30px!important}\n', '')
+
+          p.write_text(s, encoding='utf-8')
+      - name: Validate source
+        shell: bash
+        run: |
+          python -m py_compile main.py
+          test "$(grep -c '/algorithmic_fixes.js' index.html || true)" -eq 0
+          test "$(grep -c '@app.get(\"/algorithmic_fixes.js\")' main.py || true)" -eq 0
+          test "$(grep -c 'https://cdn.jsdelivr.net/npm/chart.js' index.html || true)" -ge 1
+          test "$(grep -c 'random.shuffle' main.py || true)" -ge 1
+      - name: Commit application changes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add main.py index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Refactor Algorithmic frontend and seating flow'
+          git push origin HEAD:main
