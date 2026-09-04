@@ -2688,3 +2688,4 @@ def final_delete_exam_history(history_id:int,institute:CurrentInstitute=Depends(
 @app.get("/algorithmic_fixes.js")
 def algorithmic_fixes():
     return FileResponse(Path(__file__).with_name("algorithmic_fixes.js"), media_type="application/javascript")
+\n\n# ALGORITHMIC_BACKEND_NAV_REPAIR_V2\n# Defensive JSON normalization helper used by attendance-facing endpoints.\ndef _alg_scalar(value):\n    if value is None:\n        return ""\n    if isinstance(value, (str, int, float, bool)):\n        return str(value)\n    if isinstance(value, dict):\n        for key in ("full_name", "name", "student_name", "label", "value", "id"):\n            if key in value and value[key] is not None:\n                return _alg_scalar(value[key])\n        return ""\n    if isinstance(value, (list, tuple)):\n        return ", ".join(_alg_scalar(x) for x in value)\n    return str(value)\n
