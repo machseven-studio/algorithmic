@@ -18,7 +18,7 @@ jobs:
           from pathlib import Path
           p = Path("main.py")
           s = p.read_text(encoding="utf-8")
-          marker = r"\\n\\n# ALGORITHMIC_BACKEND_NAV_REPAIR_V2"
+          marker = "\\n\\n# ALGORITHMIC_BACKEND_NAV_REPAIR_V2"
           if marker in s:
               s = s.split(marker, 1)[0].rstrip() + "\n"
               p.write_text(s, encoding="utf-8")
