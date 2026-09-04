@@ -1,29 +1,20 @@
 name: Repair current modules
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   repair:
-    if: github.event.head_commit.message != 'fix: core files updated'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate core files
+      - name: Validate patched backend
+        run: python3 -m py_compile main.py
+      - name: Validate patched frontend
         run: |
-          python3 -m py_compile main.py
-          test -f index.html
-          git diff --check
-      - name: Commit marker to core files
-        run: |
-          printf '\n# Core application file maintained directly.\n' >> main.py
-          printf '\n<!-- I.B.E.X. core application -->\n' >> index.html
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add main.py index.html
-          git commit -m "fix: core files updated"
-          git push
+          grep -q 'algorithmic-requested-fixes-css' index.html
+          grep -q 'algorithmic-requested-fixes-runtime' index.html
+          grep -q 'const hadBranch=currentBranchId' index.html
