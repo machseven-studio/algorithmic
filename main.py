@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import random
 import time
 from pathlib import Path
 import secrets
@@ -1521,92 +1522,21 @@ class SeatingGenerateRequest(BaseModel):
 
 
 def _build_seating_layout(students, rows, columns):
-    """Assign students to a grid so orthogonally adjacent seats never share a
-    batch. Uses multiple deterministic greedy restarts and rejects impossible
-    layouts instead of silently violating the rule."""
-    from collections import Counter
-
+    """Map an already-randomized student pool onto a rows x columns grid."""
     capacity = rows * columns
-    if len(students) > capacity:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Room capacity is {capacity}, but {len(students)} students were selected.",
-        )
-    if not students:
-        raise HTTPException(status_code=400, detail="No students found in this branch.")
+    selected = students[:capacity]
+    return [
+        {
+            "row": (index // columns) + 1,
+            "column": (index % columns) + 1,
+            "student_id": student["id"],
+            "name": student["name"],
+            "batch": student["batch"],
+            "roll_number": student["roll_number"],
+        }
+        for index, student in enumerate(selected)
+    ]
 
-    batches = Counter((s["batch"] or "Unassigned").strip() or "Unassigned" for s in students)
-    if max(batches.values()) > (capacity + 1) // 2:
-        raise HTTPException(
-            status_code=400,
-            detail="A valid no-adjacent layout is impossible because one batch contains too many students for this room. Increase the room size or use a different exam room.",
-        )
-
-    # Row-major cells; each cell only constrains left and above neighbors.
-    cells = [(r, c) for r in range(rows) for c in range(columns)]
-    batch_names = sorted(batches, key=lambda b: (-batches[b], b.lower()))
-
-    for attempt in range(120):
-        remaining = dict(batches)
-        placed_batches = {}
-        failed = False
-
-        # Mild deterministic variation between attempts helps with awkward
-        # batch-size combinations without making the result nondeterministic.
-        rotation = attempt % max(1, len(batch_names))
-        priority_order = batch_names[rotation:] + batch_names[:rotation]
-
-        # Only the first N cells need students; remaining room capacity stays empty.
-        cells_to_fill = cells[:len(students)]
-        for r, c in cells_to_fill:
-            forbidden = set()
-            if c > 0:
-                forbidden.add(placed_batches[(r, c - 1)])
-            if r > 0:
-                forbidden.add(placed_batches[(r - 1, c)])
-
-            candidates = [b for b in priority_order if remaining[b] > 0 and b not in forbidden]
-            if not candidates:
-                failed = True
-                break
-
-            # Largest remaining batch first prevents a dominant batch from
-            # being stranded at the end; a small positional tie-break varies
-            # across attempts.
-            candidates.sort(key=lambda b: (-remaining[b], priority_order.index(b)))
-            chosen = candidates[0]
-            placed_batches[(r, c)] = chosen
-            remaining[chosen] -= 1
-
-        if not failed:
-            by_batch = {b: [] for b in batches}
-            for student in students:
-                by_batch[(student["batch"] or "Unassigned").strip() or "Unassigned"].append(student)
-            for b in by_batch:
-                by_batch[b].sort(key=lambda x: (x.get("roll_number") or "", x.get("name") or ""))
-
-            assignments = []
-            counters = {b: 0 for b in by_batch}
-            for r, c in cells_to_fill:
-                b = placed_batches.get((r, c))
-                if not b:
-                    continue
-                student = by_batch[b][counters[b]]
-                counters[b] += 1
-                assignments.append({
-                    "row": r + 1,
-                    "column": c + 1,
-                    "student_id": student["id"],
-                    "name": student["name"],
-                    "batch": b,
-                    "roll_number": student["roll_number"],
-                })
-            return assignments
-
-    raise HTTPException(
-        status_code=400,
-        detail="Could not find a valid seating arrangement for these batch sizes and room dimensions. Try a larger room or different room dimensions.",
-    )
 
 
 @app.get("/api/seating/{branch_id}")
@@ -1643,10 +1573,23 @@ def _generate_seating_impl(req: "SeatingGenerateRequest", institute: "CurrentIns
         raise HTTPException(status_code=400, detail="Room number is required.")
 
     conn = get_conn()
-    room_cur = conn.cursor(); room_cur.execute("SELECT room_no, capacity FROM classrooms WHERE branch_id = %s AND room_no = %s", (req.branch_id, room_number)); room = room_cur.fetchone()
+
+    # Any registered classroom in this institute may host an exam. Classroom
+    # department/branch ownership is intentionally not a seating restriction.
+    room_cur = conn.cursor()
+    room_cur.execute(
+        """SELECT c.room_no, c.capacity
+           FROM classrooms c
+           JOIN branches b ON b.id = c.branch_id
+           WHERE b.tenant_id = %s AND c.room_no = %s
+           LIMIT 1""",
+        (institute.id, room_number),
+    )
+    room = room_cur.fetchone()
     if not room:
         conn.close()
-        raise HTTPException(status_code=400, detail="Selected exam room is not registered in this branch.")
+        raise HTTPException(status_code=400, detail="Selected exam room is not registered for this institute.")
+
     requested_capacity = req.rows * req.columns
     room_capacity = int(room[1] or 0)
     if room_capacity <= 0:
@@ -1656,20 +1599,66 @@ def _generate_seating_impl(req: "SeatingGenerateRequest", institute: "CurrentIns
         conn.close()
         raise HTTPException(status_code=400, detail=f"Grid capacity ({requested_capacity}) exceeds room capacity ({room_capacity}).")
 
-    students_cur = conn.cursor()
-    students_cur.execute(
-        """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
-           FROM students WHERE branch_id = %s ORDER BY LOWER(COALESCE(batch, '')), LOWER(COALESCE(name, ''))""",
-        (req.branch_id,),
-    )
-    student_rows = [dict(r) for r in students_cur.fetchall()]
-    assignments = _build_seating_layout(student_rows, req.rows, req.columns)
-
+    # Re-generating one room replaces only that room's previous allocation.
     cursor = conn.cursor()
     cursor.execute(
-        """DELETE FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s""",
+        "SELECT assignments_json FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s",
         (req.branch_id, req.exam_date, room_number),
     )
+    old_room = cursor.fetchone()
+    old_student_ids = set()
+    if old_room:
+        try:
+            old_student_ids = {
+                int(a["student_id"])
+                for a in json.loads(old_room["assignments_json"] or "[]")
+                if a.get("student_id") is not None
+            }
+        except (TypeError, ValueError, KeyError):
+            pass
+    cursor.execute(
+        "DELETE FROM exam_seatings WHERE branch_id = %s AND exam_date = %s AND room_number = %s",
+        (req.branch_id, req.exam_date, room_number),
+    )
+
+    # Fetch the selected branch's complete student pool, remove students already
+    # consumed by other rooms for this exam, then randomize the remaining pool.
+    cursor.execute(
+        """SELECT id, name, COALESCE(batch, '') AS batch, COALESCE(roll_number, '') AS roll_number
+           FROM students WHERE branch_id = %s""",
+        (req.branch_id,),
+    )
+    student_rows = [dict(r) for r in cursor.fetchall()]
+
+    cursor.execute(
+        "SELECT assignments_json FROM exam_seatings WHERE branch_id = %s AND exam_date = %s",
+        (req.branch_id, req.exam_date),
+    )
+    assigned_elsewhere = set()
+    for row in cursor.fetchall():
+        try:
+            assigned_elsewhere.update(
+                int(a["student_id"])
+                for a in json.loads(row["assignments_json"] or "[]")
+                if a.get("student_id") is not None
+            )
+        except (TypeError, ValueError, KeyError):
+            continue
+    assigned_elsewhere.difference_update(old_student_ids)
+
+    remaining_students = [
+        student for student in student_rows
+        if int(student["id"]) not in assigned_elsewhere
+    ]
+    random.shuffle(remaining_students)
+    if len(remaining_students) < requested_capacity:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only {len(remaining_students)} unassigned students remain for this exam; {requested_capacity} seats were requested.",
+        )
+    assignments = _build_seating_layout(remaining_students, req.rows, req.columns)
+
     cursor.execute(
         """INSERT INTO exam_seatings (branch_id, exam_date, room_number, rows, columns, assignments_json, created_at)
            VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
@@ -2685,6 +2674,3 @@ def final_delete_exam_history(history_id:int,institute:CurrentInstitute=Depends(
     finally: conn.close()
 
 
-@app.get("/algorithmic_fixes.js")
-def algorithmic_fixes():
-    return FileResponse(Path(__file__).with_name("algorithmic_fixes.js"), media_type="application/javascript")

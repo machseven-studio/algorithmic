@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700&display=swap');
@@ -114,11 +114,42 @@
 <style id="algorithmic-final-layout">
 #headerInstituteName{font-size:clamp(2.4rem,4.2vw,4.8rem)!important;max-width:min(70vw,1100px)!important}
 #moduleSidebar{position:relative!important;transition:width .18s ease,min-width .18s ease!important}
-#moduleSidebar.sidebar-collapsed{width:0!important;min-width:0!important;padding:0!important;border-width:0!important}
-#moduleSidebar.sidebar-collapsed>*:not(#sidebarCollapseButton):not(#algorithmicSidebarToggle){display:none!important}
-#moduleSidebar.sidebar-collapsed #sidebarCollapseButton,#moduleSidebar.sidebar-collapsed #algorithmicSidebarToggle{display:block!important;visibility:visible!important;opacity:1!important;right:-30px!important}
 .module-head-group{width:100%!important}.module-head-group>div:first-child{width:100%!important}.module-head-arrow{pointer-events:auto!important}
 </style>
+
+<style id="algorithmic-timetable-layout">
+#teacherConfigList{min-height:220px;max-height:55vh!important;overflow-y:auto;padding-right:.5rem}
+#teacherConfigList>div{min-height:84px}
+#teacherConfigList>div>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
+#ttTimingRows{max-height:55vh;overflow-y:auto;padding-right:.5rem}
+.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;max-height:90vh;overflow:hidden}
+@media(max-width:768px){#teacherConfigList>div>div:last-child{grid-template-columns:1fr}.glass-panel:has(#teacherConfigList){width:95%!important}}
+</style>
+
+
+<style id="algorithmic-sidebar-layout">
+#moduleSidebar{display:flex;flex-direction:column;align-items:stretch;position:relative!important;transition:width .18s ease,min-width .18s ease,padding .18s ease!important}
+#moduleGroups{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%}
+#moduleGroups>.mb-1,#moduleGroups .module-head-group{width:100%}
+#moduleGroups .sidebar-item{width:100%;min-height:42px;display:flex;align-items:center}
+#moduleSidebar.sidebar-collapsed{width:72px!important;min-width:72px!important}
+#moduleSidebar.sidebar-collapsed .sidebar-label,#moduleSidebar.sidebar-collapsed .module-label,#moduleSidebar.sidebar-collapsed .module-head-title,#moduleSidebar.sidebar-collapsed .module-head-text{display:none!important}
+#moduleSidebar.sidebar-collapsed .sidebar-item{justify-content:center;padding-left:0!important;padding-right:0!important;border-left-width:0!important}
+#sidebarCollapseButton{position:absolute;top:10px;right:-14px;z-index:30;width:28px;height:28px;border:1px solid rgba(212,175,55,.38);border-radius:999px;background:#0b0b0b;color:#e8c767;font-size:18px;line-height:24px;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer}
+#sidebarCollapseButton:hover{border-color:#d4af37}
+.module-head-arrow{flex:0 0 auto;cursor:pointer}
+.module-head-title{cursor:pointer}
+</style>
+
+
+<style id="algorithmic-examination-layout">
+#examV2Root .examv2-card{background:linear-gradient(160deg,rgba(20,17,10,.55),rgba(8,8,8,.9));border:1px solid rgba(212,175,55,.18);border-radius:16px;padding:24px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+#examV2Root .examv2-table th{padding:12px 14px;color:#9ca3af;border-bottom:1px solid rgba(212,175,55,.18)}
+#examV2Root .examv2-table td{padding:11px 14px;border-bottom:1px solid #181818}
+#examV2Root .examv2-btn{border-radius:10px;padding:10px 14px}
+#examV2Root .examv2-input{border-radius:10px;padding:11px 13px}
+</style>
+
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -210,6 +241,7 @@
 
         <div class="flex flex-1 overflow-hidden">
             <nav id="moduleSidebar" class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
+    <button id="sidebarCollapseButton" type="button" aria-label="Collapse sidebar" title="Collapse sidebar" onclick="toggleSidebar()">‹</button>
     <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
     <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
     <div class="px-3 space-y-1" id="moduleGroups"></div>
@@ -571,74 +603,48 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             groups.innerHTML = ACCESS_HEADS.filter(h => isOwner || myAllowedModules.includes(h)).map(head => {
                 const open = head === 'homepage' && isOwner;
                 const children = HEAD_MODULES[head].filter(([m]) => m !== 'users' || isOwner);
-                return `<div class="mb-1">
-                    <button id="head-btn-${head}" onclick="toggleModuleHead('${head}')" class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
-                        <span>${head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administrations' : 'Examination'}</span><span class="head-chevron transition-transform ${open ? 'rotate-180' : ''}">⌄</span>
-                    </button>
-                    <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">
-                        ${children.map(([m, icon, label]) => `<button data-module="${m}" onclick="switchModule('${m}', this)" class="sidebar-item w-full text-left px-6 py-2.5 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3"><span>${icon}</span><span>${label}</span></button>`).join('')}
+                const title = head === 'homepage' ? 'Homepage' : head === 'administrations' ? 'Administrations' : 'Examination';
+                return `<div class="mb-1 module-head-group" data-head="${head}">
+                    <div class="w-full flex items-center justify-between px-3 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-yellow-500 hover:bg-[#111]">
+                        <span class="module-head-title module-head-text flex-1" onclick="switchHead('${head}')">${title}</span>
+                        <button type="button" class="module-head-arrow head-chevron ${open ? 'rotate-180' : ''}" aria-label="Toggle ${title}" onclick="toggleModuleHead('${head}', event)">⌄</button>
                     </div>
+                    <div id="head-${head}" class="${open ? '' : 'hidden'} space-y-0.5">` +
+                    children.map(([mod, icon, label]) => `<button onclick="switchModule('${mod}', this)" data-module="${mod}" class="sidebar-item w-full text-left px-3 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3 rounded-lg"><span>${icon}</span><span class="module-label">${label}</span></button>`).join('') +
+                    `</div>
                 </div>`;
             }).join('');
         }
 
-        async function initApp() {
-            try {
-                await loadBranches();
-                await refreshCurrentModule();
-            } catch (err) {
-                const container = document.getElementById('mainContent');
-                if (container) container.innerHTML = `<div class="glass-panel border border-red-900/40 p-8 rounded-2xl text-center"><div class="text-red-400 font-bold mb-2">Unable to load the workspace</div><div class="text-xs text-gray-500">${esc(err.message || 'Please refresh and try again.')}</div></div>`;
-            }
-        }
-
-        // ---- Centralised Analytics (header button, not a sidebar module) ----
-        // Read-only, aggregated-across-all-branches view. No management or
-        // editing capability lives here - it reuses the existing
-        // GET /api/analytics/0 aggregation the backend already scopes to the
-        // caller's tenant, and renders it with charts instead of forms.
-        function openCentralAnalytics() {
-            currentModule = 'central_analytics';
+        function switchHead(head) {
+            if (!isOwner && !myAllowedModules.includes(head)) return;
+            currentModule = 'home';
             document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             refreshCurrentModule();
         }
 
-        window.__centralAnalyticsCharts = window.__centralAnalyticsCharts || [];
-        function destroyCentralAnalyticsCharts() {
-            (window.__centralAnalyticsCharts || []).forEach(c => { try { c.destroy(); } catch (e) {} });
-            window.__centralAnalyticsCharts = [];
-        }
-
-        async function renderCentralAnalyticsModule(container) {
-            const renderToken = Symbol('central-analytics-render');
-            window.__centralAnalyticsRenderToken = renderToken;
-            destroyCentralAnalyticsCharts();
-            container.innerHTML = `
-                <div class="space-y-8">
-                    <div class="flex justify-between items-end flex-wrap gap-3">
-                        <div>
-                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Centralised Analytics</h2>
-                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Aggregated, read-only performance across every branch</p>
-                        </div>
-                        <button onclick="refreshCurrentModule()" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider fast-transition">Refresh</button>
-                    </div>
-                    <div id="centralAnalyticsError" class="auth-error"></div>
-                    <div id="centralAnalyticsContent" class="space-y-8"><div class="glass-panel border gold-border p-10 rounded-2xl text-center text-gray-500">Loading aggregated analytics…</div></div>
-                </div>
-            `;
-            try {
-                const res = await authFetch('/api/analytics/0');
-                const data = await readApiJson(res, 'Centralised analytics request');
-                if (window.__centralAnalyticsRenderToken === renderToken && currentModule === 'central_analytics') renderCentralAnalyticsContent(data);
-            } catch (err) {
-                const error = document.getElementById('centralAnalyticsError');
-                if (error) error.textContent = err.message || 'Failed to load centralised analytics.';
-                const content = document.getElementById('centralAnalyticsContent');
-                if (content) content.innerHTML = '<div class="glass-panel border border-red-900/40 p-8 rounded-2xl text-center text-gray-500">Centralised analytics could not be loaded.</div>';
+        function toggleSidebar() {
+            const sidebar = document.getElementById('moduleSidebar');
+            const button = document.getElementById('sidebarCollapseButton');
+            if (!sidebar) return;
+            const collapsed = sidebar.classList.toggle('sidebar-collapsed');
+            if (button) {
+                button.textContent = collapsed ? '›' : '‹';
+                button.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+                button.setAttribute('aria-label', button.title);
             }
         }
 
-        function centralStatCard(label, value) {
+        function toggleModuleHead(head, event) {
+            if (event) event.stopPropagation();
+            const panel = document.getElementById(`head-${head}`);
+            const button = panel?.previousElementSibling?.querySelector('.module-head-arrow');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+            if (button) button.classList.toggle('rotate-180');
+        }
+
+        function function centralStatCard(label, value) {
             return `<div class="glass-panel border gold-border rounded-2xl p-5"><div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">${esc(label)}</div><div class="text-3xl font-black gold-gradient-text mt-1">${esc(value)}</div></div>`;
         }
 
@@ -672,11 +678,17 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             `;
 
             const goldLine = '#d4af37';
+            if (!window.Chart) {
+                const error = document.getElementById('centralAnalyticsError');
+                if (error) error.textContent = 'Analytics charts are unavailable because Chart.js did not load.';
+                return;
+            }
+
             const gridColor = 'rgba(212,175,55,0.12)';
             const tickColor = '#9ca3af';
 
             const attendanceCtx = document.getElementById('centralAttendanceChart');
-            if (attendanceCtx) {
+            if (attendanceCtx && window.Chart) {
                 window.__centralAnalyticsCharts.push(new Chart(attendanceCtx, {
                     type: 'line',
                     data: {
@@ -691,7 +703,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }
 
             const batchCtx = document.getElementById('centralBatchChart');
-            if (batchCtx) {
+            if (batchCtx && window.Chart) {
                 window.__centralAnalyticsCharts.push(new Chart(batchCtx, {
                     type: 'bar',
                     data: {
@@ -706,7 +718,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }
 
             const revenueCtx = document.getElementById('centralRevenueChart');
-            if (revenueCtx) {
+            if (revenueCtx && window.Chart) {
                 window.__centralAnalyticsCharts.push(new Chart(revenueCtx, {
                     type: 'bar',
                     data: {
@@ -1418,8 +1430,8 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                     </div>
                     <div class="max-h-72 overflow-y-auto divide-y divide-gray-900">
                         ${data.history.map(h => {
-                            const date = typeof h.date === 'object' ? JSON.stringify(h.date) : String(h.date ?? '');
-                            const status = typeof h.status === 'object' ? (h.status?.status || h.status?.value || JSON.stringify(h.status)) : String(h.status ?? '');
+                            const date = String(h?.date ?? '');
+                            const status = String(h?.status ?? '');
                             return `
                             <div class="flex justify-between items-center py-2 text-sm">
                                 <span class="text-gray-300">${esc(date)}</span>
@@ -2400,11 +2412,5 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   async function pdfHistory(){try{const rows=await api(`/api/examination/history/${bid()}`);if(!rows.length)return alert('No history records to download.');const{jsPDF}=window.jspdf,doc=new jsPDF();doc.setFontSize(17);doc.text('ALGORITHMIC — Examination History',14,18);doc.autoTable({startY:27,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date])});doc.save(`Exam-History-${new Date().toISOString().slice(0,10)}.pdf`)}catch(e){alert(e.message)}}
 })();
 </script>
-
-<script src="/algorithmic_chart_boot.js"></script>
-<script src="/algorithmic_fixes.js"></script>
-<script src="/algorithmic_final.js"></script>
-<script src="/final_frontend_repairs.js"></script>
-<script src="/algorithmic_nav_repair.js"></script>
 </body>
 </html>
