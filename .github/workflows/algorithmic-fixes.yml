@@ -1,0 +1,65 @@
+name: Apply Algorithmic stability and UI fixes
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'Apply Algorithmic stability and UI fixes')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch application
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # Serve the new browser-side fix bundle from FastAPI.
+          main = Path('main.py')
+          text = main.read_text(encoding='utf-8')
+          route = '''\n\n@app.get("/algorithmic_fixes.js")\ndef algorithmic_fixes():\n    return FileResponse(Path(__file__).with_name("algorithmic_fixes.js"), media_type="application/javascript")\n'''
+          if '@app.get("/algorithmic_fixes.js")' not in text:
+              text += route
+
+          # Existing Render databases may have the old plural `permissions`
+          # column but not the current singular `permission` column.
+          anchor = '"ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS designation TEXT",'
+          migration = '''"ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS permission TEXT NOT NULL DEFAULT 'read_only'",\n        """DO $$\n        BEGIN\n            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'staff_users' AND column_name = 'permissions') THEN\n                EXECUTE $sql$UPDATE staff_users SET permission = CASE\n                    WHEN lower(COALESCE(permissions::text, '')) LIKE '%read_only%' THEN 'read_only'\n                    WHEN lower(COALESCE(permissions::text, '')) LIKE '%edit%' THEN 'edit'\n                    ELSE permission\n                END WHERE permission IS NULL OR permission = 'read_only'$sql$;\n            END IF;\n        END $$;""",\n        "ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS designation TEXT",'''
+          if 'ALTER TABLE staff_users ADD COLUMN IF NOT EXISTS permission TEXT' not in text:
+              if anchor not in text:
+                  raise SystemExit('staff_users migration anchor not found in main.py')
+              text = text.replace(anchor, migration, 1)
+
+          # Cap the upstream Parallax wait so a dead Gemini connection cannot
+          # occupy the Render worker indefinitely.
+          text = text.replace('with urllib.request.urlopen(req, timeout=30) as resp:', 'with urllib.request.urlopen(req, timeout=20) as resp:', 1)
+          main.write_text(text, encoding='utf-8')
+
+          # Load the fix bundle after all existing inline scripts so its
+          # overrides win over the legacy examination upgrade scripts.
+          index = Path('index.html')
+          text = index.read_text(encoding='utf-8')
+          marker = '<script src="/algorithmic_fixes.js"></script>'
+          if marker not in text:
+              if '</body>' not in text:
+                  raise SystemExit('index.html has no closing body tag')
+              text = text.replace('</body>', marker + '\n</body>', 1)
+              index.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit fixes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html main.py algorithmic_fixes.js .github/workflows/algorithmic-fixes.yml
+          git rm -f .github/workflows/algorithmic-fixes.yml
+          git commit -m "Apply Algorithmic stability and UI fixes"
+          git push
