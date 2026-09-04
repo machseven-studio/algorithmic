@@ -1,30 +1,90 @@
 # main.py
 import hashlib
+import hmac
 import json
 import os
+import time
 from pathlib import Path
 import secrets
 import shutil
 import psycopg2
+import bcrypt
 from psycopg2.extras import DictCursor
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depends, Cookie, Request, Response
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, EmailStr
 
-app = FastAPI(title="ALGORITHMIC", version="4.0.0")
+app = FastAPI(title="ALGORITHMIC", version="4.1.0")
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
-UPLOAD_DIR = "uploads"
+# Uploads are stored outside the app's static/served root and are only ever
+# reachable through the authenticated /api/uploads/{filename} endpoint below -
+# there is no longer a public StaticFiles mount for this directory.
+UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "private_uploads"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 SESSION_LIFETIME_DAYS = 7
-PBKDF2_ITERATIONS = 200_000
+SESSION_COOKIE_NAME = "alg_session"
+IS_PRODUCTION = os.getenv("ENV", "production").lower() != "development"
+PBKDF2_ITERATIONS = 200_000  # legacy - kept only to verify/upgrade old hashes
 ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
+ALLOWED_UPLOAD_MIME_TYPES = {
+    "application/pdf", "image/jpeg", "image/png",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+# ---------------------------------------------------------------------------
+# Login rate limiting (in-memory, per process). Keyed by client IP + email so
+# one abusive account can't be used to lock out a shared office IP, and vice
+# versa. Swap for a Redis-backed limiter if you run multiple worker processes.
+# ---------------------------------------------------------------------------
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 15 * 60
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _rate_limit_key(request: "Request", email: str) -> str:
+    ip = request.client.host if request.client else "unknown"
+    return f"{ip}:{email.strip().lower()}"
+
+
+def check_login_rate_limit(request: "Request", email: str):
+    key = _rate_limit_key(request, email)
+    now = time.time()
+    attempts = [t for t in _login_attempts[key] if now - t < LOGIN_WINDOW_SECONDS]
+    _login_attempts[key] = attempts
+    if len(attempts) >= LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait 15 minutes and try again.")
+
+
+def record_failed_login(request: "Request", email: str):
+    key = _rate_limit_key(request, email)
+    _login_attempts[key].append(time.time())
+
+
+def clear_login_attempts(request: "Request", email: str):
+    _login_attempts.pop(_rate_limit_key(request, email), None)
+
+
+def set_session_cookie(response: "Response", token: str):
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="strict",
+        max_age=SESSION_LIFETIME_DAYS * 86400,
+        path="/",
+    )
+
+
+def clear_session_cookie(response: "Response"):
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
 
 VALID_MODULES = ['students', 'teachers', 'classrooms', 'syllabus', 'attendance', 'invigilation', 'fees']
 SEATING_MODULE = 'seating'
@@ -38,6 +98,7 @@ MODULE_HEAD = {
     'teachers': 'homepage', 'classrooms': 'homepage', 'users': 'homepage',
     'attendance': 'administrations', 'syllabus': 'administrations',
     'timetables': 'administrations', 'fees': 'administrations',
+    'whatsapp': 'administrations',
     'seating': 'examination', 'invigilation': 'examination',
 }
 ALL_ACCESS_MODULES = ACCESS_HEADS
@@ -80,6 +141,8 @@ def init_db():
         """CREATE TABLE IF NOT EXISTS invigilation (id SERIAL PRIMARY KEY, branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE, teacher_name TEXT, exam_date TEXT, room TEXT, document TEXT)""",
         """CREATE TABLE IF NOT EXISTS fees (id SERIAL PRIMARY KEY, branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE, student_name TEXT, amount_inr NUMERIC(12,2), status TEXT, due_date TEXT, document TEXT, utr_reference TEXT, paid_at TIMESTAMPTZ, paid_by INTEGER)""",
         """CREATE TABLE IF NOT EXISTS audit_log (id BIGSERIAL PRIMARY KEY, timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(), user_id INTEGER, branch_id INTEGER, action_type TEXT NOT NULL, before_after_payload JSONB NOT NULL DEFAULT '{}'::jsonb)""",
+        """CREATE TABLE IF NOT EXISTS whatsapp_wallets (institute_id INTEGER PRIMARY KEY REFERENCES institutes(id) ON DELETE CASCADE, balance_tokens INTEGER NOT NULL DEFAULT 0, low_balance_notified_at TIMESTAMPTZ)""",
+        """CREATE TABLE IF NOT EXISTS whatsapp_transactions (id BIGSERIAL PRIMARY KEY, institute_id INTEGER NOT NULL REFERENCES institutes(id) ON DELETE CASCADE, type TEXT NOT NULL, package_key TEXT, tokens INTEGER NOT NULL DEFAULT 0, amount_inr NUMERIC(12,2), provider TEXT, provider_order_id TEXT, provider_payment_id TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())""",
     ]
     for stmt in statements:
         cur.execute(stmt)
@@ -179,10 +242,34 @@ init_db()
 # Auth helpers
 # ---------------------------------------------------------------------------
 
-def hash_password(password: str, salt: str) -> str:
+def _legacy_pbkdf2_hash(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac(
         "sha256", password.encode("utf-8"), bytes.fromhex(salt), PBKDF2_ITERATIONS
     ).hex()
+
+
+def hash_password(password: str) -> str:
+    """Bcrypt with a per-password random salt baked into the hash string
+    itself - no separate salt column needed for new accounts."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+
+def verify_password(password: str, password_hash: str, legacy_salt: str | None) -> tuple[bool, str | None]:
+    """Returns (is_valid, upgraded_hash). upgraded_hash is non-None when a
+    legacy PBKDF2 hash just verified successfully and should be rewritten to
+    bcrypt by the caller (transparent password-hash migration on login)."""
+    if password_hash.startswith("$2"):
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8")), None
+        except ValueError:
+            return False, None
+    # Legacy PBKDF2 record - verify against it, then flag for upgrade.
+    if not legacy_salt:
+        return False, None
+    computed = _legacy_pbkdf2_hash(password, legacy_salt)
+    if secrets.compare_digest(computed, password_hash):
+        return True, hash_password(password)
+    return False, None
 
 
 def create_session(institute_id: int, staff_user_id: int = None) -> str:
@@ -220,10 +307,13 @@ def check_module_access(institute: "CurrentInstitute", module: str):
         raise HTTPException(status_code=403, detail=f"Your account does not have access to the {module.title()} module")
 
 
-def get_current_institute(authorization: str = Header(None)) -> CurrentInstitute:
-    if not authorization or not authorization.startswith("Bearer "):
+def get_current_institute(alg_session: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)) -> CurrentInstitute:
+    """Session token now travels exclusively as an HttpOnly, Secure,
+    SameSite=Strict cookie - never in JS-readable storage or a header the
+    frontend has to manage, so it can't be exfiltrated via XSS."""
+    if not alg_session:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.split(" ", 1)[1]
+    token = alg_session
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -360,12 +450,11 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/api/auth/signup")
-def signup(req: SignupRequest):
+def signup(req: SignupRequest, response: Response):
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
-    salt = secrets.token_hex(16)
-    password_hash = hash_password(req.password, salt)
+    password_hash = hash_password(req.password)
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -373,7 +462,7 @@ def signup(req: SignupRequest):
         cursor.execute(
             """INSERT INTO institutes (institute_name, full_name, email, password_hash, password_salt, created_at)
                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
-            (req.institute_name, req.full_name, req.email.lower(), password_hash, salt, datetime.utcnow().isoformat()),
+            (req.institute_name, req.full_name, req.email.lower(), password_hash, "", datetime.utcnow().isoformat()),
         )
         institute_id = cursor.fetchone()[0]
         # every new institute gets one starter branch
@@ -389,8 +478,8 @@ def signup(req: SignupRequest):
     audit_system(institute_id, None, "CREATE_INSTITUTE", None, {"institute_id": institute_id, "starter_branch": "Main Campus"})
 
     token = create_session(institute_id)
+    set_session_cookie(response, token)
     return {
-        "token": token,
         "institute_name": req.institute_name,
         "full_name": req.full_name,
         "is_owner": True,
@@ -401,7 +490,8 @@ def signup(req: SignupRequest):
 
 
 @app.post("/api/auth/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request, response: Response):
+    check_login_rate_limit(request, req.email)
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM institutes WHERE email = %s", (req.email.lower(),))
@@ -412,12 +502,16 @@ def login(req: LoginRequest):
     invalid = HTTPException(status_code=401, detail="Invalid email or password")
 
     if institute:
-        computed_hash = hash_password(req.password, institute["password_salt"])
-        if secrets.compare_digest(computed_hash, institute["password_hash"]):
+        valid, upgraded = verify_password(req.password, institute["password_hash"], institute["password_salt"])
+        if valid:
+            if upgraded:
+                cursor.execute("UPDATE institutes SET password_hash=%s, password_salt='' WHERE id=%s", (upgraded, institute["id"]))
+                conn.commit()
             conn.close()
+            clear_login_attempts(request, req.email)
             token = create_session(institute["id"])
+            set_session_cookie(response, token)
             return {
-                "token": token,
                 "institute_name": institute["institute_name"],
                 "full_name": institute["full_name"] or "",
                 "is_owner": True,
@@ -430,18 +524,22 @@ def login(req: LoginRequest):
     cursor.execute("SELECT * FROM staff_users WHERE email = %s", (req.email.lower(),))
     staff = cursor.fetchone()
     if staff:
-        computed_hash = hash_password(req.password, staff["password_salt"])
-        if secrets.compare_digest(computed_hash, staff["password_hash"]):
+        valid, upgraded = verify_password(req.password, staff["password_hash"], staff["password_salt"])
+        if valid:
+            if upgraded:
+                cursor.execute("UPDATE staff_users SET password_hash=%s, password_salt='' WHERE id=%s", (upgraded, staff["id"]))
+                conn.commit()
             cursor.execute("SELECT * FROM institutes WHERE id = %s", (staff["institute_id"],))
             parent_institute = cursor.fetchone()
             conn.close()
+            clear_login_attempts(request, req.email)
             token = create_session(staff["institute_id"], staff_user_id=staff["id"])
+            set_session_cookie(response, token)
             try:
                 staff_modules = json.loads(staff["module_access"]) if staff["module_access"] else []
             except (TypeError, ValueError):
                 staff_modules = []
             return {
-                "token": token,
                 "institute_name": parent_institute["institute_name"] if parent_institute else "",
                 "full_name": staff["full_name"],
                 "is_owner": False,
@@ -451,6 +549,7 @@ def login(req: LoginRequest):
             }
 
     conn.close()
+    record_failed_login(request, req.email)
     raise invalid
 
 
@@ -469,14 +568,14 @@ def whoami(institute: CurrentInstitute = Depends(get_current_institute)):
 
 
 @app.post("/api/auth/logout")
-def logout(authorization: str = Header(None)):
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1]
+def logout(response: Response, alg_session: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME)):
+    if alg_session:
         conn = get_conn()
-        cur = conn.cursor(); cur.execute("DELETE FROM sessions WHERE token = %s", (token,))
+        cur = conn.cursor(); cur.execute("DELETE FROM sessions WHERE token = %s", (alg_session,))
         conn.commit()
         conn.close()
         audit_system(None, None, "LOGOUT_SESSION", None, {"token": "redacted"})
+    clear_session_cookie(response)
     return {"status": "logged out"}
 
 
@@ -563,8 +662,7 @@ def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(r
         raise HTTPException(status_code=400, detail="Designation is required")
     _validate_modules(req.modules)
 
-    salt = secrets.token_hex(16)
-    password_hash = hash_password(req.password, salt)
+    password_hash = hash_password(req.password)
 
     conn = get_conn()
     cursor = conn.cursor()
@@ -572,7 +670,7 @@ def add_staff_user(req: StaffUserCreate, institute: CurrentInstitute = Depends(r
         cursor.execute(
             """INSERT INTO staff_users (institute_id, full_name, email, password_hash, password_salt, permission, designation, module_access, created_at)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (institute.id, req.full_name, req.email.lower(), password_hash, salt, req.permission,
+            (institute.id, req.full_name, req.email.lower(), password_hash, "", req.permission,
              req.designation.strip(), json.dumps(req.modules), datetime.utcnow().isoformat()),
         )
         user_id = cursor.fetchone()[0]
@@ -711,10 +809,28 @@ def get_records(module: str, branch_id: int, search: str = "", sort: str = "id",
     return records
 
 
+def _sniff_mime(contents: bytes, ext: str) -> str:
+    """Cheap magic-byte sniff so a renamed .exe with a .pdf extension is
+    caught server-side, not trusted off the client-supplied extension alone."""
+    if contents[:4] == b"%PDF":
+        return "application/pdf"
+    if contents[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if contents[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if contents[:4] == b"PK\x03\x04":  # .docx is a zip container
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if contents[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":  # legacy .doc (OLE)
+        return "application/msword"
+    return "application/octet-stream"
+
+
 def save_upload(file: UploadFile) -> str:
-    """Validates type/size and stores the file under a random name (never the
-    original filename) so a crafted filename can't be used to write outside
-    the uploads directory."""
+    """Validates extension, size, and actual file content (not just the
+    client-declared extension/content-type), then stores the file under a
+    random UUID name - never the original filename - inside UPLOAD_DIR, which
+    sits outside any publicly served static root. Files are only ever handed
+    back out through the authenticated /api/uploads/{filename} endpoint."""
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(
@@ -724,11 +840,61 @@ def save_upload(file: UploadFile) -> str:
     contents = file.file.read()
     if len(contents) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 5 MB)")
+    if not contents:
+        raise HTTPException(status_code=400, detail="File is empty")
 
-    filename = f"{secrets.token_hex(12)}{ext}"
-    with open(os.path.join(UPLOAD_DIR, filename), "wb") as buffer:
+    sniffed = _sniff_mime(contents, ext)
+    if sniffed not in ALLOWED_UPLOAD_MIME_TYPES:
+        raise HTTPException(status_code=400, detail="File content does not match an allowed file type")
+
+    filename = f"{secrets.token_hex(16)}{ext}"
+    dest = os.path.join(UPLOAD_DIR, filename)
+    # Defense in depth: refuse to write anywhere outside UPLOAD_DIR even if
+    # filename generation above were ever changed to something less strict.
+    if os.path.commonpath([UPLOAD_DIR, os.path.abspath(dest)]) != UPLOAD_DIR:
+        raise HTTPException(status_code=400, detail="Invalid upload path")
+    with open(dest, "wb") as buffer:
         buffer.write(contents)
     return filename
+
+
+# Every table that can carry an uploaded document, used to confirm a
+# requested file actually belongs to the requesting institute's tenant
+# before it's served back out.
+DOCUMENT_TABLES = ["classrooms", "attendance", "invigilation", "fees", "students", "teachers", "syllabus"]
+
+
+@app.get("/api/uploads/{filename}")
+def get_uploaded_file(filename: str, institute: CurrentInstitute = Depends(get_current_institute)):
+    """Uploads are no longer served by a public static mount. Any logged-in
+    member of the tenant that owns the record the file is attached to can
+    fetch it; everyone else gets a 404 (not a 403, so we don't confirm the
+    file even exists to an unauthorized caller)."""
+    safe_name = os.path.basename(filename)
+    if safe_name != filename or not safe_name:
+        raise HTTPException(status_code=404, detail="File not found")
+    path = os.path.join(UPLOAD_DIR, safe_name)
+    if os.path.commonpath([UPLOAD_DIR, os.path.abspath(path)]) != UPLOAD_DIR or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        owned = False
+        for table in DOCUMENT_TABLES:
+            cur.execute(
+                f"""SELECT 1 FROM {table} t JOIN branches b ON b.id = t.branch_id
+                    WHERE t.document = %s AND b.tenant_id = %s LIMIT 1""",
+                (safe_name, institute.id),
+            )
+            if cur.fetchone():
+                owned = True
+                break
+    finally:
+        conn.close()
+    if not owned:
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
 
 
 # Non-document columns each module accepts from the client, in the order
@@ -1547,6 +1713,223 @@ def mark_fee_paid(fee_id: int, req: FeeMarkPaidRequest, institute: CurrentInstit
     return {"status":"paid","fee":dict(after)}
 
 # ---------------------------------------------------------------------------
+# WhatsApp Messaging module - tiered token packages, checkout, balance
+# tracking, and per-message deduction.
+# ---------------------------------------------------------------------------
+
+WHATSAPP_PACKAGES = {
+    "starter":    {"label": "Starter",    "tokens": 1000,  "price_inr": 500},
+    "growth":     {"label": "Growth",     "tokens": 5000,  "price_inr": 2250},
+    "enterprise": {"label": "Enterprise", "tokens": 10000, "price_inr": 4000},
+}
+WHATSAPP_BASE_COST_INR = 0.12   # what each conversation costs us (BSP passthrough)
+WHATSAPP_SELL_RATE_MIN_INR = 0.40
+WHATSAPP_SELL_RATE_MAX_INR = 0.50
+WHATSAPP_LOW_BALANCE_THRESHOLD = 100
+
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+
+def _get_or_create_wallet(cur, institute_id: int):
+    cur.execute("SELECT * FROM whatsapp_wallets WHERE institute_id = %s FOR UPDATE", (institute_id,))
+    row = cur.fetchone()
+    if row:
+        return row
+    cur.execute("INSERT INTO whatsapp_wallets (institute_id, balance_tokens) VALUES (%s, 0) RETURNING *", (institute_id,))
+    return cur.fetchone()
+
+
+def send_low_token_balance_email(institute_email: str, institute_name: str, balance: int):
+    """Best-effort notification. Configure SMTP_HOST/PORT/USER/PASSWORD env
+    vars to actually deliver mail; otherwise this just logs, so the token
+    accounting logic still works end-to-end in local/dev environments."""
+    smtp_host = os.getenv("SMTP_HOST")
+    if not smtp_host:
+        print(f"[whatsapp] LOW BALANCE for {institute_name} <{institute_email}>: {balance} tokens left (email not sent - SMTP not configured)")
+        return
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        msg = MIMEText(
+            f"Hi {institute_name},\n\nYour WhatsApp Messaging token balance has dropped to {balance}. "
+            f"Top up from the WhatsApp Messaging module to avoid interruptions.\n\n- Algorithmic"
+        )
+        msg["Subject"] = "Low WhatsApp token balance"
+        msg["From"] = os.getenv("SMTP_FROM", smtp_host)
+        msg["To"] = institute_email
+        with smtplib.SMTP(smtp_host, int(os.getenv("SMTP_PORT", "587"))) as server:
+            server.starttls()
+            server.login(os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", ""))
+            server.sendmail(msg["From"], [institute_email], msg.as_string())
+    except Exception as exc:
+        print(f"[whatsapp] failed to send low-balance email: {exc}")
+
+
+@app.get("/api/whatsapp/packages")
+def whatsapp_packages(institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "whatsapp")
+    return {"packages": WHATSAPP_PACKAGES, "cost_per_conversation_inr": WHATSAPP_BASE_COST_INR}
+
+
+@app.get("/api/whatsapp/balance")
+def whatsapp_balance(institute: CurrentInstitute = Depends(get_current_institute)):
+    check_module_access(institute, "whatsapp")
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        wallet = _get_or_create_wallet(cur, institute.id)
+        conn.commit()
+        return {"balance_tokens": wallet["balance_tokens"]}
+    finally:
+        conn.close()
+
+
+class WhatsappCheckoutRequest(BaseModel):
+    package: str
+
+
+@app.post("/api/whatsapp/checkout")
+def whatsapp_checkout(req: WhatsappCheckoutRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    """Creates a pending transaction and a payment-gateway order. Tokens are
+    credited only once the webhook below confirms a captured payment - never
+    on this call - so a client that never completes checkout can't grant
+    itself free tokens."""
+    check_module_access(institute, "whatsapp")
+    pkg = WHATSAPP_PACKAGES.get(req.package)
+    if not pkg:
+        raise HTTPException(status_code=400, detail="Unknown package")
+
+    provider = "razorpay"
+    order_id = None
+    if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
+        try:
+            import razorpay
+            client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+            order = client.order.create({
+                "amount": int(pkg["price_inr"] * 100),  # paise
+                "currency": "INR",
+                "notes": {"institute_id": str(institute.id), "package": req.package},
+            })
+            order_id = order["id"]
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Payment provider error: {exc}")
+    else:
+        # No gateway credentials configured (e.g. local/dev) - synthesize an
+        # order id so the checkout UI still has something to render.
+        order_id = f"mock_order_{secrets.token_hex(8)}"
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO whatsapp_transactions (institute_id, type, package_key, tokens, amount_inr, provider, provider_order_id, status)
+               VALUES (%s,'purchase',%s,%s,%s,%s,%s,'pending') RETURNING id""",
+            (institute.id, req.package, pkg["tokens"], pkg["price_inr"], provider, order_id),
+        )
+        txn_id = cur.fetchone()[0]
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "transaction_id": txn_id,
+        "provider": provider,
+        "key_id": RAZORPAY_KEY_ID or None,
+        "order_id": order_id,
+        "amount_inr": pkg["price_inr"],
+        "tokens": pkg["tokens"],
+    }
+
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: "Request"):
+    """Razorpay webhook - credits tokens once a payment is actually captured.
+    Signature verification is mandatory; an unsigned or mis-signed payload is
+    rejected outright so this endpoint can't be used to mint free tokens."""
+    body = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    if not RAZORPAY_WEBHOOK_SECRET:
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    expected = hmac.new(RAZORPAY_WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    payload = json.loads(body)
+    event = payload.get("event")
+    if event != "payment.captured":
+        return {"status": "ignored"}
+
+    order_id = payload.get("payload", {}).get("payment", {}).get("entity", {}).get("order_id")
+    payment_id = payload.get("payload", {}).get("payment", {}).get("entity", {}).get("id")
+    if not order_id:
+        return {"status": "ignored"}
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM whatsapp_transactions WHERE provider_order_id=%s AND status='pending' FOR UPDATE", (order_id,))
+        txn = cur.fetchone()
+        if not txn:
+            return {"status": "already_processed_or_unknown"}
+        wallet = _get_or_create_wallet(cur, txn["institute_id"])
+        new_balance = wallet["balance_tokens"] + txn["tokens"]
+        cur.execute("UPDATE whatsapp_wallets SET balance_tokens=%s WHERE institute_id=%s", (new_balance, txn["institute_id"]))
+        cur.execute("UPDATE whatsapp_transactions SET status='paid', provider_payment_id=%s WHERE id=%s", (payment_id, txn["id"]))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "credited"}
+
+
+class WhatsappSendRequest(BaseModel):
+    branch_id: int
+    to: str
+    message: str
+
+
+@app.post("/api/whatsapp/send")
+def whatsapp_send(req: WhatsappSendRequest, institute: CurrentInstitute = Depends(require_write_access)):
+    """Deducts exactly one token per sent message. Actual WhatsApp Business
+    API delivery is left as an integration point - wire your BSP call in
+    where noted below; token accounting happens either way."""
+    check_module_access(institute, "whatsapp")
+    verify_branch_ownership(req.branch_id, institute.id)
+
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        wallet = _get_or_create_wallet(cur, institute.id)
+        if wallet["balance_tokens"] < 1:
+            conn.commit()
+            raise HTTPException(status_code=402, detail="Insufficient WhatsApp token balance. Please top up.")
+
+        # --- integrate your WhatsApp Business Solution Provider call here ---
+
+        new_balance = wallet["balance_tokens"] - 1
+        cur.execute("UPDATE whatsapp_wallets SET balance_tokens=%s WHERE institute_id=%s", (new_balance, institute.id))
+        cur.execute(
+            """INSERT INTO whatsapp_transactions (institute_id, type, tokens, status) VALUES (%s,'debit',-1,'success')"""
+            , (institute.id,)
+        )
+        should_notify = new_balance < WHATSAPP_LOW_BALANCE_THRESHOLD and (
+            wallet["low_balance_notified_at"] is None
+            or (datetime.now(timezone.utc) - wallet["low_balance_notified_at"].replace(tzinfo=timezone.utc)) > timedelta(hours=24)
+        )
+        if should_notify:
+            cur.execute("UPDATE whatsapp_wallets SET low_balance_notified_at=NOW() WHERE institute_id=%s", (institute.id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    if should_notify:
+        send_low_token_balance_email(institute.email, institute.institute_name, new_balance)
+
+    audit_write(institute, req.branch_id, "WHATSAPP_SEND", None, {"to": req.to})
+    return {"status": "sent", "balance_tokens": new_balance}
+
+# ---------------------------------------------------------------------------
 # Branch analytics
 # ---------------------------------------------------------------------------
 
@@ -1975,7 +2358,7 @@ def list_exam_results(branch_id: int, institute: CurrentInstitute = Depends(get_
         conn.close()
 
 @app.post("/api/exam/results")
-def create_exam_result(payload: ExamResultPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+def create_exam_result(payload: ExamResultPayload, institute: CurrentInstitute = Depends(require_write_access)):
     _exam_branch_check(institute, payload.branch_id)
     overall = float(payload.overall_marks)
     if overall <= 0:
@@ -1995,7 +2378,7 @@ def create_exam_result(payload: ExamResultPayload, institute: CurrentInstitute =
         conn.close()
 
 @app.patch("/api/exam/results/{result_id}")
-def update_exam_result(result_id: int, payload: ExamResultPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+def update_exam_result(result_id: int, payload: ExamResultPayload, institute: CurrentInstitute = Depends(require_write_access)):
     _exam_branch_check(institute, payload.branch_id)
     marks = _valid_marks(payload.marks, float(payload.overall_marks))
     conn = get_conn()
@@ -2014,7 +2397,7 @@ def update_exam_result(result_id: int, payload: ExamResultPayload, institute: Cu
         conn.close()
 
 @app.delete("/api/exam/results/{result_id}")
-def delete_exam_result(result_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+def delete_exam_result(result_id: int, institute: CurrentInstitute = Depends(require_write_access)):
     check_module_access(institute, "examination")
     conn = get_conn()
     try:
@@ -2037,7 +2420,7 @@ def list_exam_history(branch_id: int, institute: CurrentInstitute = Depends(get_
         conn.close()
 
 @app.post("/api/exam/history")
-def create_exam_history(payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+def create_exam_history(payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(require_write_access)):
     _exam_branch_check(institute, payload.branch_id)
     conn = get_conn()
     try:
@@ -2048,7 +2431,7 @@ def create_exam_history(payload: ExamHistoryPayload, institute: CurrentInstitute
         conn.close()
 
 @app.patch("/api/exam/history/{history_id}")
-def update_exam_history(history_id: int, payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(get_current_institute)):
+def update_exam_history(history_id: int, payload: ExamHistoryPayload, institute: CurrentInstitute = Depends(require_write_access)):
     _exam_branch_check(institute, payload.branch_id)
     conn = get_conn()
     try:
@@ -2061,7 +2444,7 @@ def update_exam_history(history_id: int, payload: ExamHistoryPayload, institute:
         conn.close()
 
 @app.delete("/api/exam/history/{history_id}")
-def delete_exam_history(history_id: int, institute: CurrentInstitute = Depends(get_current_institute)):
+def delete_exam_history(history_id: int, institute: CurrentInstitute = Depends(require_write_access)):
     check_module_access(institute, "examination")
     conn = get_conn()
     try:
