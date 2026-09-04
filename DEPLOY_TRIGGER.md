@@ -1,0 +1,1 @@
+Deployment trigger: 2026-09-04. This file intentionally exists to create a new commit on main and trigger the configured Render auto-deploy pipeline.
