@@ -8,6 +8,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700&display=swap');
 
@@ -186,6 +188,7 @@
                 <div class="flex items-center space-x-2 bg-[#121212] px-3 py-1.5 rounded-lg border gold-border">
                     <select id="branchSelector" aria-label="Branch selector" class="bg-transparent text-sm font-semibold gold-gradient-text focus:outline-none cursor-pointer"></select>
                     <button onclick="openAddBranchModal()" class="ml-2 text-xs bg-[#1a1a1a] hover:bg-[#252525] gold-gradient-text border gold-border px-2 py-0.5 rounded fast-transition">+ Branch</button>
+                    <button onclick="openCentralAnalytics()" title="Aggregated, read-only analytics across every branch" class="ml-2 text-xs bg-[#1a1a1a] hover:bg-[#252525] gold-gradient-text border gold-border px-2 py-0.5 rounded fast-transition">📊 Centralised Analytics</button>
                 </div>
                 <div class="text-xs text-right border-l pl-6 gold-border">
                     <div class="text-gray-400">Logged in as</div>
@@ -349,7 +352,6 @@
         let currentBranchId = null;
         let isGlobalView = false;
         let currentModule = 'home';
-        let authToken = localStorage.getItem('algorithmic_token');
         let isOwner = false;
         let myPermission = 'owner';
         let myFullName = '';
@@ -359,7 +361,7 @@
         const ACCESS_HEADS = ['homepage', 'administrations', 'examination'];
 const HEAD_MODULES = {
     homepage: [['analytics', '◈', 'Analytics'], ['assistant', '✦', 'Parallax'], ['students', '🎓', 'Student Department'], ['teachers', '👨‍🏫', 'Teacher Department'], ['classrooms', '🏛️', 'Classroom Department'], ['users', '🔐', 'Manage Users']],
-    administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees']],
+    administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees'], ['whatsapp', '💬', 'WhatsApp Messaging']],
     examination: [['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation']]
 };
 const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h, ms]) => ms.map(([m]) => [m, h])));
@@ -424,9 +426,11 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }
         }
 
+        // The session token now lives only in an HttpOnly, Secure,
+        // SameSite=Strict cookie set by the server - it is never readable
+        // from JS, so it can't be stolen via XSS. The browser attaches it
+        // to same-origin requests automatically; nothing to store here.
         function completeAuth(data) {
-            authToken = data.token;
-            localStorage.setItem('algorithmic_token', authToken);
             applyIdentity(data);
             document.getElementById('authOverlay').classList.add('hidden');
             document.getElementById('appContainer').classList.remove('hidden');
@@ -435,8 +439,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
         async function handleLogout() {
             try { await authFetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
-            localStorage.removeItem('algorithmic_token');
-            authToken = null;
             currentBranchId = null;
             document.getElementById('appContainer').classList.add('hidden');
             document.getElementById('authOverlay').classList.remove('hidden');
@@ -444,14 +446,11 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             document.getElementById('signupForm').classList.add('hidden');
         }
 
-        // Wraps fetch to attach the auth token and bounce to login on 401.
+        // Wraps fetch and bounces to login on 401. The cookie rides along
+        // automatically on same-origin requests - no Authorization header.
         async function authFetch(url, options = {}) {
-            options.headers = options.headers || {};
-            options.headers['Authorization'] = `Bearer ${authToken}`;
             const res = await fetch(url, options);
             if (res.status === 401) {
-                localStorage.removeItem('algorithmic_token');
-                authToken = null;
                 document.getElementById('appContainer').classList.add('hidden');
                 document.getElementById('authOverlay').classList.remove('hidden');
                 document.getElementById('loginError').textContent = 'Session expired. Please log in again.';
@@ -460,11 +459,11 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             return res;
         }
 
-        // Try to resume a session on page load if a token is already saved.
+        // Try to resume a session on page load - the cookie (if any) is sent
+        // automatically, so we just ask the server who we are.
         (async function tryResumeSession() {
-            if (!authToken) return;
             try {
-                const res = await authFetch('/api/auth/me');
+                const res = await fetch('/api/auth/me');
                 if (res.ok) {
                     const data = await res.json();
                     applyIdentity(data);
@@ -472,7 +471,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                     document.getElementById('appContainer').classList.remove('hidden');
                     initApp();
                 }
-            } catch (e) { /* handled in authFetch */ }
+            } catch (e) { /* not logged in - stay on the login screen */ }
         })();
 
         // ---- Branches ----
@@ -482,10 +481,10 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             branches = await res.json();
             const selector = document.getElementById('branchSelector');
             selector.innerHTML = '';
-            const hq = document.createElement('option');
-            hq.value = '0';
-            hq.textContent = '🏢 Centralized HQ (Read-Only)';
-            selector.appendChild(hq);
+            // Centralised HQ used to live here as a synthetic "branch 0"
+            // dropdown option. It's now the dedicated "Centralised Analytics"
+            // button next to "+ Branch" - see openCentralAnalytics() - which
+            // opens an analytics-only view instead of masquerading as a branch.
             branches.forEach(b => {
                 const opt = document.createElement('option');
                 opt.value = b.id;
@@ -584,6 +583,229 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }
         }
 
+        // ---- Centralised Analytics (header button, not a sidebar module) ----
+        // Read-only, aggregated-across-all-branches view. No management or
+        // editing capability lives here - it reuses the existing
+        // GET /api/analytics/0 aggregation the backend already scopes to the
+        // caller's tenant, and renders it with charts instead of forms.
+        function openCentralAnalytics() {
+            currentModule = 'central_analytics';
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            refreshCurrentModule();
+        }
+
+        window.__centralAnalyticsCharts = window.__centralAnalyticsCharts || [];
+        function destroyCentralAnalyticsCharts() {
+            (window.__centralAnalyticsCharts || []).forEach(c => { try { c.destroy(); } catch (e) {} });
+            window.__centralAnalyticsCharts = [];
+        }
+
+        async function renderCentralAnalyticsModule(container) {
+            const renderToken = Symbol('central-analytics-render');
+            window.__centralAnalyticsRenderToken = renderToken;
+            destroyCentralAnalyticsCharts();
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <div class="flex justify-between items-end flex-wrap gap-3">
+                        <div>
+                            <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">Centralised Analytics</h2>
+                            <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Aggregated, read-only performance across every branch</p>
+                        </div>
+                        <button onclick="refreshCurrentModule()" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider fast-transition">Refresh</button>
+                    </div>
+                    <div id="centralAnalyticsError" class="auth-error"></div>
+                    <div id="centralAnalyticsContent" class="space-y-8"><div class="glass-panel border gold-border p-10 rounded-2xl text-center text-gray-500">Loading aggregated analytics…</div></div>
+                </div>
+            `;
+            try {
+                const res = await authFetch('/api/analytics/0');
+                const data = await readApiJson(res, 'Centralised analytics request');
+                if (window.__centralAnalyticsRenderToken === renderToken && currentModule === 'central_analytics') renderCentralAnalyticsContent(data);
+            } catch (err) {
+                const error = document.getElementById('centralAnalyticsError');
+                if (error) error.textContent = err.message || 'Failed to load centralised analytics.';
+                const content = document.getElementById('centralAnalyticsContent');
+                if (content) content.innerHTML = '<div class="glass-panel border border-red-900/40 p-8 rounded-2xl text-center text-gray-500">Centralised analytics could not be loaded.</div>';
+            }
+        }
+
+        function centralStatCard(label, value) {
+            return `<div class="glass-panel border gold-border rounded-2xl p-5"><div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">${esc(label)}</div><div class="text-3xl font-black gold-gradient-text mt-1">${esc(value)}</div></div>`;
+        }
+
+        function renderCentralAnalyticsContent(d) {
+            const el = document.getElementById('centralAnalyticsContent');
+            if (!el) return;
+            const a = d.attendance || {}, f = d.fees || {}, l = d.lectures || {};
+            const trend = a.trend || [], batches = a.by_batch || [], revenue = (f.revenue || []).slice().reverse();
+
+            el.innerHTML = `
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    ${centralStatCard('Students', d.students_total)}
+                    ${centralStatCard('Teachers', d.teachers_total)}
+                    ${centralStatCard('Classrooms', d.classrooms_total)}
+                    ${centralStatCard('Fees Pending', '₹' + Number(f.pending_amount || 0).toLocaleString('en-IN'))}
+                </div>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="glass-panel border gold-border rounded-2xl p-6">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4">Attendance - Last 7 Days</div>
+                        <canvas id="centralAttendanceChart" height="220"></canvas>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4">Attendance by Batch</div>
+                        <canvas id="centralBatchChart" height="220"></canvas>
+                    </div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 md:col-span-2">
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4">Fee Revenue (Recent)</div>
+                        <canvas id="centralRevenueChart" height="180"></canvas>
+                    </div>
+                </div>
+            `;
+
+            const goldLine = '#d4af37';
+            const gridColor = 'rgba(212,175,55,0.12)';
+            const tickColor = '#9ca3af';
+
+            const attendanceCtx = document.getElementById('centralAttendanceChart');
+            if (attendanceCtx) {
+                window.__centralAnalyticsCharts.push(new Chart(attendanceCtx, {
+                    type: 'line',
+                    data: {
+                        labels: trend.map(t => t.label),
+                        datasets: [{ label: 'Present %', data: trend.map(t => t.pct), borderColor: goldLine, backgroundColor: 'rgba(212,175,55,0.15)', tension: 0.35, fill: true }]
+                    },
+                    options: {
+                        plugins: { legend: { labels: { color: tickColor } } },
+                        scales: { x: { ticks: { color: tickColor }, grid: { color: gridColor } }, y: { ticks: { color: tickColor }, grid: { color: gridColor }, min: 0, max: 100 } }
+                    }
+                }));
+            }
+
+            const batchCtx = document.getElementById('centralBatchChart');
+            if (batchCtx) {
+                window.__centralAnalyticsCharts.push(new Chart(batchCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: batches.map(b => b.batch),
+                        datasets: [{ label: 'Attendance %', data: batches.map(b => b.pct), backgroundColor: goldLine }]
+                    },
+                    options: {
+                        plugins: { legend: { display: false } },
+                        scales: { x: { ticks: { color: tickColor }, grid: { display: false } }, y: { ticks: { color: tickColor }, grid: { color: gridColor }, min: 0, max: 100 } }
+                    }
+                }));
+            }
+
+            const revenueCtx = document.getElementById('centralRevenueChart');
+            if (revenueCtx) {
+                window.__centralAnalyticsCharts.push(new Chart(revenueCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: revenue.map(r => r.date),
+                        datasets: [{ label: 'Revenue (₹)', data: revenue.map(r => r.amount), backgroundColor: 'rgba(212,175,55,0.65)' }]
+                    },
+                    options: {
+                        plugins: { legend: { display: false } },
+                        scales: { x: { ticks: { color: tickColor }, grid: { display: false } }, y: { ticks: { color: tickColor }, grid: { color: gridColor } } }
+                    }
+                }));
+            }
+        }
+
+        // ---- WhatsApp Messaging module ----
+
+        async function renderWhatsappModule(container) {
+            container.innerHTML = `
+                <div class="space-y-8">
+                    <div>
+                        <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">WhatsApp Messaging</h2>
+                        <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Token wallet &amp; package top-ups for parent/staff messaging</p>
+                    </div>
+                    <div id="waError" class="auth-error"></div>
+                    <div class="glass-panel border gold-border rounded-2xl p-6 flex items-center justify-between flex-wrap gap-4">
+                        <div>
+                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Current Balance</div>
+                            <div id="waBalance" class="text-4xl font-black gold-gradient-text mt-1">—</div>
+                        </div>
+                        <div class="text-xs text-gray-500 max-w-sm">Each sent message deducts 1 token. You'll get a low-balance email once your wallet drops below 100 tokens.</div>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4">Token Packages</div>
+                        <div id="waPackages" class="grid md:grid-cols-3 gap-4">
+                            <div class="glass-panel border gold-border p-8 rounded-2xl text-center text-gray-500">Loading packages…</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            try {
+                const [balRes, pkgRes] = await Promise.all([
+                    authFetch('/api/whatsapp/balance'),
+                    authFetch('/api/whatsapp/packages'),
+                ]);
+                const bal = await readApiJson(balRes, 'WhatsApp balance request');
+                const pkgs = await readApiJson(pkgRes, 'WhatsApp packages request');
+                document.getElementById('waBalance').textContent = `${bal.balance_tokens} tokens`;
+                renderWhatsappPackages(pkgs.packages || {});
+            } catch (err) {
+                const error = document.getElementById('waError');
+                if (error) error.textContent = err.message || 'Failed to load WhatsApp Messaging.';
+            }
+        }
+
+        function renderWhatsappPackages(packages) {
+            const el = document.getElementById('waPackages');
+            if (!el) return;
+            el.innerHTML = Object.entries(packages).map(([key, p]) => `
+                <div class="glass-panel border gold-border rounded-2xl p-6 flex flex-col">
+                    <div class="text-xs uppercase tracking-widest text-gray-500 font-bold">${esc(p.label)}</div>
+                    <div class="text-3xl font-black gold-gradient-text mt-2">₹${Number(p.price_inr).toLocaleString('en-IN')}</div>
+                    <div class="text-xs text-gray-400 mt-1">${Number(p.tokens).toLocaleString('en-IN')} tokens</div>
+                    <button onclick="startWhatsappCheckout('${key}')" class="mt-6 gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition">Buy Now</button>
+                </div>
+            `).join('');
+        }
+
+        async function startWhatsappCheckout(packageKey) {
+            const error = document.getElementById('waError');
+            if (error) error.textContent = '';
+            try {
+                const res = await authFetch('/api/whatsapp/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ package: packageKey }),
+                });
+                const order = await readApiJson(res, 'Checkout request');
+
+                if (!order.key_id) {
+                    // No live payment gateway configured (e.g. local/dev) - the
+                    // order was recorded, but there's nothing for Razorpay's
+                    // widget to open. Tokens are only ever credited by the
+                    // signed webhook, never from the client.
+                    alert('Checkout order created (payment gateway not configured in this environment). Tokens will be credited automatically once payment is confirmed.');
+                    return;
+                }
+
+                const rzp = new Razorpay({
+                    key: order.key_id,
+                    order_id: order.order_id,
+                    amount: order.amount_inr * 100,
+                    currency: 'INR',
+                    name: document.getElementById('headerInstituteName').textContent || 'Algorithmic',
+                    description: `${order.tokens} WhatsApp tokens`,
+                    handler: function () {
+                        // The webhook (server-to-server, signature-verified) is
+                        // the only thing that ever credits tokens. This just
+                        // refreshes the on-screen balance after a moment.
+                        setTimeout(() => refreshCurrentModule(), 3000);
+                    },
+                    theme: { color: '#d4af37' },
+                });
+                rzp.open();
+            } catch (err) {
+                if (error) error.textContent = err.message || 'Failed to start checkout.';
+            }
+        }
+
         async function refreshCurrentModule() {
             const container = document.getElementById('mainContent');
             if (!container) return;
@@ -604,6 +826,10 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                     await renderSeatingModule(container);
                 } else if (currentModule === 'assistant') {
                     await renderAssistantModule(container);
+                } else if (currentModule === 'central_analytics') {
+                    await renderCentralAnalyticsModule(container);
+                } else if (currentModule === 'whatsapp') {
+                    await renderWhatsappModule(container);
                 } else {
                     await renderDataModule(container, currentModule);
                 }
