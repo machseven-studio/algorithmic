@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALGORITHMIC - Enterprise Institutional Operations</title>
+    <title>I.B.E.X. - Enterprise Institutional Operations</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script id="algorithmic-chart-guard">
+<script id="ibex-chart-guard">
 (function(){
-  if (window.__algorithmicChartGuardInstalled) return;
-  window.__algorithmicChartGuardInstalled = true;
-  window.AlgorithmicChart = function(target, config){
+  if (window.__ibexChartGuardInstalled) return;
+  window.__ibexChartGuardInstalled = true;
+  window.IBEXChart = function(target, config){
     if (!window.Chart) return { destroy:function(){}, update:function(){}, resize:function(){} };
     var el = typeof target === 'string' ? document.getElementById(target) : target;
     if (!el || !document.documentElement.contains(el)) return { destroy:function(){}, update:function(){}, resize:function(){} };
@@ -63,6 +63,9 @@
             -webkit-text-fill-color: transparent;
             filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
         }
+
+        /* Small elegant tagline shown under every I.B.E.X. logo instance. */
+        .ibex-tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 0.6rem; line-height: 1.25; letter-spacing: 0.06em; color: rgba(232, 199, 103, 0.7); }
 
         .gold-border { border-color: rgba(212, 175, 55, 0.28); }
 
@@ -124,13 +127,13 @@
     .head-chevron { transition: transform .15s ease; } .rotate-180 { transform: rotate(180deg); }
     </style>
 
-<style id="algorithmic-final-layout">
+<style id="ibex-final-layout">
 #headerInstituteName{font-size:clamp(2.4rem,4.2vw,4.8rem)!important;max-width:min(70vw,1100px)!important}
 #moduleSidebar{position:relative!important;transition:width .18s ease,min-width .18s ease!important}
 .module-head-group{width:100%!important}.module-head-group>div:first-child{width:100%!important}.module-head-arrow{pointer-events:auto!important}
 </style>
 
-<style id="algorithmic-timetable-layout">
+<style id="ibex-timetable-layout">
 #teacherConfigList{min-height:220px;max-height:55vh!important;overflow-y:auto;padding-right:.5rem}
 #teacherConfigList>div{min-height:84px}
 #teacherConfigList>div>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
@@ -140,7 +143,7 @@
 </style>
 
 
-<style id="algorithmic-sidebar-layout">
+<style id="ibex-sidebar-layout">
 #moduleSidebar{display:flex;flex-direction:column;align-items:stretch;position:relative!important;transition:width .18s ease,min-width .18s ease,padding .18s ease!important}
 #moduleGroups{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%}
 #moduleGroups>.mb-1,#moduleGroups .module-head-group{width:100%}
@@ -155,7 +158,7 @@
 </style>
 
 
-<style id="algorithmic-examination-layout">
+<style id="ibex-examination-layout">
 #examV2Root .examv2-card{background:linear-gradient(160deg,rgba(20,17,10,.55),rgba(8,8,8,.9));border:1px solid rgba(212,175,55,.18);border-radius:16px;padding:24px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
 #examV2Root .examv2-table th{padding:12px 14px;color:#9ca3af;border-bottom:1px solid rgba(212,175,55,.18)}
 #examV2Root .examv2-table td{padding:11px 14px;border-bottom:1px solid #181818}
@@ -164,7 +167,7 @@
 </style>
 
 
-<style id="algorithmic-timetable-final">
+<style id="ibex-timetable-final">
 #teacherConfigList{width:100%!important;min-height:180px;max-height:52vh;overflow-y:auto;overflow-x:hidden;padding-right:4px}
 .glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;margin-left:auto;margin-right:auto}
 #teacherConfigList>div{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}
@@ -172,7 +175,7 @@
 @media(max-width:600px){#teacherConfigList>div{grid-template-columns:1fr}}
 </style>
 
-<style id="algorithmic-sidebar-final">
+<style id="ibex-sidebar-final">
 #moduleSidebar{display:flex;flex-direction:column;align-items:stretch}
 #moduleSidebar .module-head-group{width:100%;box-sizing:border-box}
 #moduleSidebar .module-head-group>div:first-child{display:flex;align-items:center;width:100%;min-height:44px}
@@ -181,21 +184,26 @@
 #moduleSidebar.sidebar-collapsed .module-head-items{display:none!important}
 </style>
 
-<style id="algorithmic-examination-final">
+<style id="ibex-examination-final">
 #examV2Root,#examUpgradeRoot{font-family:'Plus Jakarta Sans',sans-serif}
 #examV2Root .examv2-card,#examUpgradeRoot>div{border-color:rgba(212,175,55,.18);background:rgba(10,10,10,.92);border-radius:16px}
 #examV2Root table,#examUpgradeRoot table{border-collapse:collapse;width:100%}
 #examV2Root th,#examUpgradeRoot th{color:#6b7280;text-transform:uppercase;letter-spacing:.08em;font-size:10px;font-weight:800}
 #examV2Root td,#examUpgradeRoot td{font-size:12px;color:#d1d5db;border-bottom:1px solid #181818}
 </style>
-<style id="algorithmic-requested-fixes-css">
+<style id="ibex-requested-fixes-css">
 #branchSelector{background:#17140b!important;border:1px solid rgba(232,199,103,.5)!important;border-radius:10px;padding:8px 12px;color:#f0d77c!important;min-width:170px}#branchSelector option{background:#10100d;color:#f5e8b0}
 #moduleGroups .sidebar-item{padding-left:1rem!important;margin-left:0!important;justify-content:flex-start!important;gap:0!important;border-left:0!important}#moduleGroups .sidebar-item>span:first-child{display:none!important}
 #moduleSidebar.sidebar-collapsed{width:64px!important;min-width:64px!important;flex-basis:64px!important}#moduleSidebar.sidebar-collapsed>div:not(#moduleGroups),#moduleSidebar.sidebar-collapsed #moduleGroups{display:none!important}#moduleSidebar.sidebar-collapsed .sidebar-item,#moduleSidebar.sidebar-collapsed .module-head-group{display:none!important}
 .parallax-thread{background:radial-gradient(circle at 20% 0,rgba(212,175,55,.07),transparent 40%),linear-gradient(155deg,#100e09,#070707)!important;border-color:rgba(232,199,103,.28)!important;box-shadow:0 24px 60px rgba(0,0,0,.35)!important;min-height:120px}#parallaxForm{padding:10px!important;border:1px solid rgba(212,175,55,.18)!important;border-radius:16px!important;background:rgba(12,12,12,.8)!important}#parallaxInput{min-height:48px!important;font-size:13px!important}
 .parallax-search-shell{margin-top:1rem;padding:18px;border-radius:22px;border:1px solid rgba(232,199,103,.22);background:radial-gradient(circle at 10% 0,rgba(212,175,55,.08),transparent 38%),linear-gradient(145deg,#11100d,#080808);box-shadow:0 24px 60px rgba(0,0,0,.32)}.parallax-search-kicker{font-size:9px;letter-spacing:.2em;color:#8f8567;font-weight:800;margin-bottom:10px}.parallax-search-row{display:flex;align-items:center;gap:10px}.parallax-search-row input{flex:1;background:#060606;border:1px solid rgba(212,175,55,.25);border-radius:13px;padding:13px 14px;color:#eee;outline:none}.parallax-search-row button{background:#c6a64b;color:#080808;border:0;border-radius:12px;padding:12px 18px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em}.parallax-search-results{margin-top:10px;border-top:1px solid rgba(255,255,255,.05);padding-top:8px}.parallax-search-hit{display:grid;grid-template-columns:150px 1fr;gap:5px 14px;width:100%;text-align:left;padding:11px 12px;border-radius:10px;background:#0d0d0d;border:1px solid transparent;color:#ddd}.parallax-search-hit:hover{border-color:rgba(212,175,55,.18);background:#12110e}.parallax-search-hit span{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#8c815e}.parallax-search-hit b{font-size:12px}.parallax-search-hit small{grid-column:1/-1;color:#777;font-size:10px}
-#teacherConfigList{min-height:520px!important;max-height:70vh!important;padding:14px!important}.glass-panel:has(#teacherConfigList){width:min(94vw,1280px)!important;max-width:1280px!important;min-height:720px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList>div{min-height:150px!important;padding:20px!important;gap:20px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList input{min-height:48px!important;font-size:14px!important}
-#examV2Root,#examUpgradeRoot{font-family:'Plus Jakarta Sans',sans-serif!important;color:#d1d5db!important}#examV2Root h1,#examV2Root h2,#examV2Root h3,#examUpgradeRoot h1,#examUpgradeRoot h2,#examUpgradeRoot h3{font-family:'Fraunces',serif!important;color:#c7aa56!important}#examV2Root th,#examUpgradeRoot th{color:#8f8567!important}#examV2Root td,#examUpgradeRoot td{color:#d1d5db!important}
+#teacherConfigList{min-height:320px!important;max-height:55vh!important;padding:14px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList>div{min-height:150px!important;padding:20px!important;gap:20px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList input{min-height:48px!important;font-size:14px!important}
+/* "Generated Weekly Schedule" box: previously squeezed/exposed the page
+   background behind it because the left config panel above was forced to
+   width:min(94vw,1280px), breaking out of the 3-column grid. That override
+   is removed; this box now reliably fills its full grid column. */
+#ttScheduleBox{width:100%!important;box-sizing:border-box;min-height:60vh}
+#examV2Root,#examUpgradeRoot{font-family:'Plus Jakarta Sans',sans-serif!important;color:#d1d5db!important}#examV2Root th,#examUpgradeRoot th{color:#8f8567!important}#examV2Root td,#examUpgradeRoot td{color:#d1d5db!important}
 </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -208,7 +216,8 @@
                 <div class="inline-block p-3 rounded-full bg-[#121212] border gold-border mb-4 shadow-lg">
                     <span class="text-2xl font-black gold-gradient-text">⚡</span>
                 </div>
-                <h1 class="text-2xl font-black gold-gradient-text tracking-wider">ALGORITHMIC</h1>
+                <h1 class="text-2xl font-black gold-gradient-text tracking-wider">I.B.E.X.</h1>
+                <div class="ibex-tagline mt-0.5">Institutional<br>Backbone<br>EXecutive</div>
                 <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Enterprise Institutional Portal</p>
             </div>
 
@@ -233,7 +242,7 @@
             <form id="signupForm" onsubmit="handleSignup(event)" class="space-y-4 hidden">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Institute Name</label>
-                    <input type="text" id="signupInstitute" required placeholder="Algorithmic Academy of Excellence" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                    <input type="text" id="signupInstitute" required placeholder="I.B.E.X. Academy of Excellence" class="w-full bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Your Name</label>
@@ -289,7 +298,10 @@
         <div class="flex flex-1 overflow-hidden">
             <nav id="moduleSidebar" class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
     <button id="sidebarCollapseButton" type="button" aria-label="Collapse sidebar" title="Collapse sidebar" onclick="toggleSidebar()">‹</button>
-    <div class="px-6 pb-1 elegant-font text-lg font-bold gold-gradient-text tracking-wide">ALGORITHMIC</div>
+    <div class="px-6 pb-1">
+        <div class="elegant-font text-lg font-bold gold-gradient-text tracking-wide">I.B.E.X.</div>
+        <div class="ibex-tagline">Institutional<br>Backbone<br>EXecutive</div>
+    </div>
     <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
     <div class="px-3 space-y-1" id="moduleGroups"></div>
     <div class="mt-auto px-6 pt-6 border-t gold-border text-[11px] text-gray-400 space-y-1 bg-[#090909]">
@@ -389,15 +401,6 @@
     </div>
 
     <!-- Attendance History Modal -->
-    <div id="attendanceHistoryModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
-        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-md shadow-2xl">
-            <div class="flex justify-between items-center mb-6">
-                <h3 id="attendanceHistoryTitle" class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Attendance History</h3>
-                <button onclick="closeAttendanceHistory()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
-            </div>
-            <div id="attendanceHistoryBody"></div>
-        </div>
-    </div>
 
     <!-- Timetable Slot Edit Modal -->
     <div id="timetableSlotEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50">
@@ -450,7 +453,7 @@
 const HEAD_MODULES = {
     homepage: [['analytics', '◈', 'Analytics'], ['assistant', '✦', 'Parallax'], ['students', '🎓', 'Student Department'], ['teachers', '👨‍🏫', 'Teacher Department'], ['classrooms', '🏛️', 'Classroom Department'], ['users', '🔐', 'Manage Users']],
     administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees'], ['whatsapp', '💬', 'WhatsApp Messaging']],
-    examination: [['seating', '🪑', 'Exam Seating'], ['invigilation', '🛡️', 'Exam Invigilation']]
+    examination: [['seating', '', 'Exam Seating'], ['invigilation', '', 'Exam Invigilation']]
 };
 const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h, ms]) => ms.map(([m]) => [m, h])));
 
@@ -492,7 +495,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 }
                 completeAuth(data);
             } catch (err) {
-                console.error('Algorithmic login request failed:', err);
+                console.error('I.B.E.X. login request failed:', err);
                 errorEl.textContent = 'Unable to reach the login server. Please refresh the page and try again.';
             } finally {
                 if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Log In'; }
@@ -532,7 +535,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 }
                 completeAuth(data);
             } catch (err) {
-                console.error('Algorithmic signup request failed:', err);
+                console.error('I.B.E.X. signup request failed:', err);
                 errorEl.textContent = 'Unable to reach the signup server. Please refresh the page and try again.';
             } finally {
                 if (button) { button.disabled = false; button.textContent = button.dataset.originalText || 'Create Account'; }
@@ -587,6 +590,19 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 throw new Error('Session expired');
             }
             return res;
+        }
+
+        // Runs once, right after login/signup or a resumed session is
+        // confirmed. This was previously missing entirely, which meant
+        // loadBranches() never ran on startup - so the branch selector
+        // (and its "Main Campus" default) never initialized, and the
+        // dashboard never rendered until something else happened to
+        // trigger it. This is the fix for both.
+        async function initApp() {
+            currentModule = 'home';
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            await loadBranches();
+            await refreshCurrentModule();
         }
 
         // Try to resume a session on page load - the cookie (if any) is sent
@@ -678,14 +694,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             await refreshCurrentModule();
         }
 
-        function toggleModuleHead(head) {
-            const panel = document.getElementById(`head-${head}`);
-            const button = document.getElementById(`head-btn-${head}`);
-            if (!panel || !button) return;
-            panel.classList.toggle('hidden');
-            button.querySelector('.head-chevron').classList.toggle('rotate-180');
-        }
-
         function renderModuleGroups() {
             const groups = document.getElementById('moduleGroups');
             if (!groups) return;
@@ -729,6 +737,21 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             const panel = document.getElementById(`head-${head}`);
             const button = panel?.previousElementSibling?.querySelector('.module-head-arrow');
             if (!panel) return;
+            const opening = panel.classList.contains('hidden');
+            // Accordion behaviour: only one parent module may stay open at
+            // a time. Opening a new one closes whichever was already open.
+            if (opening) {
+                document.querySelectorAll('#moduleGroups .module-head-group').forEach(group => {
+                    const otherHead = group.dataset.head;
+                    if (otherHead === head) return;
+                    const otherPanel = document.getElementById(`head-${otherHead}`);
+                    const otherButton = otherPanel?.previousElementSibling?.querySelector('.module-head-arrow');
+                    if (otherPanel && !otherPanel.classList.contains('hidden')) {
+                        otherPanel.classList.add('hidden');
+                        if (otherButton) otherButton.classList.remove('rotate-180');
+                    }
+                });
+            }
             panel.classList.toggle('hidden');
             if (button) button.classList.toggle('rotate-180');
         }
@@ -778,7 +801,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const attendanceCtx = document.getElementById('centralAttendanceChart');
             if (attendanceCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(attendanceCtx, {
+                window.__centralAnalyticsCharts.push(new window.IBEXChart(attendanceCtx, {
                     type: 'line',
                     data: {
                         labels: trend.map(t => t.label),
@@ -793,7 +816,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const batchCtx = document.getElementById('centralBatchChart');
             if (batchCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(batchCtx, {
+                window.__centralAnalyticsCharts.push(new window.IBEXChart(batchCtx, {
                     type: 'bar',
                     data: {
                         labels: batches.map(b => b.batch),
@@ -808,7 +831,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
             const revenueCtx = document.getElementById('centralRevenueChart');
             if (revenueCtx && window.Chart) {
-                window.__centralAnalyticsCharts.push(new window.AlgorithmicChart(revenueCtx, {
+                window.__centralAnalyticsCharts.push(new window.IBEXChart(revenueCtx, {
                     type: 'bar',
                     data: {
                         labels: revenue.map(r => r.date),
@@ -900,7 +923,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                     order_id: order.order_id,
                     amount: order.amount_inr * 100,
                     currency: 'INR',
-                    name: document.getElementById('headerInstituteName').textContent || 'Algorithmic',
+                    name: document.getElementById('headerInstituteName').textContent || 'I.B.E.X.',
                     description: `${order.tokens} WhatsApp tokens`,
                     handler: function () {
                         // The webhook (server-to-server, signature-verified) is
@@ -1069,32 +1092,45 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 <div class="space-y-8">
                     ${isGlobalView ? '<div class="border border-slate-700/60 bg-slate-950/60 rounded-xl px-5 py-3 text-xs text-slate-300">🏢 Centralized HQ mode · consolidated read-only view across every branch.</div>' : ''}
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
-                        <div class="max-w-3xl relative z-10 space-y-4">
-                            <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
-                            <h2 class="welcome-animate command-heading-font text-5xl gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
+                        <div class="max-w-3xl relative z-10 space-y-4 flex items-center justify-between gap-6 flex-wrap">
+                            <div class="space-y-4">
+                                <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
+                                <h2 class="welcome-animate command-heading-font text-5xl gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
+                            </div>
+                            <div id="homeIstClock" class="command-heading-font gold-gradient-text tracking-tight leading-tight text-right"></div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        ${can('students') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Active Students</div><div class="text-3xl font-black gold-gradient-text" id="statStudents">—</div></div>` : ''}
-                        ${can('teachers') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Faculty Members</div><div class="text-3xl font-black gold-gradient-text" id="statTeachers">—</div></div>` : ''}
-                        ${can('classrooms') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Classrooms Available</div><div class="text-3xl font-black gold-gradient-text" id="statClassrooms">—</div></div>` : ''}
-                        ${can('fees') ? `<div class="glass-panel p-6 rounded-2xl border gold-border"><div class="text-gray-400 text-xs uppercase tracking-widest mb-1">Fees Pending</div><div class="text-3xl font-black gold-gradient-text" id="statFeesPending">—</div></div>` : ''}
-                    </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        ${can('attendance') ? `
-                        <div class="glass-panel p-6 rounded-2xl border gold-border">
-                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Attendance This Week · Per Batch</h3>
-                            <div id="dashAttendanceChart" class="space-y-3"><p class="text-xs text-gray-500">Loading…</p></div>
-                        </div>` : ''}
+                    <div class="grid grid-cols-1 gap-6">
                         ${can('timetables') ? `
-                        <div class="glass-panel p-6 rounded-2xl border gold-border">
-                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider mb-4">Ongoing Lectures Right Now</h3>
-                            <div id="dashOngoingLectures" class="space-y-2"><p class="text-xs text-gray-500">Loading…</p></div>
+                        <div class="glass-panel px-8 py-4 rounded-2xl border gold-border w-full">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Ongoing Lectures Right Now</h3>
+                            </div>
+                            <div id="dashOngoingLectures" class="flex flex-wrap gap-3"><p class="text-xs text-gray-500">Loading…</p></div>
                         </div>` : ''}
                     </div>
                 </div>
             `;
             loadHomeStats();
+            startHomeClock();
+        }
+
+        // Live IST clock + date shown beside "Welcome, X" - same font/color
+        // classes as the welcome heading itself (command-heading-font +
+        // gold-gradient-text) so it reads as one continuous piece of type.
+        let homeClockTimer = null;
+        function startHomeClock() {
+            if (homeClockTimer) clearInterval(homeClockTimer);
+            const tick = () => {
+                const el = document.getElementById('homeIstClock');
+                if (!el) { clearInterval(homeClockTimer); homeClockTimer = null; return; }
+                const now = new Date();
+                const time = now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+                const date = now.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                el.innerHTML = `<div class="text-3xl">${esc(time)}</div><div class="text-xs tracking-widest uppercase mt-1 opacity-80">${esc(date)} · IST</div>`;
+            };
+            tick();
+            homeClockTimer = setInterval(tick, 1000);
         }
 
         async function loadHomeStats() {
@@ -1102,49 +1138,20 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 if (!currentBranchId) return;
                 const can = (m) => isOwner || myAllowedModules.includes(m);
 
-                if (can('students')) {
-                    const r = await authFetch(`/api/records/students/${currentBranchId}`);
-                    document.getElementById('statStudents').textContent = (await r.json()).length;
-                }
-                if (can('teachers')) {
-                    const r = await authFetch(`/api/records/teachers/${currentBranchId}`);
-                    document.getElementById('statTeachers').textContent = (await r.json()).length;
-                }
-                if (can('classrooms')) {
-                    const r = await authFetch(`/api/records/classrooms/${currentBranchId}`);
-                    document.getElementById('statClassrooms').textContent = (await r.json()).length;
-                }
-
-                const dRes = await authFetch(`/api/dashboard/${currentBranchId}`);
-                const dash = await dRes.json();
-
-                if (can('fees')) {
-                    document.getElementById('statFeesPending').textContent = `₹${(dash.fees_pending_total || 0).toLocaleString('en-IN')}`;
-                }
-
-                if (can('attendance')) {
-                    const el = document.getElementById('dashAttendanceChart');
-                    if (!dash.attendance_week.length) {
-                        el.innerHTML = '<p class="text-xs text-gray-500">No attendance marked in the last 7 days.</p>';
-                    } else {
-                        el.innerHTML = dash.attendance_week.map(b => `
-                            <div>
-                                <div class="flex justify-between text-xs mb-1"><span class="text-gray-300 font-semibold">${esc(b.batch)}</span><span class="text-gray-500">${b.present}/${b.total} present · ${b.pct}%</span></div>
-                                <div class="mini-bar-track"><div class="mini-bar-fill" style="width:${b.pct}%"></div></div>
-                            </div>
-                        `).join('');
-                    }
-                }
-
+                // All other dashboard stats/analytics now live exclusively
+                // in the Analytics module - the homepage only surfaces
+                // what's happening right now.
                 if (can('timetables')) {
+                    const dRes = await authFetch(`/api/dashboard/${currentBranchId}`);
+                    const dash = await dRes.json();
                     const el = document.getElementById('dashOngoingLectures');
                     if (!dash.ongoing_lectures.length) {
-                        el.innerHTML = `<p class="text-sm font-serif italic text-gold-400/80 text-yellow-400/70 leading-relaxed">Zero active lectures. The silence is golden, and so is the electricity bill you're saving.</p>`;
+                        el.innerHTML = `<p class="text-sm font-serif italic text-yellow-400/70 leading-relaxed">Zero active lectures. The silence is golden, and so is the electricity bill you're saving.</p>`;
                     } else {
                         el.innerHTML = dash.ongoing_lectures.map(l => `
-                            <div class="flex items-center justify-between text-xs bg-[#0c0c0c] border gold-border rounded-xl px-4 py-3">
-                                <div class="flex items-center space-x-2"><span class="ongoing-dot"></span><span class="font-semibold text-white">${esc(l.batch_name)}</span><span class="text-gray-500">${esc(l.subject)}</span></div>
-                                <div class="text-gray-400">${esc(l.teacher)} · ${esc(l.room)}</div>
+                            <div class="flex items-center space-x-2 text-xs bg-[#0c0c0c] border gold-border rounded-xl px-4 py-2.5 whitespace-nowrap">
+                                <span class="ongoing-dot"></span><span class="font-semibold text-white">${esc(l.batch_name)}</span><span class="text-gray-500">${esc(l.subject)}</span>
+                                <span class="text-gray-400">· ${esc(l.teacher)} · ${esc(l.room)}</span>
                             </div>
                         `).join('');
                     }
@@ -1154,6 +1161,56 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 
         // Small HTML-escaping helper reused across dashboard/table rendering.
         function esc(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c])); }
+
+        // Shared branding for EVERY PDF exported from any module: cream
+        // background, executive serif type, gold rule, I.B.E.X. wordmark +
+        // tagline. Call this first, then start the table/content at the
+        // returned Y position.
+        function ibexPdfHeader(doc, title, subtitle) {
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            doc.setFillColor(250, 246, 233);
+            doc.rect(0, 0, pageWidth, pageHeight, 'F');
+            doc.setFont('times', 'bold');
+            doc.setTextColor(120, 92, 30);
+            doc.setFontSize(20);
+            doc.text('I.B.E.X.', 14, 17);
+            doc.setFont('times', 'italic');
+            doc.setFontSize(7);
+            doc.setTextColor(150, 128, 80);
+            doc.text('Institutional', 14, 22);
+            doc.text('Backbone', 14, 25.5);
+            doc.text('EXecutive', 14, 29);
+            doc.setFont('times', 'bold');
+            doc.setFontSize(15);
+            doc.setTextColor(45, 35, 15);
+            doc.text(String(title || ''), 14, 40);
+            let y = 40;
+            if (subtitle) {
+                doc.setFont('times', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(90, 78, 50);
+                doc.text(String(subtitle), 14, 46);
+                y = 46;
+            }
+            doc.setDrawColor(190, 160, 90);
+            doc.setLineWidth(0.4);
+            doc.line(14, y + 4, pageWidth - 14, y + 4);
+            doc.setTextColor(30, 26, 15);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            return y + 12;
+        }
+
+        // Shared jsPDF-autoTable theme so every exported table matches the
+        // cream, gold-trimmed executive look.
+        const IBEX_PDF_TABLE_STYLE = {
+            styles: { font: 'times', fontSize: 8, textColor: [40, 32, 15], lineColor: [210, 190, 140], lineWidth: 0.2 },
+            headStyles: { fillColor: [201, 168, 92], textColor: [35, 25, 10], font: 'times', fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [250, 246, 233] },
+            tableLineColor: [210, 190, 140],
+            tableLineWidth: 0.2,
+        };
 
         // Shared by the on-screen table AND both export functions, so a
         // module's columns/order never drift apart between what's shown and
@@ -1175,14 +1232,12 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             if (!records.length) { alert('Nothing to export yet.'); return; }
             const columns = getModuleColumns(moduleName, records);
             const doc = new window.jspdf.jsPDF();
-            doc.setFontSize(14);
-            doc.text(`${moduleName[0].toUpperCase()}${moduleName.slice(1)} - Algorithmic`, 14, 16);
+            const startY = ibexPdfHeader(doc, `${moduleName[0].toUpperCase()}${moduleName.slice(1)}`, 'Institutional records export');
             doc.autoTable({
-                startY: 22,
+                startY,
                 head: [columns.map(c => c.label)],
                 body: records.map(r => columns.map(c => String(formatExportValue(moduleName, c.key, r[c.key])))),
-                styles: { fontSize: 8 },
-                headStyles: { fillColor: [20, 20, 20] },
+                ...IBEX_PDF_TABLE_STYLE,
             });
             doc.save(`${moduleName}_export.pdf`);
         }
@@ -1486,7 +1541,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 <div class="flex items-center justify-between py-3">
                     <span class="text-sm font-medium text-gray-200">${esc(s.name)}</span>
                     <div class="flex items-center space-x-2">
-                        <button onclick="openAttendanceHistory('${safeName}')" title="View past attendance" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition bg-[#141414] text-gray-400 border gold-border hover:text-yellow-500">History</button>
                         <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Present')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Present' ? 'bg-green-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-green-400'}">Present</button>
                         <button ${canWrite ? '' : 'disabled'} onclick="markAttendance('${safeName}', 'Absent')" class="px-4 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wider fast-transition ${mark === 'Absent' ? 'bg-red-600 text-white' : 'bg-[#141414] text-gray-400 border gold-border hover:text-red-400'}">Absent</button>
                     </div>
@@ -1494,48 +1548,8 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }).join('');
         }
 
-        async function openAttendanceHistory(studentName) {
-            const modal = document.getElementById('attendanceHistoryModal');
-            const body = document.getElementById('attendanceHistoryBody');
-            document.getElementById('attendanceHistoryTitle').textContent = `Attendance History · ${studentName}`;
-            body.innerHTML = '<p class="text-xs text-gray-500 p-4">Loading…</p>';
-            modal.classList.remove('hidden');
-            try {
-                const res = await authFetch(`/api/attendance/history/${currentBranchId}?student_name=${encodeURIComponent(studentName)}`);
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    body.innerHTML = `<p class="text-xs text-red-400 p-4">${esc(data.detail || 'Failed to load attendance history.')}</p>`;
-                    return;
-                }
-                if (!Array.isArray(data.history) || !data.history.length) {
-                    body.innerHTML = '<p class="text-xs text-gray-500 p-4">No attendance marked yet for this student.</p>';
-                    return;
-                }
-                body.innerHTML = `
-                    <div class="flex justify-between text-xs text-gray-400 px-1 pb-3 border-b gold-border mb-3">
-                        <span>${data.total_marked} days marked</span>
-                        <span class="text-green-400">${data.present_count} present</span>
-                        <span class="text-red-400">${data.absent_count} absent</span>
-                    </div>
-                    <div class="max-h-72 overflow-y-auto divide-y divide-gray-900">
-                        ${data.history.map(h => {
-                            const date = String(h?.date ?? '');
-                            const status = String(h?.status ?? '');
-                            return `
-                            <div class="flex justify-between items-center py-2 text-sm">
-                                <span class="text-gray-300">${esc(date)}</span>
-                                <span class="font-semibold ${status === 'Present' ? 'text-green-400' : 'text-red-400'}">${esc(status)}</span>
-                            </div>
-                        `;
-                    }).join('')}
-                    </div>
-                `;
-            } catch (e) {
-                body.innerHTML = '<p class="text-xs text-red-400 p-4">Failed to load history.</p>';
-            }
-        }
-
-        function closeAttendanceHistory() { document.getElementById('attendanceHistoryModal').classList.add('hidden'); }
+        // The attendance History feature (openAttendanceHistory/closeAttendanceHistory
+        // + their modal) was removed - it's obsolete per product decision.
 
         async function markAttendance(studentName, status) {
             const res = await authFetch('/api/attendance/mark', {
@@ -2029,7 +2043,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                                     : `<p class="text-xs text-gray-500">You have read-only access and cannot generate timetables.</p>`}
                             </div>
                         </div>
-                        <div class="lg:col-span-2 glass-panel border gold-border p-6 rounded-2xl overflow-x-auto">
+                        <div id="ttScheduleBox" class="lg:col-span-2 glass-panel border gold-border p-6 rounded-2xl overflow-x-auto">
                             <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
                                 <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Generated Weekly Schedule</h3>
                                 ${batchNamesInSlots.length > 0 ? `
@@ -2388,7 +2402,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   }
 
   function header(title, subtitle='') {
-    return `<div class="mb-6 flex items-start justify-between gap-4"><div><div class="text-[10px] uppercase tracking-[.2em] text-yellow-600 font-bold">Examination</div><h1 class="text-3xl font-black text-gray-100 mt-1">${title}</h1><p class="text-sm text-gray-500 mt-2">${subtitle}</p></div></div>`;
+    return `<div class="mb-6 flex items-start justify-between gap-4"><div><h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${title}</h2><p class="text-sm text-gray-500 mt-2">${subtitle}</p></div></div>`;
   }
   function card(inner) { return `<div class="bg-[#0b0b0b] border border-[#29230f] rounded-2xl p-5 shadow-2xl">${inner}</div>`; }
   function field(id,label,type='text',placeholder='') { return `<label class="block"><span class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">${label}</span><input id="${id}" type="${type}" placeholder="${placeholder}" class="w-full bg-[#050505] border border-gray-800 rounded-xl px-3 py-3 text-sm text-gray-200 outline-none focus:border-yellow-700"></label>`; }
@@ -2432,7 +2446,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   window.deleteExamResult=async(id)=>{if(!confirm('Delete this result record?'))return;try{await api(`/api/exam/results/${id}`,{method:'DELETE'});await renderResults();}catch(e){alert(e.message)}};
   window.editExamResult=async(id)=>{const r=(window.__examResultRows||[]).find(x=>x.id===id);if(!r)return;document.getElementById('erBatch').value=r.batch_name;document.getElementById('erSubjects').value=r.subjects;document.getElementById('erTopics').value=r.topics;document.getElementById('erDate').value=r.exam_date;document.getElementById('erOverall').value=r.overall_marks;await loadResultsStudents();const inp=document.querySelector(`[data-mark-for="${r.student_id}"]`);if(inp)inp.value=r.marks??'';window.__examEditingId=id;document.getElementById('erLoad').textContent='UPDATE STUDENT';document.getElementById('erLoad').onclick=async()=>{try{const s=(window.__examStudents||[]).find(x=>x.id===r.student_id),m=Number(document.querySelector(`[data-mark-for="${r.student_id}"]`).value),meta=window.__examResultMeta;await api(`/api/exam/results/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:Number(branchId()),batch_name:meta.batch,subjects:meta.subjects,topics:meta.topics,exam_date:meta.date,overall_marks:Number(meta.overall),student_id:r.student_id,student_name:s.name,roll_number:s.roll_number,marks:m})});await renderResults();}catch(e){alert(e.message)}}};
 
-  function pdfResults(){ const rows=window.__examResultRows||[]; if(!rows.length){alert('No saved result records to download.');return;} const J=window.jspdf; if(!J?.jsPDF){alert('PDF library is unavailable.');return;} const doc=new J.jsPDF('l'); doc.text('Examination Results',14,15); doc.autoTable({startY:22,head:[['Batch','Subject(s)','Topic(s)','Date','Student','Roll','Marks']],body:rows.map(r=>[r.batch_name,r.subjects,r.topics,r.exam_date,r.student_name,r.roll_number||'',`${r.marks??''} / ${r.overall_marks}`])});doc.save('exam-results.pdf'); }
+  function pdfResults(){ const rows=window.__examResultRows||[]; if(!rows.length){alert('No saved result records to download.');return;} const J=window.jspdf; if(!J?.jsPDF){alert('PDF library is unavailable.');return;} const doc=new J.jsPDF('l'); const startY=ibexPdfHeader(doc,'Examination Results','Recorded marks across all saved batches'); doc.autoTable({startY,head:[['Batch','Subject(s)','Topic(s)','Date','Student','Roll','Marks']],body:rows.map(r=>[r.batch_name,r.subjects,r.topics,r.exam_date,r.student_name,r.roll_number||'',`${r.marks??''} / ${r.overall_marks}`]),...IBEX_PDF_TABLE_STYLE});doc.save('exam-results.pdf'); }
   window.pdfResults=pdfResults;
 
   async function renderHistory(){const host=contentHost();examRoot=document.createElement('div');examRoot.id='examUpgradeRoot';host.innerHTML='';host.appendChild(examRoot);examRoot.innerHTML=header('History','Keep a clean record of every examination conducted.')+card(`<div class="grid md:grid-cols-4 gap-3">${field('ehSubject','Subject')}${field('ehTopic','Topic')}${field('ehBatch','Batch name')}${field('ehDate','Exam date','date')}</div><div class="mt-4 flex gap-2"><button id="ehSave" class="px-4 py-2 rounded-xl bg-yellow-700/20 border border-yellow-800 text-yellow-500 font-bold text-xs uppercase tracking-widest">Save Record</button><button onclick="pdfHistory()" class="px-4 py-2 rounded-xl border border-gray-800 text-gray-300 font-bold text-xs uppercase tracking-widest">Download PDF</button></div><div id="ehTable" class="mt-6 overflow-x-auto"></div>`);document.getElementById('ehSave').onclick=saveHistory;await loadHistory();}
@@ -2440,7 +2454,7 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   async function loadHistory(){try{const rows=await api(`/api/exam/history/${encodeURIComponent(branchId())}`);window.__examHistoryRows=rows;document.getElementById('ehTable').innerHTML=`<table id="ehSavedTable" class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-widest text-gray-500 border-b border-gray-900"><th class="p-3">Subject</th><th class="p-3">Topic</th><th class="p-3">Batch</th><th class="p-3">Exam date</th><th class="p-3">Actions</th></tr></thead><tbody>${rows.map(r=>`<tr class="border-b border-gray-950"><td class="p-3">${escExam(r.subject)}</td><td class="p-3">${escExam(r.topic)}</td><td class="p-3">${escExam(r.batch_name)}</td><td class="p-3">${escExam(r.exam_date)}</td><td class="p-3"><button onclick="editExamHistory(${r.id})" class="text-yellow-600 mr-3 text-xs font-bold">EDIT</button><button onclick="deleteExamHistory(${r.id})" class="text-red-500 text-xs font-bold">DELETE</button></td></tr>`).join('')}</tbody></table>`;}catch(e){console.error(e)}}
   window.editExamHistory=(id)=>{const r=(window.__examHistoryRows||[]).find(x=>x.id===id);if(!r)return;document.getElementById('ehSubject').value=r.subject;document.getElementById('ehTopic').value=r.topic;document.getElementById('ehBatch').value=r.batch_name;document.getElementById('ehDate').value=r.exam_date;window.__historyEditingId=id;document.getElementById('ehSave').textContent='Update Record';};
   window.deleteExamHistory=async(id)=>{if(!confirm('Delete this history record?'))return;try{await api(`/api/exam/history/${id}`,{method:'DELETE'});await loadHistory()}catch(e){alert(e.message)}};
-  window.pdfHistory=()=>{const rows=window.__examHistoryRows||[];if(!rows.length){alert('No History records to download.');return;}const J=window.jspdf;if(!J?.jsPDF){alert('PDF library is unavailable.');return;}const doc=new J.jsPDF('l');doc.text('Examination History',14,15);doc.autoTable({startY:22,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date])});doc.save('exam-history.pdf');};
+  window.pdfHistory=()=>{const rows=window.__examHistoryRows||[];if(!rows.length){alert('No History records to download.');return;}const J=window.jspdf;if(!J?.jsPDF){alert('PDF library is unavailable.');return;}const doc=new J.jsPDF('l');const startY=ibexPdfHeader(doc,'Examination History','Every examination conducted, on record');doc.autoTable({startY,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date]),...IBEX_PDF_TABLE_STYLE});doc.save('exam-history.pdf');};
 
   function install(){
     addExamSidebarItems();
@@ -2492,16 +2506,16 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   async function loadSavedResults(){const el=document.getElementById('v2Saved');if(!el)return;try{const rows=await api(`/api/examination/results/${bid()}`);if(!rows.length){el.innerHTML='<p class="text-xs text-gray-500">No saved results yet.</p>';return}const groups={};rows.forEach(r=>{const k=[r.exam_date,r.batch_name,r.subjects,r.topics,r.overall_marks].join('|');(groups[k]??=[]).push(r)});el.innerHTML=Object.values(groups).map(g=>{const x=g[0];return `<div class="mb-8"><div class="grid md:grid-cols-5 gap-3 text-xs text-gray-400 mb-3"><span>Batch: <b class="text-gray-200">${escv(x.batch_name)}</b></span><span>Subject(s): <b class="text-gray-200">${escv(x.subjects)}</b></span><span>Topic(s): <b class="text-gray-200">${escv(x.topics)}</b></span><span>Date: <b class="text-gray-200">${escv(x.exam_date)}</b></span><span>Overall: <b class="text-gray-200">${escv(x.overall_marks)}</b></span></div><div class="overflow-x-auto"><table class="examv2-table"><thead><tr><th>Student</th><th>Roll Number</th><th>Marks / ${escv(x.overall_marks)}</th><th>Actions</th></tr></thead><tbody>${g.map(r=>`<tr><td>${escv(r.student_name)}</td><td>${escv(r.roll_number)}</td><td><input id="v2m-${r.id}" class="examv2-input max-w-[140px]" type="number" min="0" max="${escv(x.overall_marks)}" step="0.01" value="${r.marks??''}"></td><td class="whitespace-nowrap"><button class="examv2-btn" onclick="editV2Result(${r.id},${Number(x.overall_marks)})">Save</button> <button class="examv2-btn danger" onclick="deleteV2Result(${r.id})">Delete</button></td></tr>`).join('')}</tbody></table></div></div>`}).join('')}catch(e){el.innerHTML=`<p class="text-xs text-red-400">${escv(e.message)}</p>`}}
   window.editV2Result=async(id,overall)=>{const m=Number(document.getElementById(`v2m-${id}`).value);if(Number.isNaN(m)||m<0||m>overall)return alert(`Marks must be between 0 and ${overall}.`);try{await api(`/api/examination/results/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marks:m})});await loadSavedResults()}catch(e){alert(e.message)}};
   window.deleteV2Result=async id=>{if(!confirm('Delete this result record?'))return;try{await api(`/api/examination/results/${id}`,{method:'DELETE'});await loadSavedResults()}catch(e){alert(e.message)}};
-  async function pdfResults(){try{const rows=await api(`/api/examination/results/${bid()}`);if(!rows.length)return alert('No results to download.');const x=rows[0],{jsPDF}=window.jspdf,doc=new jsPDF();doc.setFontSize(17);doc.text('ALGORITHMIC — Examination Results',14,18);doc.setFontSize(10);doc.text(`Batch: ${x.batch_name}`,14,27);doc.text(`Subject(s): ${x.subjects}`,14,33);doc.text(`Topic(s): ${x.topics}`,14,39);doc.text(`Exam Date: ${x.exam_date}`,14,45);doc.text(`Overall Marks: ${x.overall_marks}`,14,51);doc.autoTable({startY:58,head:[['Student','Roll Number',`Marks / ${x.overall_marks}`]],body:rows.filter(r=>r.batch_name===x.batch_name&&r.subjects===x.subjects&&r.topics===x.topics&&r.exam_date===x.exam_date).map(r=>[r.student_name,r.roll_number||'',r.marks??'—'])});doc.save(`Results-${x.batch_name}-${x.exam_date}.pdf`)}catch(e){alert(e.message)}}
+  async function pdfResults(){try{const rows=await api(`/api/examination/results/${bid()}`);if(!rows.length)return alert('No results to download.');const x=rows[0],doc=new window.jspdf.jsPDF();const startY=ibexPdfHeader(doc,'Examination Results',`Batch: ${x.batch_name} · Subject(s): ${x.subjects} · Topic(s): ${x.topics} · Exam Date: ${x.exam_date} · Overall Marks: ${x.overall_marks}`);doc.autoTable({startY,head:[['Student','Roll Number',`Marks / ${x.overall_marks}`]],body:rows.filter(r=>r.batch_name===x.batch_name&&r.subjects===x.subjects&&r.topics===x.topics&&r.exam_date===x.exam_date).map(r=>[r.student_name,r.roll_number||'',r.marks??'—']),...IBEX_PDF_TABLE_STYLE});doc.save(`Results-${x.batch_name}-${x.exam_date}.pdf`)}catch(e){alert(e.message)}}
   window.openHistory=async function(){if(!isOwner&&!myAllowedModules.includes('examination'))return alert('You do not have Examination access.');const root=shell('History','Record the subject, topic, batch, and exam date for every examination.');root.insertAdjacentHTML('beforeend',`<div class="examv2-card"><div class="examv2-grid">${f('v2hSubject','Subject')}${f('v2hTopic','Topic')}${f('v2hBatch','Batch name')}${f('v2hDate','Exam date','date')}<div class="flex items-end"><button id="v2hAdd" class="examv2-btn primary w-full">Add Record</button></div></div><div class="flex gap-2 mt-3"><button id="v2hPdf" class="examv2-btn">Download PDF</button><button id="v2hRefresh" class="examv2-btn">Refresh</button></div></div><div class="examv2-card"><div class="flex justify-between items-center mb-4"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Exam History</h3><span class="text-xs text-gray-600">Editable and deletable</span></div><div id="v2History"></div></div>`);v2hAdd.onclick=addHistory;v2hPdf.onclick=pdfHistory;v2hRefresh.onclick=loadHistory;await loadHistory()};
   async function addHistory(){try{const subject=v2hSubject.value.trim(),topic=v2hTopic.value.trim(),batch_name=v2hBatch.value.trim(),exam_date=v2hDate.value;if(!subject||!topic||!batch_name||!exam_date)throw Error('Complete all history fields.');await api('/api/examination/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),subject,topic,batch_name,exam_date})});v2hSubject.value=v2hTopic.value=v2hBatch.value=v2hDate.value='';await loadHistory()}catch(e){alert(e.message)}}
   async function loadHistory(){const el=document.getElementById('v2History');if(!el)return;try{const rows=await api(`/api/examination/history/${bid()}`);el.innerHTML=rows.length?`<div class="overflow-x-auto"><table class="examv2-table"><thead><tr><th>Subject</th><th>Topic</th><th>Batch</th><th>Date</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td><input id="v2hs-${r.id}" class="examv2-input" value="${escv(r.subject)}"></td><td><input id="v2ht-${r.id}" class="examv2-input" value="${escv(r.topic)}"></td><td><input id="v2hb-${r.id}" class="examv2-input" value="${escv(r.batch_name)}"></td><td><input id="v2hd-${r.id}" type="date" class="examv2-input" value="${escv(r.exam_date)}"></td><td class="whitespace-nowrap"><button class="examv2-btn" onclick="editV2History(${r.id})">Save</button> <button class="examv2-btn danger" onclick="deleteV2History(${r.id})">Delete</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="text-xs text-gray-500">No examination history records yet.</p>'}catch(e){el.innerHTML=`<p class="text-xs text-red-400">${escv(e.message)}</p>`}}
   window.editV2History=async id=>{const subject=document.getElementById(`v2hs-${id}`).value.trim(),topic=document.getElementById(`v2ht-${id}`).value.trim(),batch_name=document.getElementById(`v2hb-${id}`).value.trim(),exam_date=document.getElementById(`v2hd-${id}`).value;if(!subject||!topic||!batch_name||!exam_date)return alert('All fields are required.');try{await api(`/api/examination/history/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),subject,topic,batch_name,exam_date})});await loadHistory()}catch(e){alert(e.message)}};
   window.deleteV2History=async id=>{if(!confirm('Delete this history record?'))return;try{await api(`/api/examination/history/${id}`,{method:'DELETE'});await loadHistory()}catch(e){alert(e.message)}};
-  async function pdfHistory(){try{const rows=await api(`/api/examination/history/${bid()}`);if(!rows.length)return alert('No history records to download.');const{jsPDF}=window.jspdf,doc=new jsPDF();doc.setFontSize(17);doc.text('ALGORITHMIC — Examination History',14,18);doc.autoTable({startY:27,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date])});doc.save(`Exam-History-${new Date().toISOString().slice(0,10)}.pdf`)}catch(e){alert(e.message)}}
+  async function pdfHistory(){try{const rows=await api(`/api/examination/history/${bid()}`);if(!rows.length)return alert('No history records to download.');const doc=new window.jspdf.jsPDF();const startY=ibexPdfHeader(doc,'Examination History');doc.autoTable({startY,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date]),...IBEX_PDF_TABLE_STYLE});doc.save(`Exam-History-${new Date().toISOString().slice(0,10)}.pdf`)}catch(e){alert(e.message)}}
 })();
 </script>
-<script id="algorithmic-requested-fixes-runtime">
+<script id="ibex-requested-fixes-runtime">
 (function(){
   const originalLoadBranches=loadBranches;
   loadBranches=async function(){const hadBranch=currentBranchId;await originalLoadBranches();const mc=branches.find(b=>String(b.name||'').trim().toLowerCase()==='main campus');if(mc&&!hadBranch)currentBranchId=mc.id;const sel=document.getElementById('branchSelector');if(sel)sel.value=currentBranchId;const wrap=sel?.parentElement;if(wrap&&!document.getElementById('branchEditRuntime')){const mk=(id,text,fn,cls)=>{const b=document.createElement('button');b.id=id;b.textContent=text;b.className='ml-2 text-xs px-2.5 py-1 rounded-lg border '+cls;b.onclick=fn;return b};wrap.append(mk('branchEditRuntime','Edit',editBranchRuntime,'border-yellow-700/60 text-yellow-300 bg-[#25200f]'),mk('branchDeleteRuntime','Delete',deleteBranchRuntime,'border-red-700/50 text-red-300 bg-[#241111]'));}};
@@ -2511,7 +2525,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   function installSearch(){const main=document.getElementById('mainContent');if(!main||document.getElementById('homeParallaxSearch'))return;const hero=main.querySelector('.glass-panel');if(!hero)return;const w=document.createElement('div');w.id='homeParallaxSearch';w.className='parallax-search-shell';w.innerHTML='<div class="parallax-search-kicker">PARALLAX · INSTITUTE SEARCH</div><div class="parallax-search-row"><input id="homeParallaxSearchInput" placeholder="Search students, teachers, fees, attendance, classrooms…"><button type="button">Search</button></div><div id="homeParallaxSearchResults" class="parallax-search-results hidden"></div>';hero.after(w);w.querySelector('button').onclick=searchHome;w.querySelector('input').onkeydown=e=>{if(e.key==='Enter')searchHome()};}
   async function searchHome(){const q=document.getElementById('homeParallaxSearchInput')?.value.trim(),out=document.getElementById('homeParallaxSearchResults');if(!q||!out||!currentBranchId)return;out.classList.remove('hidden');out.innerHTML='<div class="text-xs text-gray-500 p-3">Searching institute data…</div>';const mods=[['students','Student Department'],['teachers','Teacher Department'],['classrooms','Classroom Department'],['syllabus','Syllabus'],['attendance','Attendance'],['fees','Fees']],hits=[];await Promise.all(mods.map(async([m,l])=>{try{const r=await authFetch(`/api/records/${m}/${currentBranchId}?search=${encodeURIComponent(q)}&page_size=10`);if(r.ok)(await r.json()).slice(0,4).forEach(x=>hits.push({m,l,x}))}catch(_){}}));out.innerHTML=hits.length?hits.map(h=>`<button class="parallax-search-hit" onclick="switchModule('${h.m}')"><span>${esc(h.l)}</span><b>${esc(h.x.name||h.x.student_name||h.x.subject||h.x.room_no||'Record')}</b><small>${esc(Object.entries(h.x).filter(([k])=>!['id','branch_id','document'].includes(k)).slice(0,4).map(([k,v])=>k+': '+v).join(' · '))}</small></button>`).join(''):'<div class="text-xs text-gray-500 p-3">No matching records found in this branch.</div>';}
   const oldParallax=renderParallaxThread;renderParallaxThread=function(){oldParallax();const t=document.getElementById('parallaxThread');if(!t)return;if(!window.parallaxHistory.length)t.innerHTML='';const f=document.getElementById('parallaxForm');if(f&&!document.getElementById('parallaxDeleteRuntime')){const b=document.createElement('button');b.id='parallaxDeleteRuntime';b.type='button';b.textContent='Delete Chat History';b.className='text-xs text-red-300 border border-red-900/40 bg-[#160d0d] px-3 py-2 rounded-lg';b.onclick=async()=>{if(!confirm('Delete this Parallax chat history?'))return;window.parallaxHistory=[];renderParallaxThread();try{await authFetch(`/api/assistant/history/${currentBranchId}`,{method:'DELETE'})}catch(_){}};f.parentElement.insertBefore(b,f)}};
-  const oldHist=openAttendanceHistory;openAttendanceHistory=async function(name){const m=document.getElementById('attendanceHistoryModal'),body=document.getElementById('attendanceHistoryBody');document.getElementById('attendanceHistoryTitle').textContent='Attendance History · '+name;body.innerHTML='<p class="text-xs text-gray-500 p-4">Loading…</p>';m.classList.remove('hidden');try{const r=await authFetch(`/api/attendance/history/${currentBranchId}?student_name=${encodeURIComponent(name)}`),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'Failed to load attendance history.');const rows=Array.isArray(d)?d:(Array.isArray(d.history)?d.history:[]);if(!rows.length){body.innerHTML='<p class="text-xs text-gray-500 p-4">No attendance marked yet for this student.</p>';return}body.innerHTML='<div class="flex justify-between text-xs text-gray-400 px-1 pb-3 border-b gold-border mb-3"><span>'+rows.length+' days marked</span><span class="text-green-400">'+rows.filter(x=>String(x.status)==='Present').length+' present</span><span class="text-red-400">'+rows.filter(x=>String(x.status)==='Absent').length+' absent</span></div><div class="max-h-72 overflow-y-auto">'+rows.map(x=>'<div class="attendance-history-row"><span class="date">'+esc(String(x.date??''))+'</span><span class="status '+(String(x.status)==='Present'?'present':'absent')+'">'+esc(String(x.status??''))+'</span></div>').join('')+'</div>'}catch(e){body.innerHTML='<p class="text-xs text-red-400 p-4">'+esc(e.message||'Failed to load history.')+'</p>'}};
 })();
 </script>
 </body>
