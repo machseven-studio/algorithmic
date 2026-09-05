@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Depe
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, EmailStr
 
-app = FastAPI(title="ALGORITHMIC", version="4.1.0")
+app = FastAPI(title="I.B.E.X.", version="4.1.0")
 
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 # Uploads are stored outside the app's static/served root and are only ever
@@ -1795,7 +1795,7 @@ def send_low_token_balance_email(institute_email: str, institute_name: str, bala
         from email.mime.text import MIMEText
         msg = MIMEText(
             f"Hi {institute_name},\n\nYour WhatsApp Messaging token balance has dropped to {balance}. "
-            f"Top up from the WhatsApp Messaging module to avoid interruptions.\n\n- Algorithmic"
+            f"Top up from the WhatsApp Messaging module to avoid interruptions.\n\n- I.B.E.X."
         )
         msg["Subject"] = "Low WhatsApp token balance"
         msg["From"] = os.getenv("SMTP_FROM", smtp_host)
