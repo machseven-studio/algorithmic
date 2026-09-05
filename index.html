@@ -65,7 +65,7 @@
         }
 
         /* Small elegant tagline shown under every I.B.E.X. logo instance. */
-        .ibex-tagline { font-family: 'Fraunces', serif; font-style: italic; font-weight: 400; font-size: 0.6rem; line-height: 1.25; letter-spacing: 0.06em; color: rgba(232, 199, 103, 0.7); }
+        .ibex-tagline { font-family: 'Fraunces', serif; font-style: normal; font-weight: 400; font-size: 0.55rem; line-height: 1.25; letter-spacing: 0.05em; color: rgba(232, 199, 103, 0.7); white-space: nowrap; }
 
         .gold-border { border-color: rgba(212, 175, 55, 0.28); }
 
@@ -129,26 +129,15 @@
 
 <style id="ibex-final-layout">
 #headerInstituteName{font-size:clamp(2.4rem,4.2vw,4.8rem)!important;max-width:min(70vw,1100px)!important}
-#moduleSidebar{position:relative!important;transition:width .18s ease,min-width .18s ease!important}
 .module-head-group{width:100%!important}.module-head-group>div:first-child{width:100%!important}.module-head-arrow{pointer-events:auto!important}
 </style>
 
-<style id="ibex-timetable-layout">
-#teacherConfigList{min-height:220px;max-height:55vh!important;overflow-y:auto;padding-right:.5rem}
-#teacherConfigList>div{min-height:84px}
-#teacherConfigList>div>div:last-child{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.75rem}
-#ttTimingRows{max-height:55vh;overflow-y:auto;padding-right:.5rem}
-.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;max-height:90vh;overflow:hidden}
-@media(max-width:768px){#teacherConfigList>div>div:last-child{grid-template-columns:1fr}.glass-panel:has(#teacherConfigList){width:95%!important}}
-</style>
-
-
 <style id="ibex-sidebar-layout">
-#moduleSidebar{display:flex;flex-direction:column;align-items:stretch;position:relative!important;transition:width .18s ease,min-width .18s ease,padding .18s ease!important}
+#moduleSidebar{display:flex;flex-direction:column;align-items:stretch;position:relative!important;overflow:hidden;will-change:width;transition:width .2s ease,min-width .2s ease,padding .2s ease!important}
 #moduleGroups{display:flex;flex-direction:column;align-items:stretch;gap:2px;width:100%}
 #moduleGroups>.mb-1,#moduleGroups .module-head-group{width:100%}
 #moduleGroups .sidebar-item{width:100%;min-height:42px;display:flex;align-items:center}
-#moduleSidebar.sidebar-collapsed{width:72px!important;min-width:72px!important}
+#moduleSidebar.sidebar-collapsed{width:72px!important;min-width:72px!important;flex-basis:72px!important}
 #moduleSidebar.sidebar-collapsed .sidebar-label,#moduleSidebar.sidebar-collapsed .module-label,#moduleSidebar.sidebar-collapsed .module-head-title,#moduleSidebar.sidebar-collapsed .module-head-text{display:none!important}
 #moduleSidebar.sidebar-collapsed .sidebar-item{justify-content:center;padding-left:0!important;padding-right:0!important;border-left-width:0!important}
 #sidebarCollapseButton{position:absolute;top:10px;right:-14px;z-index:30;width:28px;height:28px;border:1px solid rgba(212,175,55,.38);border-radius:999px;background:#0b0b0b;color:#e8c767;font-size:18px;line-height:24px;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer}
@@ -166,14 +155,6 @@
 #examV2Root .examv2-input{border-radius:10px;padding:11px 13px}
 </style>
 
-
-<style id="ibex-timetable-final">
-#teacherConfigList{width:100%!important;min-height:180px;max-height:52vh;overflow-y:auto;overflow-x:hidden;padding-right:4px}
-.glass-panel:has(#teacherConfigList){width:91.666667%!important;max-width:64rem!important;margin-left:auto;margin-right:auto}
-#teacherConfigList>div{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end}
-@media(max-width:900px){#teacherConfigList>div{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){#teacherConfigList>div{grid-template-columns:1fr}}
-</style>
 
 <style id="ibex-sidebar-final">
 #moduleSidebar{display:flex;flex-direction:column;align-items:stretch}
@@ -194,10 +175,9 @@
 <style id="ibex-requested-fixes-css">
 #branchSelector{background:#17140b!important;border:1px solid rgba(232,199,103,.5)!important;border-radius:10px;padding:8px 12px;color:#f0d77c!important;min-width:170px}#branchSelector option{background:#10100d;color:#f5e8b0}
 #moduleGroups .sidebar-item{padding-left:1rem!important;margin-left:0!important;justify-content:flex-start!important;gap:0!important;border-left:0!important}#moduleGroups .sidebar-item>span:first-child{display:none!important}
-#moduleSidebar.sidebar-collapsed{width:64px!important;min-width:64px!important;flex-basis:64px!important}#moduleSidebar.sidebar-collapsed>div:not(#moduleGroups),#moduleSidebar.sidebar-collapsed #moduleGroups{display:none!important}#moduleSidebar.sidebar-collapsed .sidebar-item,#moduleSidebar.sidebar-collapsed .module-head-group{display:none!important}
+#moduleSidebar.sidebar-collapsed #moduleGroups{opacity:0;pointer-events:none}
 .parallax-thread{background:radial-gradient(circle at 20% 0,rgba(212,175,55,.07),transparent 40%),linear-gradient(155deg,#100e09,#070707)!important;border-color:rgba(232,199,103,.28)!important;box-shadow:0 24px 60px rgba(0,0,0,.35)!important;min-height:120px}#parallaxForm{padding:10px!important;border:1px solid rgba(212,175,55,.18)!important;border-radius:16px!important;background:rgba(12,12,12,.8)!important}#parallaxInput{min-height:48px!important;font-size:13px!important}
 .parallax-search-shell{margin-top:1rem;padding:18px;border-radius:22px;border:1px solid rgba(232,199,103,.22);background:radial-gradient(circle at 10% 0,rgba(212,175,55,.08),transparent 38%),linear-gradient(145deg,#11100d,#080808);box-shadow:0 24px 60px rgba(0,0,0,.32)}.parallax-search-kicker{font-size:9px;letter-spacing:.2em;color:#8f8567;font-weight:800;margin-bottom:10px}.parallax-search-row{display:flex;align-items:center;gap:10px}.parallax-search-row input{flex:1;background:#060606;border:1px solid rgba(212,175,55,.25);border-radius:13px;padding:13px 14px;color:#eee;outline:none}.parallax-search-row button{background:#c6a64b;color:#080808;border:0;border-radius:12px;padding:12px 18px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em}.parallax-search-results{margin-top:10px;border-top:1px solid rgba(255,255,255,.05);padding-top:8px}.parallax-search-hit{display:grid;grid-template-columns:150px 1fr;gap:5px 14px;width:100%;text-align:left;padding:11px 12px;border-radius:10px;background:#0d0d0d;border:1px solid transparent;color:#ddd}.parallax-search-hit:hover{border-color:rgba(212,175,55,.18);background:#12110e}.parallax-search-hit span{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#8c815e}.parallax-search-hit b{font-size:12px}.parallax-search-hit small{grid-column:1/-1;color:#777;font-size:10px}
-#teacherConfigList{min-height:320px!important;max-height:55vh!important;padding:14px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList>div{min-height:150px!important;padding:20px!important;gap:20px!important}.glass-panel:has(#teacherConfigList) #teacherConfigList input{min-height:48px!important;font-size:14px!important}
 /* "Generated Weekly Schedule" box: previously squeezed/exposed the page
    background behind it because the left config panel above was forced to
    width:min(94vw,1280px), breaking out of the 3-column grid. That override
@@ -216,8 +196,8 @@
                 <div class="inline-block p-3 rounded-full bg-[#121212] border gold-border mb-4 shadow-lg">
                     <span class="text-2xl font-black gold-gradient-text">⚡</span>
                 </div>
-                <h1 class="text-2xl font-black gold-gradient-text tracking-wider">I.B.E.X.</h1>
-                <div class="ibex-tagline mt-0.5">Institutional<br>Backbone<br>EXecutive</div>
+                <h1 class="text-4xl font-black gold-gradient-text tracking-wider">I.B.E.X.</h1>
+                <div class="ibex-tagline mt-1">Institutional Backbone Executive</div>
                 <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Enterprise Institutional Portal</p>
             </div>
 
@@ -299,8 +279,8 @@
             <nav id="moduleSidebar" class="w-72 border-r gold-border bg-[#0b0b0b] flex flex-col py-6 space-y-1.5 shrink-0">
     <button id="sidebarCollapseButton" type="button" aria-label="Collapse sidebar" title="Collapse sidebar" onclick="toggleSidebar()">‹</button>
     <div class="px-6 pb-1">
-        <div class="elegant-font text-lg font-bold gold-gradient-text tracking-wide">I.B.E.X.</div>
-        <div class="ibex-tagline">Institutional<br>Backbone<br>EXecutive</div>
+        <div class="elegant-font text-3xl font-bold gold-gradient-text tracking-wide">I.B.E.X.</div>
+        <div class="ibex-tagline mt-0.5">Institutional Backbone Executive</div>
     </div>
     <div class="px-6 pb-2 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Enterprise Modules</div>
     <div class="px-3 space-y-1" id="moduleGroups"></div>
@@ -438,6 +418,22 @@
         </div>
     </div>
 
+    <div id="centralAnalyticsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4">
+        <div class="glass-panel border gold-border p-8 rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-start mb-6 gap-4">
+                <div>
+                    <h3 class="text-xl font-extrabold gold-gradient-text uppercase tracking-wider">Centralised Analytics</h3>
+                    <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Aggregated, read-only view across every branch</p>
+                </div>
+                <button onclick="closeCentralAnalyticsModal()" class="text-gray-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div id="centralAnalyticsError" class="auth-error"></div>
+            <div id="centralAnalyticsContent" class="space-y-6">
+                <div class="glass-panel border gold-border p-10 rounded-2xl text-center text-gray-500">Loading analytics…</div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let branches = [];
         let currentBranchId = null;
@@ -452,8 +448,8 @@
         const ACCESS_HEADS = ['homepage', 'administrations', 'examination'];
 const HEAD_MODULES = {
     homepage: [['analytics', '◈', 'Analytics'], ['assistant', '✦', 'Parallax'], ['students', '🎓', 'Student Department'], ['teachers', '👨‍🏫', 'Teacher Department'], ['classrooms', '🏛️', 'Classroom Department'], ['users', '🔐', 'Manage Users']],
-    administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees'], ['whatsapp', '💬', 'WhatsApp Messaging']],
-    examination: [['seating', '', 'Exam Seating'], ['invigilation', '', 'Exam Invigilation']]
+    administrations: [['attendance', '📋', 'Attendance'], ['syllabus', '📚', 'Syllabus'], ['timetables', '🕒', 'Timetable'], ['fees', '💳', 'Fees']],
+    examination: [['seating', '', 'Exam Seating'], ['invigilation', '', 'Exam Invigilation'], ['results', '▣', 'Results'], ['history', '◷', 'History']]
 };
 const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h, ms]) => ms.map(([m]) => [m, h])));
 
@@ -658,6 +654,33 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
         function openAddBranchModal() { if (isGlobalView) return; document.getElementById('branchModal').classList.remove('hidden'); }
         function closeAddBranchModal() { document.getElementById('branchModal').classList.add('hidden'); document.getElementById('newBranchName').value = ''; }
 
+        async function openCentralAnalytics() {
+            document.getElementById('centralAnalyticsModal').classList.remove('hidden');
+            await renderCentralAnalyticsModule();
+        }
+        function closeCentralAnalyticsModal() {
+            document.getElementById('centralAnalyticsModal').classList.add('hidden');
+            (window.__centralAnalyticsCharts || []).forEach(c => { try { c.destroy(); } catch (_) {} });
+            window.__centralAnalyticsCharts = [];
+        }
+        async function renderCentralAnalyticsModule() {
+            window.__centralAnalyticsCharts = window.__centralAnalyticsCharts || [];
+            window.__centralAnalyticsCharts.forEach(c => { try { c.destroy(); } catch (_) {} });
+            window.__centralAnalyticsCharts = [];
+            const error = document.getElementById('centralAnalyticsError');
+            const content = document.getElementById('centralAnalyticsContent');
+            if (error) error.textContent = '';
+            if (content) content.innerHTML = '<div class="glass-panel border gold-border p-10 rounded-2xl text-center text-gray-500">Loading analytics…</div>';
+            try {
+                const res = await authFetch('/api/analytics/0');
+                const data = await readApiJson(res, 'Centralised analytics request');
+                renderCentralAnalyticsContent(data);
+            } catch (err) {
+                if (error) error.textContent = err.message || 'Failed to load centralised analytics.';
+                if (content) content.innerHTML = '<div class="glass-panel border border-red-900/40 p-8 rounded-2xl text-center text-gray-500">Centralised analytics could not be loaded.</div>';
+            }
+        }
+
         async function createNewBranch() {
             const name = document.getElementById('newBranchName').value.trim();
             if (!name) return;
@@ -845,100 +868,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
             }
         }
 
-        // ---- WhatsApp Messaging module ----
-
-        async function renderWhatsappModule(container) {
-            container.innerHTML = `
-                <div class="space-y-8">
-                    <div>
-                        <h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">WhatsApp Messaging</h2>
-                        <p class="text-xs text-gray-400 mt-1 uppercase tracking-widest">Token wallet &amp; package top-ups for parent/staff messaging</p>
-                    </div>
-                    <div id="waError" class="auth-error"></div>
-                    <div class="glass-panel border gold-border rounded-2xl p-6 flex items-center justify-between flex-wrap gap-4">
-                        <div>
-                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Current Balance</div>
-                            <div id="waBalance" class="text-4xl font-black gold-gradient-text mt-1">—</div>
-                        </div>
-                        <div class="text-xs text-gray-500 max-w-sm">Each sent message deducts 1 token. You'll get a low-balance email once your wallet drops below 100 tokens.</div>
-                    </div>
-                    <div>
-                        <div class="text-xs uppercase tracking-widest text-gray-400 font-bold mb-4">Token Packages</div>
-                        <div id="waPackages" class="grid md:grid-cols-3 gap-4">
-                            <div class="glass-panel border gold-border p-8 rounded-2xl text-center text-gray-500">Loading packages…</div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            try {
-                const [balRes, pkgRes] = await Promise.all([
-                    authFetch('/api/whatsapp/balance'),
-                    authFetch('/api/whatsapp/packages'),
-                ]);
-                const bal = await readApiJson(balRes, 'WhatsApp balance request');
-                const pkgs = await readApiJson(pkgRes, 'WhatsApp packages request');
-                document.getElementById('waBalance').textContent = `${bal.balance_tokens} tokens`;
-                renderWhatsappPackages(pkgs.packages || {});
-            } catch (err) {
-                const error = document.getElementById('waError');
-                if (error) error.textContent = err.message || 'Failed to load WhatsApp Messaging.';
-            }
-        }
-
-        function renderWhatsappPackages(packages) {
-            const el = document.getElementById('waPackages');
-            if (!el) return;
-            el.innerHTML = Object.entries(packages).map(([key, p]) => `
-                <div class="glass-panel border gold-border rounded-2xl p-6 flex flex-col">
-                    <div class="text-xs uppercase tracking-widest text-gray-500 font-bold">${esc(p.label)}</div>
-                    <div class="text-3xl font-black gold-gradient-text mt-2">₹${Number(p.price_inr).toLocaleString('en-IN')}</div>
-                    <div class="text-xs text-gray-400 mt-1">${Number(p.tokens).toLocaleString('en-IN')} tokens</div>
-                    <button onclick="startWhatsappCheckout('${key}')" class="mt-6 gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition">Buy Now</button>
-                </div>
-            `).join('');
-        }
-
-        async function startWhatsappCheckout(packageKey) {
-            const error = document.getElementById('waError');
-            if (error) error.textContent = '';
-            try {
-                const res = await authFetch('/api/whatsapp/checkout', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ package: packageKey }),
-                });
-                const order = await readApiJson(res, 'Checkout request');
-
-                if (!order.key_id) {
-                    // No live payment gateway configured (e.g. local/dev) - the
-                    // order was recorded, but there's nothing for Razorpay's
-                    // widget to open. Tokens are only ever credited by the
-                    // signed webhook, never from the client.
-                    alert('Checkout order created (payment gateway not configured in this environment). Tokens will be credited automatically once payment is confirmed.');
-                    return;
-                }
-
-                const rzp = new Razorpay({
-                    key: order.key_id,
-                    order_id: order.order_id,
-                    amount: order.amount_inr * 100,
-                    currency: 'INR',
-                    name: document.getElementById('headerInstituteName').textContent || 'I.B.E.X.',
-                    description: `${order.tokens} WhatsApp tokens`,
-                    handler: function () {
-                        // The webhook (server-to-server, signature-verified) is
-                        // the only thing that ever credits tokens. This just
-                        // refreshes the on-screen balance after a moment.
-                        setTimeout(() => refreshCurrentModule(), 3000);
-                    },
-                    theme: { color: '#d4af37' },
-                });
-                rzp.open();
-            } catch (err) {
-                if (error) error.textContent = err.message || 'Failed to start checkout.';
-            }
-        }
-
         async function refreshCurrentModule() {
             const container = document.getElementById('mainContent');
             if (!container) return;
@@ -961,8 +890,10 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                     await renderAssistantModule(container);
                 } else if (currentModule === 'central_analytics') {
                     await renderCentralAnalyticsModule(container);
-                } else if (currentModule === 'whatsapp') {
-                    await renderWhatsappModule(container);
+                } else if (currentModule === 'results') {
+                    await renderResults();
+                } else if (currentModule === 'history') {
+                    await renderHistory();
                 } else {
                     await renderDataModule(container, currentModule);
                 }
@@ -1092,12 +1023,12 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                 <div class="space-y-8">
                     ${isGlobalView ? '<div class="border border-slate-700/60 bg-slate-950/60 rounded-xl px-5 py-3 text-xs text-slate-300">🏢 Centralized HQ mode · consolidated read-only view across every branch.</div>' : ''}
                     <div class="glass-panel border gold-border p-10 rounded-3xl relative overflow-hidden shadow-2xl">
-                        <div class="max-w-3xl relative z-10 space-y-4 flex items-center justify-between gap-6 flex-wrap">
+                        <div class="max-w-4xl relative z-10 flex items-end justify-between gap-6 flex-wrap">
                             <div class="space-y-4">
                                 <span class="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-[#1c1c1c] gold-gradient-text border gold-border font-extrabold">Executive Command Center</span>
                                 <h2 class="welcome-animate command-heading-font text-5xl gold-gradient-text tracking-tight leading-tight">Welcome, ${myFullName || 'there'}</h2>
                             </div>
-                            <div id="homeIstClock" class="command-heading-font gold-gradient-text tracking-tight leading-tight text-right"></div>
+                            <div id="homeIstClock" class="command-heading-font gold-gradient-text tracking-tight text-right shrink-0 whitespace-nowrap"></div>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 gap-6">
@@ -1273,8 +1204,8 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                         </div>` : ''}
                     </div>
                     <div class="flex items-center justify-end space-x-3">
-                        <button onclick="exportModulePDF('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export PDF</button>
-                        <button onclick="exportModuleExcel('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export Excel</button>
+                        <button onclick="exportModulePDF('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export PDF</button>
+                        <button onclick="exportModuleExcel('${moduleName}')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export Excel</button>
                     </div>
                     <div class="glass-panel border gold-border rounded-2xl p-6 overflow-x-auto shadow-2xl">
                         <table class="w-full text-left text-sm text-gray-300">
@@ -1392,8 +1323,8 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                         </div>` : ''}
                     </div>
                     <div class="flex items-center justify-end space-x-3">
-                        <button onclick="exportModulePDF('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export PDF</button>
-                        <button onclick="exportModuleExcel('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-bold px-4 py-2 rounded-lg text-xs uppercase tracking-wider fast-transition">Export Excel</button>
+                        <button onclick="exportModulePDF('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export PDF</button>
+                        <button onclick="exportModuleExcel('students')" class="bg-[#141414] hover:bg-[#1f1f1f] gold-gradient-text border gold-border font-extrabold px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Export Excel</button>
                     </div>
                     <div class="glass-panel border gold-border rounded-2xl p-6 shadow-2xl">
                         <input type="text" id="studentSearchInput" placeholder="Search student by name..." class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none mb-4">
@@ -2002,48 +1933,48 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
                             <button onclick="window.print()" class="bg-[#141414] hover:bg-[#202020] gold-gradient-text border gold-border px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider fast-transition shadow-lg">Download PDF / Print Timetable</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <div class="glass-panel border gold-border p-6 rounded-2xl space-y-6">
-                            <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Configure Batch & Teacher Load</h3>
-                            <div class="space-y-4">
+                    <div class="flex flex-col gap-8">
+                        <div class="glass-panel border gold-border p-8 rounded-2xl space-y-6 relative z-10">
+                            <h3 class="text-lg font-extrabold gold-gradient-text uppercase tracking-wider">Configure Batch & Teacher Load</h3>
+                            <div class="space-y-5">
                                 ${ttSavedConfigs.length > 0 ? `
                                 <div>
                                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Load Existing Batch <span class="text-gray-600 normal-case font-normal">(to edit & regenerate exactly)</span></label>
-                                    <select id="ttLoadBatchSelect" onchange="loadTimetableConfig(this.value)" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-xs text-gray-200 focus:outline-none">
+                                    <select id="ttLoadBatchSelect" onchange="loadTimetableConfig(this.value)" class="w-full max-w-xl bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 focus:outline-none relative z-10">
                                         <option value="">— New Batch —</option>
                                         ${ttSavedConfigs.map(c => `<option value="${esc(c.batch_name)}">${esc(c.batch_name)}</option>`).join('')}
                                     </select>
                                 </div>` : ''}
                                 <div>
                                     <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Batch Name</label>
-                                    <input type="text" id="ttBatchName" placeholder="e.g. B.Tech CSE Batch A" value="B.Tech CSE Batch A" class="w-full bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none">
+                                    <input type="text" id="ttBatchName" placeholder="e.g. B.Tech CSE Batch A" value="B.Tech CSE Batch A" class="w-full max-w-xl bg-[#0c0c0c] border gold-border rounded-xl p-3 text-sm text-gray-200 gold-border-glow focus:outline-none relative z-10">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">Lecture Timings</label>
-                                    <div id="ttTimingRows" class="space-y-2"></div>
-                                    <button type="button" onclick="addTimingRow()" class="mt-2 text-xs font-bold gold-gradient-text hover:opacity-80">+ Add Lecture Timing</button>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Lecture Timings</label>
+                                    <div id="ttTimingRows" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-3xl"></div>
+                                    <button type="button" onclick="addTimingRow()" class="mt-3 text-xs font-bold gold-gradient-text hover:opacity-80">+ Add Lecture Timing</button>
                                 </div>
                                 <div class="pt-2">
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">Assigned Teachers & Constraints</label>
-                                    <div id="teacherConfigList" class="space-y-3 max-h-60 overflow-y-auto pr-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">Assigned Teachers & Constraints</label>
+                                    <div id="teacherConfigList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 max-h-[28rem] overflow-y-auto pr-2">
                                         ${ttTeachersData.length === 0 ? '<p class="text-xs text-gray-500">No teachers found. Please add teachers first.</p>' :
                                           ttTeachersData.map((t, idx) => `
-                                            <div class="p-3 bg-[#0f0f0f] border gold-border rounded-xl space-y-2" data-teacher="${esc(t.name)}" data-subject="${esc(t.subject)}">
-                                                <div class="flex justify-between items-center text-xs font-bold text-gray-200"><span>${esc(t.name)} (${esc(t.subject)})</span></div>
+                                            <div class="p-4 bg-[#0f0f0f] border gold-border rounded-xl space-y-3" data-teacher="${esc(t.name)}" data-subject="${esc(t.subject)}">
+                                                <div class="text-xs font-bold text-gray-200">${esc(t.name)} (${esc(t.subject)})</div>
                                                 <div class="grid grid-cols-2 gap-2">
-                                                    <div><label class="text-[10px] text-gray-400 uppercase">Lectures/Week</label><input type="number" id="lec_${idx}" value="3" min="1" max="5" class="w-full bg-[#070707] border gold-border rounded p-1.5 text-xs text-white"></div>
-                                                    <div><label class="text-[10px] text-gray-400 uppercase">Unavailable Days</label><input type="text" id="unav_${idx}" placeholder="e.g. Monday" class="w-full bg-[#070707] border gold-border rounded p-1.5 text-xs text-white" title="Comma separated days"></div>
+                                                    <div><label class="text-[10px] text-gray-400 uppercase">Lectures/Week</label><input type="number" id="lec_${idx}" value="3" min="1" max="5" class="w-full bg-[#070707] border gold-border rounded p-2 text-xs text-white relative z-10"></div>
+                                                    <div><label class="text-[10px] text-gray-400 uppercase">Unavailable Days</label><input type="text" id="unav_${idx}" placeholder="e.g. Monday" class="w-full bg-[#070707] border gold-border rounded p-2 text-xs text-white relative z-10" title="Comma separated days"></div>
                                                 </div>
                                             </div>
                                           `).join('')}
                                     </div>
                                 </div>
                                 ${canWrite
-                                    ? `<button onclick="generateTimetableSchedule()" class="w-full gold-bg hover:opacity-95 text-black font-extrabold py-3 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate / Regenerate Weekly Timetable</button>`
+                                    ? `<button onclick="generateTimetableSchedule()" class="w-full max-w-xl gold-bg hover:opacity-95 text-black font-extrabold py-3.5 rounded-xl text-xs uppercase tracking-wider fast-transition shadow-lg">Generate / Regenerate Weekly Timetable</button>`
                                     : `<p class="text-xs text-gray-500">You have read-only access and cannot generate timetables.</p>`}
                             </div>
                         </div>
-                        <div id="ttScheduleBox" class="lg:col-span-2 glass-panel border gold-border p-6 rounded-2xl overflow-x-auto">
+                        <div id="ttScheduleBox" class="glass-panel border gold-border p-6 rounded-2xl overflow-x-auto">
                             <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
                                 <h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Generated Weekly Schedule</h3>
                                 ${batchNamesInSlots.length > 0 ? `
@@ -2354,8 +2285,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
 (() => {
   const HEAD = 'examination';
   const MODULES = { results: 'Results', history: 'History' };
-  let originalSwitch = null;
-  let originalRefresh = null;
   let examRoot = null;
   let editingResult = null;
   let editingHistory = null;
@@ -2378,28 +2307,6 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
     return el?.value || el?.dataset?.branchId || 1;
   };
   const contentHost = () => document.querySelector('main') || document.querySelector('#mainContent') || document.querySelector('#content') || document.body;
-
-  function addExamSidebarItems() {
-    document.querySelectorAll('button').forEach(btn => {
-      const label = (btn.textContent || '').replace(/\s+/g,' ').trim();
-      if (label === 'Exam Seating') btn.childNodes.forEach(n => { if (n.nodeType === 3) n.textContent = n.textContent.replace('Exam Seating','Seating'); });
-      if (label === 'Exam Invigilation') btn.childNodes.forEach(n => { if (n.nodeType === 3) n.textContent = n.textContent.replace('Exam Invigilation','Invigilation'); });
-    });
-    const seating = [...document.querySelectorAll('button')].find(b => /^(?:🪑\s*)?Seating$/i.test((b.textContent||'').trim()) || /Exam Seating/i.test(b.textContent||''));
-    const inv = [...document.querySelectorAll('button')].find(b => /Invigilation/i.test(b.textContent||''));
-    if (!seating || !inv || document.querySelector('[data-exam-extra="results"]')) return;
-    const parent = inv.parentElement || seating.parentElement;
-    if (!parent) return;
-    const make = (name, label) => {
-      const b = document.createElement('button');
-      b.type='button'; b.dataset.examExtra=name; b.className=seating.className || 'sidebar-item w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300';
-      b.innerHTML=`<span>◈</span><span>${label}</span>`;
-      b.onclick=()=>window.switchModule(name,b);
-      return b;
-    };
-    parent.appendChild(make('results','Results'));
-    parent.appendChild(make('history','History'));
-  }
 
   function header(title, subtitle='') {
     return `<div class="mb-6 flex items-start justify-between gap-4"><div><h2 class="text-2xl font-black uppercase gold-gradient-text tracking-wide">${title}</h2><p class="text-sm text-gray-500 mt-2">${subtitle}</p></div></div>`;
@@ -2456,65 +2363,13 @@ const MODULE_HEAD = Object.fromEntries(Object.entries(HEAD_MODULES).flatMap(([h,
   window.deleteExamHistory=async(id)=>{if(!confirm('Delete this history record?'))return;try{await api(`/api/exam/history/${id}`,{method:'DELETE'});await loadHistory()}catch(e){alert(e.message)}};
   window.pdfHistory=()=>{const rows=window.__examHistoryRows||[];if(!rows.length){alert('No History records to download.');return;}const J=window.jspdf;if(!J?.jsPDF){alert('PDF library is unavailable.');return;}const doc=new J.jsPDF('l');const startY=ibexPdfHeader(doc,'Examination History','Every examination conducted, on record');doc.autoTable({startY,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date]),...IBEX_PDF_TABLE_STYLE});doc.save('exam-history.pdf');};
 
-  function install(){
-    addExamSidebarItems();
-    if(!originalSwitch && typeof window.switchModule==='function'){
-      originalSwitch=window.switchModule;
-      window.switchModule=async function(moduleName, btn){
-        if(moduleName==='results'){currentModule='results';await renderResults();return;}
-        if(moduleName==='history'){currentModule='history';await renderHistory();return;}
-        if(examRoot){examRoot.remove();examRoot=null;}
-        return originalSwitch.apply(this,arguments);
-      };
-    }
-  }
-  const observer=new MutationObserver(()=>install());
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
+  window.renderResults = renderResults;
+  window.renderHistory = renderHistory;
 })();
 </script>
 
 
 
-<!-- === FINAL EXAM MODULES V2 === -->
-<style>
-#examV2Root input{box-sizing:border-box}.examv2-card{background:#0b0b0b;border:1px solid rgba(212,175,55,.2);border-radius:16px;padding:20px}.examv2-input{width:100%;background:#050505;border:1px solid #292929;border-radius:10px;color:#eee;padding:10px 12px;font-size:12px;outline:none}.examv2-input:focus{border-color:#a88428}.examv2-btn{background:#111;border:1px solid rgba(212,175,55,.28);color:#e8c767;border-radius:9px;padding:9px 13px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.examv2-btn.primary{background:linear-gradient(135deg,#eacd6e,#aa771c);color:#080808}.examv2-btn.danger{color:#f87171;border-color:rgba(248,113,113,.25)}.examv2-table{width:100%;border-collapse:collapse}.examv2-table th{padding:11px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#777;border-bottom:1px solid #242424}.examv2-table td{padding:9px 11px;border-bottom:1px solid #181818;font-size:12px}.examv2-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}@media(max-width:900px){.examv2-grid{grid-template-columns:1fr 1fr}}@media(max-width:600px){.examv2-grid{grid-template-columns:1fr}}
-</style>
-<script>
-(function(){
-  const api=async(url,opt={})=>{const r=await authFetch(url,opt);const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch(e){}if(!r.ok)throw new Error(d.detail||`Request failed (${r.status})`);return d};
-  const bid=()=>Number(currentBranchId);
-  const escv=v=>typeof esc==='function'?esc(v??''):String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  function host(){return document.getElementById('mainContent')||document.querySelector('main')}
-  function addNav(){
-    document.querySelectorAll('button').forEach(b=>{if(/Exam Seating/i.test(b.textContent||'')){b.textContent=(b.textContent||'').replace(/Exam Seating/gi,'Seating')}if(/Exam Invigilation/i.test(b.textContent||'')){b.textContent=(b.textContent||'').replace(/Exam Invigilation/gi,'Invigilation')}});
-    const group=document.querySelector('.alg-head-group[data-head="examination"]'); const items=group?.querySelector('.alg-head-items'); if(!items)return;
-    if(!items.querySelector('[data-exam-v2="results"]')){const b=document.createElement('button');b.dataset.examV2='results';b.className='sidebar-item alg-child w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3';b.innerHTML='<span>▣</span><span>Results</span>';b.onclick=openResults;items.appendChild(b)}
-    if(!items.querySelector('[data-exam-v2="history"]')){const b=document.createElement('button');b.dataset.examV2='history';b.className='sidebar-item alg-child w-full text-left px-6 py-3 text-xs font-extrabold uppercase text-gray-300 flex items-center space-x-3';b.innerHTML='<span>◷</span><span>History</span>';b.onclick=openHistory;items.appendChild(b)}
-  }
-  new MutationObserver(addNav).observe(document.body,{subtree:true,childList:true});setTimeout(addNav,100);setTimeout(addNav,1000);
-  function shell(title,sub){const h=host();h.innerHTML=`<div id="examV2Root" class="space-y-6"><div><div class="text-[10px] uppercase tracking-[.2em] text-yellow-600 font-bold">Examination</div><h2 class="command-heading-font text-4xl gold-gradient-text mt-1">${title}</h2><p class="text-sm text-gray-500 mt-2">${sub}</p></div></div>`;return document.getElementById('examV2Root')}
-  const f=(id,l,t='text',ph='')=>`<label class="block"><span class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">${l}</span><input id="${id}" type="${t}" placeholder="${ph}" class="examv2-input"></label>`;
-  window.openResults=async function(){
-    if(!isOwner&&!myAllowedModules.includes('examination'))return alert('You do not have Examination access.');
-    const root=shell('Results','Enter the paper details, then load the selected batch and enter each student’s marks.');
-    root.insertAdjacentHTML('beforeend',`<div class="examv2-card space-y-5"><div class="examv2-grid">${f('v2Batch','Batch name','text','Batch A')}${f('v2Subjects','Subject(s)','text','Physics, Chemistry')}${f('v2Topics','Topic(s)','text','Kinematics')}${f('v2Date','Exam date','date')}${f('v2Overall','Overall marks','number','100')}</div><div class="flex flex-wrap gap-2"><button id="v2Load" class="examv2-btn primary">Load Students</button><button id="v2Save" class="examv2-btn primary">Save Results</button><button id="v2Pdf" class="examv2-btn">Download PDF</button></div><div id="v2Meta" class="hidden text-xs text-gray-400 bg-[#070707] border border-gray-900 rounded-xl p-4"></div><div id="v2Students"></div></div><div class="examv2-card"><div class="flex justify-between items-center mb-4"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Saved Results</h3><span class="text-xs text-gray-600">Editable and deletable</span></div><div id="v2Saved"></div></div>`);
-    v2Load.onclick=loadStudents;v2Save.onclick=saveResults;v2Pdf.onclick=pdfResults;await loadSavedResults();
-  };
-  async function loadStudents(){try{const batch=v2Batch.value.trim(),overall=Number(v2Overall.value);if(!batch||overall<=0)throw Error('Enter a batch and valid overall marks.');const s=await api(`/api/examination/results/students/${bid()}?batch=${encodeURIComponent(batch)}`);window.__v2students=s;v2Meta.classList.remove('hidden');v2Meta.innerHTML=`Batch: <b>${escv(batch)}</b> · Subject(s): <b>${escv(v2Subjects.value)}</b> · Topic(s): <b>${escv(v2Topics.value)}</b> · Date: <b>${escv(v2Date.value)}</b>`;v2Students.innerHTML=(s||[]).length?`<div class="overflow-x-auto"><table class="examv2-table"><thead><tr><th>Student</th><th>Roll Number</th><th>Total / ${overall}</th></tr></thead><tbody>${s.map(x=>`<tr><td class="text-white font-semibold">${escv(x.name)}</td><td class="text-gray-500">${escv(x.roll_number)}</td><td><input data-v2-mark="${x.id}" type="number" min="0" max="${overall}" step="0.01" placeholder="Marks" class="examv2-input max-w-[160px]"></td></tr>`).join('')}</tbody></table></div>`:'<p class="text-xs text-gray-500">No students found in this batch.</p>'}catch(e){alert(e.message)}}
-  async function saveResults(){try{const batch=v2Batch.value.trim(),subjects=v2Subjects.value.trim(),topics=v2Topics.value.trim(),exam_date=v2Date.value,overall=Number(v2Overall.value),ss=window.__v2students||[];if(!batch||!subjects||!topics||!exam_date||!overall||!ss.length)throw Error('Complete the paper details and load a batch first.');const students=ss.map(s=>({student_id:s.id,student_name:s.name,roll_number:s.roll_number||'',marks:(document.querySelector(`[data-v2-mark="${s.id}"]`)?.value||'')===''?null:Number(document.querySelector(`[data-v2-mark="${s.id}"]`).value)}));if(students.some(s=>s.marks!==null&&(s.marks<0||s.marks>overall)))throw Error(`Marks must be between 0 and ${overall}.`);await api('/api/examination/results',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),batch_name:batch,subjects,topics,exam_date,overall_marks:overall,students})});await api('/api/examination/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),subject:subjects,topic:topics,batch_name:batch,exam_date})}).catch(()=>{});alert('Results saved.');await loadSavedResults()}catch(e){alert(e.message)}}
-  async function loadSavedResults(){const el=document.getElementById('v2Saved');if(!el)return;try{const rows=await api(`/api/examination/results/${bid()}`);if(!rows.length){el.innerHTML='<p class="text-xs text-gray-500">No saved results yet.</p>';return}const groups={};rows.forEach(r=>{const k=[r.exam_date,r.batch_name,r.subjects,r.topics,r.overall_marks].join('|');(groups[k]??=[]).push(r)});el.innerHTML=Object.values(groups).map(g=>{const x=g[0];return `<div class="mb-8"><div class="grid md:grid-cols-5 gap-3 text-xs text-gray-400 mb-3"><span>Batch: <b class="text-gray-200">${escv(x.batch_name)}</b></span><span>Subject(s): <b class="text-gray-200">${escv(x.subjects)}</b></span><span>Topic(s): <b class="text-gray-200">${escv(x.topics)}</b></span><span>Date: <b class="text-gray-200">${escv(x.exam_date)}</b></span><span>Overall: <b class="text-gray-200">${escv(x.overall_marks)}</b></span></div><div class="overflow-x-auto"><table class="examv2-table"><thead><tr><th>Student</th><th>Roll Number</th><th>Marks / ${escv(x.overall_marks)}</th><th>Actions</th></tr></thead><tbody>${g.map(r=>`<tr><td>${escv(r.student_name)}</td><td>${escv(r.roll_number)}</td><td><input id="v2m-${r.id}" class="examv2-input max-w-[140px]" type="number" min="0" max="${escv(x.overall_marks)}" step="0.01" value="${r.marks??''}"></td><td class="whitespace-nowrap"><button class="examv2-btn" onclick="editV2Result(${r.id},${Number(x.overall_marks)})">Save</button> <button class="examv2-btn danger" onclick="deleteV2Result(${r.id})">Delete</button></td></tr>`).join('')}</tbody></table></div></div>`}).join('')}catch(e){el.innerHTML=`<p class="text-xs text-red-400">${escv(e.message)}</p>`}}
-  window.editV2Result=async(id,overall)=>{const m=Number(document.getElementById(`v2m-${id}`).value);if(Number.isNaN(m)||m<0||m>overall)return alert(`Marks must be between 0 and ${overall}.`);try{await api(`/api/examination/results/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({marks:m})});await loadSavedResults()}catch(e){alert(e.message)}};
-  window.deleteV2Result=async id=>{if(!confirm('Delete this result record?'))return;try{await api(`/api/examination/results/${id}`,{method:'DELETE'});await loadSavedResults()}catch(e){alert(e.message)}};
-  async function pdfResults(){try{const rows=await api(`/api/examination/results/${bid()}`);if(!rows.length)return alert('No results to download.');const x=rows[0],doc=new window.jspdf.jsPDF();const startY=ibexPdfHeader(doc,'Examination Results',`Batch: ${x.batch_name} · Subject(s): ${x.subjects} · Topic(s): ${x.topics} · Exam Date: ${x.exam_date} · Overall Marks: ${x.overall_marks}`);doc.autoTable({startY,head:[['Student','Roll Number',`Marks / ${x.overall_marks}`]],body:rows.filter(r=>r.batch_name===x.batch_name&&r.subjects===x.subjects&&r.topics===x.topics&&r.exam_date===x.exam_date).map(r=>[r.student_name,r.roll_number||'',r.marks??'—']),...IBEX_PDF_TABLE_STYLE});doc.save(`Results-${x.batch_name}-${x.exam_date}.pdf`)}catch(e){alert(e.message)}}
-  window.openHistory=async function(){if(!isOwner&&!myAllowedModules.includes('examination'))return alert('You do not have Examination access.');const root=shell('History','Record the subject, topic, batch, and exam date for every examination.');root.insertAdjacentHTML('beforeend',`<div class="examv2-card"><div class="examv2-grid">${f('v2hSubject','Subject')}${f('v2hTopic','Topic')}${f('v2hBatch','Batch name')}${f('v2hDate','Exam date','date')}<div class="flex items-end"><button id="v2hAdd" class="examv2-btn primary w-full">Add Record</button></div></div><div class="flex gap-2 mt-3"><button id="v2hPdf" class="examv2-btn">Download PDF</button><button id="v2hRefresh" class="examv2-btn">Refresh</button></div></div><div class="examv2-card"><div class="flex justify-between items-center mb-4"><h3 class="text-sm font-extrabold gold-gradient-text uppercase tracking-wider">Exam History</h3><span class="text-xs text-gray-600">Editable and deletable</span></div><div id="v2History"></div></div>`);v2hAdd.onclick=addHistory;v2hPdf.onclick=pdfHistory;v2hRefresh.onclick=loadHistory;await loadHistory()};
-  async function addHistory(){try{const subject=v2hSubject.value.trim(),topic=v2hTopic.value.trim(),batch_name=v2hBatch.value.trim(),exam_date=v2hDate.value;if(!subject||!topic||!batch_name||!exam_date)throw Error('Complete all history fields.');await api('/api/examination/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),subject,topic,batch_name,exam_date})});v2hSubject.value=v2hTopic.value=v2hBatch.value=v2hDate.value='';await loadHistory()}catch(e){alert(e.message)}}
-  async function loadHistory(){const el=document.getElementById('v2History');if(!el)return;try{const rows=await api(`/api/examination/history/${bid()}`);el.innerHTML=rows.length?`<div class="overflow-x-auto"><table class="examv2-table"><thead><tr><th>Subject</th><th>Topic</th><th>Batch</th><th>Date</th><th>Actions</th></tr></thead><tbody>${rows.map(r=>`<tr><td><input id="v2hs-${r.id}" class="examv2-input" value="${escv(r.subject)}"></td><td><input id="v2ht-${r.id}" class="examv2-input" value="${escv(r.topic)}"></td><td><input id="v2hb-${r.id}" class="examv2-input" value="${escv(r.batch_name)}"></td><td><input id="v2hd-${r.id}" type="date" class="examv2-input" value="${escv(r.exam_date)}"></td><td class="whitespace-nowrap"><button class="examv2-btn" onclick="editV2History(${r.id})">Save</button> <button class="examv2-btn danger" onclick="deleteV2History(${r.id})">Delete</button></td></tr>`).join('')}</tbody></table></div>`:'<p class="text-xs text-gray-500">No examination history records yet.</p>'}catch(e){el.innerHTML=`<p class="text-xs text-red-400">${escv(e.message)}</p>`}}
-  window.editV2History=async id=>{const subject=document.getElementById(`v2hs-${id}`).value.trim(),topic=document.getElementById(`v2ht-${id}`).value.trim(),batch_name=document.getElementById(`v2hb-${id}`).value.trim(),exam_date=document.getElementById(`v2hd-${id}`).value;if(!subject||!topic||!batch_name||!exam_date)return alert('All fields are required.');try{await api(`/api/examination/history/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({branch_id:bid(),subject,topic,batch_name,exam_date})});await loadHistory()}catch(e){alert(e.message)}};
-  window.deleteV2History=async id=>{if(!confirm('Delete this history record?'))return;try{await api(`/api/examination/history/${id}`,{method:'DELETE'});await loadHistory()}catch(e){alert(e.message)}};
-  async function pdfHistory(){try{const rows=await api(`/api/examination/history/${bid()}`);if(!rows.length)return alert('No history records to download.');const doc=new window.jspdf.jsPDF();const startY=ibexPdfHeader(doc,'Examination History');doc.autoTable({startY,head:[['Subject','Topic','Batch','Exam Date']],body:rows.map(r=>[r.subject,r.topic,r.batch_name,r.exam_date]),...IBEX_PDF_TABLE_STYLE});doc.save(`Exam-History-${new Date().toISOString().slice(0,10)}.pdf`)}catch(e){alert(e.message)}}
-})();
-</script>
 <script id="ibex-requested-fixes-runtime">
 (function(){
   const originalLoadBranches=loadBranches;
